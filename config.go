@@ -37,9 +37,14 @@ type config struct {
 	// purpose.
 	Listen string `hcl:"listen,optional"`
 
-	// CertFile and KeyFile serve TLS directly.
+	// CertFile and KeyFile serve TLS directly, re-read when they change
+	// (tls.go).
 	CertFile string `hcl:"cert_file,optional"`
 	KeyFile  string `hcl:"key_file,optional"`
+
+	// ACME serves TLS with a certificate from an ACME CA instead: Let's
+	// Encrypt, or GÉANT TCS (HARICA) with External Account Binding.
+	ACME *acmeBlock `hcl:"acme,block"`
 
 	// SigningKeyFile is the RSA key that signs tokens (PEM). `bridge keygen`
 	// writes one. It is a file, not generated at start: a key that changes
@@ -320,6 +325,14 @@ func (c *config) check() error {
 	}
 	if (c.CertFile == "") != (c.KeyFile == "") {
 		return errors.New("cert_file and key_file go together")
+	}
+	if c.ACME != nil {
+		if c.CertFile != "" {
+			return errors.New("acme and cert_file: one or the other")
+		}
+		if err := c.ACME.check(c.Issuer); err != nil {
+			return fmt.Errorf("acme: %w", err)
+		}
 	}
 
 	if c.signingKey, err = loadSigningKey(c.SigningKeyFile); err != nil {
