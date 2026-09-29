@@ -39,12 +39,29 @@ type server struct {
 	// revocation removes.
 	issued *ttl[map[string]any]
 
+	// devices waiting for their person, by device code; and the user codes
+	// people type, pointing at them.
+	devices *ttl[*deviceGrant]
+	// poll is the interval devices are told to poll at (RFC 8628 3.2).
+	poll      time.Duration
+	userCodes *ttl[string]
+	tries     *attempts
+
+	// refresh tokens, by token; and the ones already rotated away, by
+	// token, pointing at their family -- see rotate.
+	refresh  *ttl[*refreshGrant]
+	rotated  *ttl[string]
+	families *ttl[[]string]
+
 	logMu sync.Mutex
 }
 
 // A login is somebody on their way to their IdP and back.
 type login struct {
-	kind string // "authorize"
+	kind string // "authorize" or "device"
+
+	// deviceCode is the device waiting for this login, for kind "device".
+	deviceCode string
 
 	// The authorization request, checked.
 	client      *clientBlock
@@ -89,6 +106,13 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
 	s.issued = newTTL[map[string]any](now)
+	s.devices = newTTL[*deviceGrant](now)
+	s.poll = deviceInterval * time.Second
+	s.userCodes = newTTL[string](now)
+	s.tries = &attempts{m: map[string][]time.Time{}, now: now}
+	s.refresh = newTTL[*refreshGrant](now)
+	s.rotated = newTTL[string](now)
+	s.families = newTTL[[]string](now)
 	return s, nil
 }
 
@@ -110,6 +134,10 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("GET /saml/choose", s.choose)
 	mux.HandleFunc("GET /saml/disco", s.disco)
 	mux.HandleFunc("POST /saml/acs", s.acs)
+	mux.HandleFunc("POST /device_authorization", s.deviceAuthorization)
+	mux.HandleFunc("/device", s.device)
+	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
+	mux.HandleFunc("/app-password", s.appPassword)
 	return mux
 }
 

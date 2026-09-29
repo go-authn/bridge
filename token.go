@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -80,6 +81,10 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 	switch r.PostForm.Get("grant_type") {
 	case "authorization_code":
 		s.exchangeCode(w, r, client)
+	case "urn:ietf:params:oauth:grant-type:device_code":
+		s.pollDevice(w, r, client)
+	case "refresh_token":
+		s.rotate(w, r, client)
 	default:
 		tokenError(w, http.StatusBadRequest, "unsupported_grant_type", "")
 	}
@@ -128,6 +133,9 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		return
 	}
 	s.spent.put(code, []string{jti}, s.now().Add(s.cfg.tokenTTL))
+	if rt := s.newRefresh(client, g.who, g.scopes, jti); rt != "" {
+		resp["refresh_token"] = rt
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -160,6 +168,11 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	if len(who.groups) > 0 {
 		at["groups"] = who.groups
 	}
+	// When the IdP said its session ends, the token carries it, so that what
+	// is derived from the token -- an SSH certificate -- does not outlive it.
+	if !who.sessionEnd.IsZero() {
+		at["session_end"] = who.sessionEnd.Unix()
+	}
 	access, err := s.cfg.signingKey.sign("at+jwt", at)
 	if err != nil {
 		return nil, "", err
@@ -189,17 +202,20 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	for k, v := range info {
 		id[k] = v
 	}
-	idToken, err := s.cfg.signingKey.sign("JWT", id)
-	if err != nil {
-		return nil, "", err
-	}
-	return map[string]any{
+	resp := map[string]any{
 		"access_token": access,
 		"token_type":   "Bearer",
 		"expires_in":   int(s.cfg.tokenTTL.Seconds()),
-		"id_token":     idToken,
 		"scope":        strings.Join(scopes, " "),
-	}, jti, nil
+	}
+	// An ID token only for an OpenID Connect request: a device client such
+	// as rclone may ask for plain OAuth, and gets an access token alone.
+	if slices.Contains(scopes, "openid") {
+		if resp["id_token"], err = s.cfg.signingKey.sign("JWT", id); err != nil {
+			return nil, "", err
+		}
+	}
+	return resp, jti, nil
 }
 
 // halfHash is at_hash: the left half of the SHA-256 of the token, base64url

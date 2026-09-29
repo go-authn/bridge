@@ -70,7 +70,11 @@ func (c *confFixture) load(t *testing.T, body string) (*config, error) {
 	t.Helper()
 	p := filepath.Join(c.dir, "bridge.hcl")
 	os.WriteFile(p, []byte(body), 0o644)
-	return loadConfig([]string{p})
+	cfg, err := loadConfig([]string{p})
+	if cfg != nil {
+		t.Cleanup(func() { cfg.close() })
+	}
+	return cfg, err
 }
 
 func TestConfigDefaults(t *testing.T) {
@@ -134,6 +138,10 @@ func TestConfigRefusals(t *testing.T) {
 		"an http redirect":     {add(`client "x" { redirect_uris = ["http://app.example.org/cb"] }`), "cleartext"},
 		"a relative redirect":  {add(`client "x" { redirect_uris = ["/cb"] }`), "absolute"},
 		"a fragment":           {add(`client "x" { redirect_uris = ["https://a.example/cb#f"] }`), "fragment"},
+		"a refresh lifetime": {add(`client "x" {
+  device = true
+  refresh_lifetime = "long"
+}`), "refresh_lifetime"},
 		"a subject type": {add(`client "x" {
   redirect_uris = ["https://a.example/cb"]
   subject = "random"
@@ -251,7 +259,7 @@ func TestKeys(t *testing.T) {
 	if _, err := loadSigningKey(filepath.Join(dir, "none")); err == nil {
 		t.Error("a missing key file")
 	}
-	if !bytes.Contains(k.jwks(), []byte(`"alg":"RS256"`)) {
+	if !bytes.Contains(jwks(k), []byte(`"alg":"RS256"`)) {
 		t.Error("the key set does not say RS256")
 	}
 }

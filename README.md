@@ -119,17 +119,105 @@ together with RENATER's discovery service (which cannot be restricted).
   token type, `email_verified`, and a public client's secret each turn a test
   red.
 
+## Without a browser: the device grant, and `bridge token`
+
+A WebDAV client, a script, a terminal has no browser to send to a university.
+It asks for a code instead (RFC 8628), and the person logs in on any other
+device:
+
+```hcl
+client "rclone" {
+  device           = true
+  audience         = ["fileshare"]
+  refresh_lifetime = "720h"     # refresh tokens, off unless set
+  name             = "rclone (WebDAV)"
+}
+```
+
+```sh
+bridge token --issuer https://login.example.org --client rclone
+```
+
+prints an access token, logging in the first time and refreshing quietly after
+that -- which is exactly rclone's `bearer_token_command` for
+[go-fileshare](https://github.com/go-fileshare/fileshare) over WebDAV. It is
+golang.org/x/oauth2's device client, not one written here.
+
+| | |
+|---|---|
+| **user codes** | eight letters from RFC 8628's alphabet (no vowels, no digits), ten tries per address per ten minutes |
+| **the confirmation page** | names the application and says to refuse a code somebody else sent: RFC 8628 5.4's remote phishing, where the ATTACKER's device gets the token |
+| **polling** | `slow_down` adds five seconds for good; a device code buys one set of tokens |
+| **refresh tokens** | rotate (RFC 9700 4.14.2) inside a family whose end is fixed at the login; a retired one used again revokes the family and the access tokens it bought |
+
+## SSH certificates, for SFTP
+
+```hcl
+ssh_ca {
+  key_file = "/var/lib/bridge/ssh-ca"   # bridge keygen --ssh-ca
+  validity = "12h"
+}
+client "sftp" {
+  device           = true
+  ssh_certificates = true
+}
+```
+
+`bridge ssh-cert --issuer ... --client sftp` logs in with a code and writes
+`~/.ssh/id_ed25519-cert.pub`, where ssh and sftp find it. The certificate has
+**exactly one principal**, the `preferred_username` -- PROTOCOL.certkeys makes
+an empty list valid for ANY user, so there is never one -- no `permit-*`
+extension, the person's groups in `groups@go-authn.org`, and it ends with the
+IdP's session when that is sooner. go-fileshare trusts it with `oidc {
+ssh_ca_file }`.
+
+## Application passwords, for SMB and S3
+
+NTLMv2 and SigV4 prove a secret the server must already hold, so no token will
+do. `bridge app-password --issuer ... --client files` sets one, generated,
+shown once, into a database go-fileshare reads with a `users "sql"` block:
+
+```hcl
+app_passwords {
+  driver   = "sqlite"          # or postgres, mysql
+  dsn_file = "/etc/bridge/apppw.dsn"
+  store    = ["nt_hash"]       # SMB only: the default. Add "password" for S3.
+  lifetime = "2160h"
+}
+```
+
+What is stored is what the protocols need: the NT hash for SMB, the password
+itself only when S3 is asked for.
+
+## OpenPubkey and opkssh
+
+[OpenPubkey](https://github.com/openpubkey/openpubkey) commits the user's key in
+the ID token's nonce, and opkssh turns that into SSH logins with no CA at all.
+This provider does what that needs: the nonce comes back verbatim in the code
+flow and in the device flow (where the openpubkey client sends it on the
+device authorization request), RS256 so that GQ signatures work, and
+
+```hcl
+retired_signing_key_files = ["/var/lib/bridge/oidc-2026-03.key"]
+```
+
+because a PK Token outlives the ID token inside it and the openpubkey verifier
+only fetches the keys published now: a retired key stays in the JWKS,
+verifying and never signing, for at least the longest PK Token lifetime any
+verifier allows (opkssh: a day by default, up to a week). Give opkssh a client
+of its own -- `http://localhost:3000/login-callback` and its two siblings as
+redirect URIs -- because its ID token travels to every server it logs into.
+
+Judged by the openpubkey library itself: its client makes PK Tokens through
+the device flow, with GQ signatures, and through the loopback code flow; its
+verifier accepts them, and refuses one signed by a key no longer published.
+
 ## What it is not, yet
 
-- **One process.** Logins in progress, codes and issued tokens live in memory:
-  a restart costs people one login, and two instances behind a load balancer
-  would each know half the codes.
-- No refresh tokens, no device flow, no dynamic registration, no front- or
-  back-channel logout.
-- The device flow (for WebDAV clients without a browser), SSH certificates for
-  SFTP and application passwords for SMB and S3 -- so that
-  [go-fileshare](https://github.com/go-fileshare/fileshare) can serve every
-  protocol to federated people -- are the next pieces.
+- **One process.** Logins in progress, codes, device grants, refresh tokens
+  and issued tokens live in memory: a restart costs people one login, and two
+  instances behind a load balancer would each know half of them.
+- No dynamic registration, no front- or back-channel logout.
 
 ## Licence
 

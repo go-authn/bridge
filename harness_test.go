@@ -213,6 +213,7 @@ client "cli" {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { c.close() })
 	f.s, err = newServer(c, &testLog{t})
 	if err != nil {
 		t.Fatal(err)

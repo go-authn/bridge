@@ -75,6 +75,14 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "the openid scope is required")
 		return
 	}
+	if slices.Contains(scopes, "ssh") && !client.SSHCertificates {
+		fail("invalid_scope", "this client may not ask for SSH certificates")
+		return
+	}
+	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
+		fail("invalid_scope", "this client may not set application passwords")
+		return
+	}
 	// ⛔ PKCE, S256, for every client. RFC 7636 4.3 makes "plain" the
 	// DEFAULT when no method is given, so an absent method is refused
 	// rather than read as S256: a provider that accepted it would be

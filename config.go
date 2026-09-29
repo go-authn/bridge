@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"golang.org/x/crypto/ssh"
 )
 
 // A config is one HCL file, or a directory of them read as one.
@@ -45,6 +46,15 @@ type config struct {
 	// at every restart invalidates every token every relying party holds.
 	SigningKeyFile string `hcl:"signing_key_file"`
 
+	// RetiredSigningKeyFiles are keys that signed before the current one.
+	// They sign nothing any more and stay PUBLISHED, because a verifier can
+	// only check a signature whose key it can still fetch: an OpenPubkey PK
+	// Token lives a day or a week, long after the ID token inside it
+	// expired, and the openpubkey verifier never looks for old keys. Keep a
+	// retired key here at least as long as the longest PK Token lifetime any
+	// verifier allows.
+	RetiredSigningKeyFiles []string `hcl:"retired_signing_key_files,optional"`
+
 	// SubjectSaltFile holds the secret that pairwise subjects are derived
 	// with. ⛔ Required, and a file: SATOSA generates one at random when it
 	// is not configured, and every "sub" then changes at every restart --
@@ -55,6 +65,13 @@ type config struct {
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`
 
+	// SSHCA certifies SSH keys for federated people.
+	SSHCA *sshCABlock `hcl:"ssh_ca,block"`
+
+	// AppPasswords gives federated people a password for the protocols that
+	// cannot carry a token: SMB and S3.
+	AppPasswords *appPasswordsBlock `hcl:"app_passwords,block"`
+
 	// Lifetimes. The defaults are short on purpose: a bearer token is
 	// whoever holds it, and the federation says nothing when somebody
 	// leaves.
@@ -64,12 +81,13 @@ type config struct {
 
 	files []string
 
-	signingKey *signingKey
-	salt       []byte
-	metaCert   *x509.Certificate
-	codeTTL    time.Duration
-	tokenTTL   time.Duration
-	idTokenTTL time.Duration
+	signingKey  *signingKey
+	retiredKeys []*signingKey
+	salt        []byte
+	metaCert    *x509.Certificate
+	codeTTL     time.Duration
+	tokenTTL    time.Duration
+	idTokenTTL  time.Duration
 }
 
 // The SAML side: who this is in the federation, and which federation.
@@ -113,6 +131,23 @@ type samlBlock struct {
 	Technical        string            `hcl:"technical_contact,optional"`
 }
 
+// An SSH certificate authority.
+type sshCABlock struct {
+	// KeyFile is the CA's private key in OpenSSH format (`bridge keygen
+	// --ssh-ca`). Its public half is what go-fileshare's
+	// trusted_user_ca_file holds.
+	KeyFile string `hcl:"key_file"`
+
+	// Validity is how long a certificate lives: 12h by default, never
+	// longer than the IdP's session when it said when that ends. A
+	// certificate cannot be revoked by this provider, so its lifetime IS its
+	// revocation.
+	Validity string `hcl:"validity,optional"`
+
+	signer   ssh.Signer
+	validity time.Duration
+}
+
 // How what the IdP said becomes claims.
 type claimsBlock struct {
 	// Username is the SAML attribute that becomes preferred_username: "eppn"
@@ -151,7 +186,29 @@ type clientBlock struct {
 	// Name is shown to people when they are asked to approve a device.
 	Name string `hcl:"name,optional"`
 
-	secret string
+	// Device lets this client use the device authorization grant (RFC 8628):
+	// a command-line tool or a WebDAV client with no browser of its own shows
+	// a code, and the person logs in on any other device. A client that only
+	// does this needs no redirect URI.
+	Device bool `hcl:"device,optional"`
+
+	// RefreshLifetime turns on refresh tokens, and bounds them: a refresh
+	// token lives this long from the LOGIN, however often it is rotated.
+	// The federation is not asked again in that time, so this is how long
+	// somebody who has left keeps access. Off by default.
+	RefreshLifetime string `hcl:"refresh_lifetime,optional"`
+
+	// SSHCertificates lets tokens of this client, with the "ssh" scope, have
+	// an SSH public key certified by the ssh_ca block -- which is how a
+	// federated person reaches go-fileshare over SFTP.
+	SSHCertificates bool `hcl:"ssh_certificates,optional"`
+
+	// AppPasswords lets tokens of this client, with the "app_password"
+	// scope, set the person's application password.
+	AppPasswords bool `hcl:"app_passwords,optional"`
+
+	secret     string
+	refreshTTL time.Duration
 }
 
 func (c *clientBlock) public() bool { return c.secret == "" }
@@ -180,6 +237,9 @@ func loadConfig(paths []string) (*config, error) {
 	}
 	c.files = files
 	if err := c.check(); err != nil {
+		// check may have opened the database before something after it was
+		// refused.
+		c.close()
 		return nil, err
 	}
 	return &c, nil
@@ -232,6 +292,16 @@ func (c *config) check() error {
 
 	if c.signingKey, err = loadSigningKey(c.SigningKeyFile); err != nil {
 		return fmt.Errorf("signing_key_file: %w", err)
+	}
+	for _, f := range c.RetiredSigningKeyFiles {
+		k, err := loadSigningKey(f)
+		if err != nil {
+			return fmt.Errorf("retired_signing_key_files: %w", err)
+		}
+		if k.kid == c.signingKey.kid {
+			return fmt.Errorf("retired_signing_key_files: %s is the current signing key", f)
+		}
+		c.retiredKeys = append(c.retiredKeys, k)
 	}
 	if c.salt, err = os.ReadFile(c.SubjectSaltFile); err != nil {
 		return fmt.Errorf("subject_salt_file: %w", err)
@@ -301,6 +371,18 @@ func (c *config) check() error {
 		}
 	}
 
+	if c.SSHCA != nil {
+		if err := c.SSHCA.load(); err != nil {
+			return fmt.Errorf("ssh_ca: %w", err)
+		}
+	}
+
+	if c.AppPasswords != nil {
+		if err := c.AppPasswords.check(); err != nil {
+			return fmt.Errorf("app_passwords: %w", err)
+		}
+	}
+
 	if len(c.Clients) == 0 {
 		return errors.New("no client block: nobody could ask this provider for anything")
 	}
@@ -321,8 +403,15 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: a secret of %d characters is a password somebody can guess", cl.ID, len(cl.secret))
 			}
 		}
-		if len(cl.RedirectURIs) == 0 {
-			return fmt.Errorf("client %q: no redirect_uris", cl.ID)
+		if len(cl.RedirectURIs) == 0 && !cl.Device {
+			return fmt.Errorf("client %q: no redirect_uris, and not a device client", cl.ID)
+		}
+		if cl.RefreshLifetime != "" {
+			d, err := time.ParseDuration(cl.RefreshLifetime)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("client %q: refresh_lifetime = %q: a positive duration like \"720h\"", cl.ID, cl.RefreshLifetime)
+			}
+			cl.refreshTTL = d
 		}
 		for _, r := range cl.RedirectURIs {
 			ru, err := url.Parse(r)
@@ -332,6 +421,12 @@ func (c *config) check() error {
 			if ru.Scheme == "http" && !loopbackHost(ru.Hostname()) {
 				return fmt.Errorf("client %q: redirect URI %q: a code sent over cleartext http is a code anybody on the path has", cl.ID, r)
 			}
+		}
+		if cl.AppPasswords && c.AppPasswords == nil {
+			return fmt.Errorf("client %q: app_passwords needs an app_passwords block", cl.ID)
+		}
+		if cl.SSHCertificates && c.SSHCA == nil {
+			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
 		}
 		switch cl.Subject {
 		case "":
@@ -384,4 +479,14 @@ func loopbackHost(h string) bool {
 	}
 	ip := net.ParseIP(h)
 	return ip != nil && ip.IsLoopback()
+}
+
+// close releases what the configuration opened: the application passwords'
+// database. A *sql.DB left open is a file Windows will not delete and a
+// connection pool a server never gives back.
+func (c *config) close() error {
+	if c.AppPasswords != nil && c.AppPasswords.db != nil {
+		return c.AppPasswords.db.Close()
+	}
+	return nil
 }
