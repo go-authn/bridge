@@ -230,6 +230,13 @@ func TestDeviceRefusals(t *testing.T) {
 	if p := b.get(f.s.cfg.Issuer + "/device?user_code=" + url.QueryEscape(strings.ToLower(strings.ReplaceAll(da.UserCode, "-", " ")))); p.StatusCode != http.StatusOK {
 		t.Errorf("a code typed in lower case with a space: %d", p.StatusCode)
 	}
+	// Right codes are not guesses: more of them than the limit, from one
+	// address -- a building behind one NAT address -- all get through.
+	for i := 0; i < codeAttempts+2; i++ {
+		if p := b.get(f.s.cfg.Issuer + "/device?user_code=" + url.QueryEscape(da.UserCode)); p.StatusCode != http.StatusOK {
+			t.Fatalf("right code %d from one address: %d", i+1, p.StatusCode)
+		}
+	}
 	// Ten tries, then no more from this address (RFC 8628 5.1).
 	limited := false
 	for i := 0; i < 15; i++ {
@@ -240,6 +247,11 @@ func TestDeviceRefusals(t *testing.T) {
 	}
 	if !limited {
 		t.Error("guessing codes is not limited")
+	}
+	// And once limited, a right code is refused too: otherwise the limit
+	// would only slow the guessing, not stop it.
+	if p := b.get(f.s.cfg.Issuer + "/device?user_code=" + url.QueryEscape(da.UserCode)); p.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("a right code once limited: %d", p.StatusCode)
 	}
 }
 

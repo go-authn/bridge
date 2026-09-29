@@ -61,6 +61,11 @@ type config struct {
 	// every relying party sees everybody as a new person.
 	SubjectSaltFile string `hcl:"subject_salt_file"`
 
+	// DisabledFile keeps the people and institutions an operator has
+	// disabled through the admin API. Without it the API refuses to
+	// disable anybody: a restart would forget them.
+	DisabledFile string `hcl:"disabled_file,optional"`
+
 	SAML    *samlBlock    `hcl:"saml,block"`
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`

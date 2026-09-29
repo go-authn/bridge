@@ -104,6 +104,9 @@ func (s *server) collect(w *endpoint.Writer) {
 	w.Gauge("bridge_devices_waiting", "Device grants waiting for their person.", endpoint.S(float64(s.devices.count())))
 	w.Gauge("bridge_refresh_families", "Refresh token families alive.", endpoint.S(float64(s.families.count())))
 	w.Gauge("bridge_access_tokens", "Access tokens this provider still honours at /userinfo.", endpoint.S(float64(s.issued.count())))
+	people, idps := s.disabled.list(s.now())
+	w.Gauge("bridge_disabled", "People and institutions disabled here, in force.",
+		endpoint.S(float64(len(idps)), endpoint.L("kind", "idp")), endpoint.S(float64(len(people)), endpoint.L("kind", "person")))
 
 	names := make([]string, 0, len(counterHelp))
 	for n := range counterHelp {

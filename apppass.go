@@ -94,8 +94,19 @@ func (b *appPasswordsBlock) check() error {
 		login   VARCHAR(255) NOT NULL PRIMARY KEY,
 		password VARCHAR(255),
 		nt_hash  VARCHAR(32),
-		expires  BIGINT NOT NULL)`)
-	return err
+		expires  BIGINT NOT NULL,
+		idp      VARCHAR(1024))`)
+	if err != nil {
+		return err
+	}
+	// A table from before the idp column: add it. Its rows keep a NULL
+	// there, and removeIdP finds them by scope instead.
+	if _, err := b.db.Exec(`SELECT idp FROM ` + b.Table + ` WHERE 1 = 0`); err != nil {
+		if _, err := b.db.Exec(`ALTER TABLE ` + b.Table + ` ADD COLUMN idp VARCHAR(1024)`); err != nil {
+			return fmt.Errorf("adding the idp column to %s: %w", b.Table, err)
+		}
+	}
+	return nil
 }
 
 // arg is the n-th placeholder in this driver's dialect.
@@ -106,8 +117,9 @@ func (b *appPasswordsBlock) arg(n int) string {
 	return "?"
 }
 
-// set replaces a person's application password.
-func (b *appPasswordsBlock) set(login, password string, expires time.Time) error {
+// set replaces a person's application password; idp is the institution
+// that vouched for them, so that disabling it can find the password.
+func (b *appPasswordsBlock) set(login, idp, password string, expires time.Time) error {
 	var pw, nt sql.NullString
 	if slices.Contains(b.Store, "password") {
 		pw = sql.NullString{String: password, Valid: true}
@@ -123,8 +135,8 @@ func (b *appPasswordsBlock) set(login, password string, expires time.Time) error
 	if _, err := tx.Exec(`DELETE FROM `+b.Table+` WHERE login = `+b.arg(1), login); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`INSERT INTO `+b.Table+` (login, password, nt_hash, expires) VALUES (`+
-		b.arg(1)+`, `+b.arg(2)+`, `+b.arg(3)+`, `+b.arg(4)+`)`, login, pw, nt, expires.Unix()); err != nil {
+	if _, err := tx.Exec(`INSERT INTO `+b.Table+` (login, password, nt_hash, expires, idp) VALUES (`+
+		b.arg(1)+`, `+b.arg(2)+`, `+b.arg(3)+`, `+b.arg(4)+`, `+b.arg(5)+`)`, login, pw, nt, expires.Unix(), idp); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -144,6 +156,49 @@ func (b *appPasswordsBlock) removeCount(login string) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// removeIdP deletes the application passwords of the people one institution
+// vouched for: those recorded with it, and those from before the idp column
+// whose login is in one of scopes -- which only a scoped username (eppn,
+// subject-id) is, and which go-authn/saml has already held to the scopes
+// the federation grants that IdP. It says how many it removed.
+func (b *appPasswordsBlock) removeIdP(entityID string, scopes []string) (int64, error) {
+	res, err := b.db.Exec(`DELETE FROM `+b.Table+` WHERE idp = `+b.arg(1), entityID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if len(scopes) == 0 {
+		return n, nil
+	}
+	rows, err := b.db.Query(`SELECT login FROM ` + b.Table + ` WHERE idp IS NULL`)
+	if err != nil {
+		return n, err
+	}
+	var logins []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			rows.Close()
+			return n, err
+		}
+		if _, scope, ok := strings.Cut(l, "@"); ok && slices.Contains(scopes, scope) {
+			logins = append(logins, l)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return n, err
+	}
+	for _, l := range logins {
+		m, err := b.removeCount(l)
+		if err != nil {
+			return n, err
+		}
+		n += m
+	}
+	return n, nil
 }
 
 // passwordAlphabet has no characters that read alike (0/O, 1/l/I) and none
@@ -205,9 +260,19 @@ func (s *server) appPassword(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		pw := newAppPassword()
 		exp := s.now().Add(ap.lifetime)
-		if err := ap.set(user, pw, exp); err != nil {
+		jti, _ := claims["jti"].(string)
+		it, _ := s.issued.get(jti)
+		if err := ap.set(user, it.idp, pw, exp); err != nil {
 			s.logf("app password: %v", err)
 			http.Error(w, "the password could not be stored", http.StatusInternalServerError)
+			return
+		}
+		// A disabling that arrived while this was being set: it is recorded
+		// before anything is revoked, so either its revocation removed the
+		// password or this sees it.
+		if why := s.refused(&person{username: user, idp: it.idp}); why != "" {
+			ap.remove(user)
+			http.Error(w, "the token is not valid", http.StatusUnauthorized)
 			return
 		}
 		s.counters.inc("bridge_app_passwords_total", "set")
