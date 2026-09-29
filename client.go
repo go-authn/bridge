@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -61,7 +62,7 @@ func clientToken(ctx context.Context, issuer, clientID string, scopes []string, 
 		return "", err
 	}
 	cfg := &oauth2.Config{ClientID: clientID, Endpoint: ep, Scopes: scopes}
-	cache, err := cachePath(cacheDir, issuer, clientID)
+	cache, err := cachePath(cacheDir, issuer, clientID, scopes)
 	if err != nil {
 		return "", err
 	}
@@ -127,11 +128,16 @@ func endpoints(ctx context.Context, issuer string) (oauth2.Endpoint, error) {
 	return oauth2.Endpoint{TokenURL: d.Token, DeviceAuthURL: d.Device, AuthStyle: oauth2.AuthStyleInParams}, nil
 }
 
-// cachePath is where the token for one issuer and client is kept: the
-// user's configuration directory, one file per pair, readable by them
+// cachePath is where the token for one issuer, client and set of scopes is
+// kept: the user's configuration directory, one file each, readable by them
 // alone. It holds a refresh token, which is a password for as long as it
 // lives.
-func cachePath(dir, issuer, clientID string) (string, error) {
+//
+// ⛔ The scopes are part of the name. `bridge token` asks for openid and
+// `bridge ssh-cert` for openid and ssh; with one file per client, ssh-cert
+// found token's login, refreshed it -- a refresh keeps the scopes it was
+// given -- and was refused by the provider every time.
+func cachePath(dir, issuer, clientID string, scopes []string) (string, error) {
 	if dir == "" {
 		base, err := os.UserConfigDir()
 		if err != nil {
@@ -142,7 +148,9 @@ func cachePath(dir, issuer, clientID string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256([]byte(issuer + "\x00" + clientID))
+	sorted := slices.Clone(scopes)
+	slices.Sort(sorted)
+	sum := sha256.Sum256([]byte(issuer + "\x00" + clientID + "\x00" + strings.Join(sorted, " ")))
 	return filepath.Join(dir, hex.EncodeToString(sum[:8])+".json"), nil
 }
 

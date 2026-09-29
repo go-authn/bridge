@@ -70,7 +70,11 @@ func (c *confFixture) load(t *testing.T, body string) (*config, error) {
 	t.Helper()
 	p := filepath.Join(c.dir, "bridge.hcl")
 	os.WriteFile(p, []byte(body), 0o644)
-	return loadConfig([]string{p})
+	cfg, err := loadConfig([]string{p})
+	if cfg != nil {
+		t.Cleanup(func() { cfg.close() })
+	}
+	return cfg, err
 }
 
 func TestConfigDefaults(t *testing.T) {

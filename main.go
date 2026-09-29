@@ -73,6 +73,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer cfg.close()
 			s, err := newServer(cfg, out)
 			if err != nil {
 				return err
@@ -114,6 +115,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer cfg.close()
 			s, err := newServer(cfg, io.Discard)
 			if err != nil {
 				return err
@@ -169,6 +171,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 
 // serve runs until ctx ends.
 func serve(ctx context.Context, cfg *config, out io.Writer) error {
+	defer cfg.close()
 	s, err := newServer(cfg, out)
 	if err != nil {
 		return err

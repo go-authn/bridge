@@ -237,6 +237,9 @@ func loadConfig(paths []string) (*config, error) {
 	}
 	c.files = files
 	if err := c.check(); err != nil {
+		// check may have opened the database before something after it was
+		// refused.
+		c.close()
 		return nil, err
 	}
 	return &c, nil
@@ -476,4 +479,14 @@ func loopbackHost(h string) bool {
 	}
 	ip := net.ParseIP(h)
 	return ip != nil && ip.IsLoopback()
+}
+
+// close releases what the configuration opened: the application passwords'
+// database. A *sql.DB left open is a file Windows will not delete and a
+// connection pool a server never gives back.
+func (c *config) close() error {
+	if c.AppPasswords != nil && c.AppPasswords.db != nil {
+		return c.AppPasswords.db.Close()
+	}
+	return nil
 }

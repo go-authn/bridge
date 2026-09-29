@@ -194,3 +194,27 @@ func TestAppPasswordConfig(t *testing.T) {
 		t.Error("placeholders")
 	}
 }
+
+// The database is closed with the configuration: a *sql.DB left open is a
+// file Windows will not delete, which is how this was found.
+func TestAppPasswordDatabaseIsClosed(t *testing.T) {
+	c := newConf(t)
+	dsn := filepath.ToSlash(filepath.Join(c.dir, "dsn"))
+	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(c.dir, "x.db"))), 0o600)
+	cfg, err := c.load(t, c.hcl(nil)+"app_passwords {\ndriver = \"sqlite\"\ndsn_file = \""+dsn+"\"\n}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.AppPasswords.db.Ping(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.AppPasswords.db.Ping(); err == nil {
+		t.Error("the database is still open after close")
+	}
+	if err := (&config{}).close(); err != nil {
+		t.Error("closing a configuration with no database")
+	}
+}
