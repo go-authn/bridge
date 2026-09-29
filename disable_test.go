@@ -453,9 +453,13 @@ func TestAppPasswordsTableGainsIdP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.db.Close()
-	if err := b.check(); err != nil {
+	// A second start, the column already there. Its own handle, closed: on
+	// Windows an open handle keeps the file from being removed.
+	again := &appPasswordsBlock{Driver: "sqlite", DSNFile: dsn}
+	if err := again.check(); err != nil {
 		t.Fatalf("a second start, the column already there: %v", err)
 	}
+	again.db.Close()
 	if err := b.set("new@"+idpScope, idpEntity, "pw", time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
