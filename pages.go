@@ -49,7 +49,7 @@ func (s *server) discovery(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) jwks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/jwk-set+json")
-	w.Write(jwks(append([]*signingKey{s.cfg.signingKey}, s.cfg.retiredKeys...)...))
+	w.Write(jwks(s.cfg.publishedKeys()...))
 }
 
 // samlMetadata is this SP's metadata, for the federation's registry.

@@ -236,7 +236,7 @@ func TestOpenPubkeyAfterRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	fresh, _ := loadSigningKey(p)
-	f.s.cfg.signingKey = fresh
+	f.s.cfg.signingKey, f.s.cfg.accessKey = fresh, fresh
 	f.s.cfg.retiredKeys = []*signingKey{old}
 
 	v, _ := verifier.New(opkOp(f, "opk", true, false, ""))

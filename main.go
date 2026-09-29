@@ -129,13 +129,13 @@ func newRootCmd(out io.Writer) *cobra.Command {
 		},
 	})
 
-	var keyFile, saltFile, sshCAFile string
+	var keyFile, saltFile, sshCAFile, atKeyFile string
 	keygen := &cobra.Command{
 		Use:   "keygen",
 		Short: "write a new token signing key and subject salt, refusing to overwrite either",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if keyFile == "" && saltFile == "" && sshCAFile == "" {
-				return errors.New("give --key, --salt, --ssh-ca, or several")
+			if keyFile == "" && saltFile == "" && sshCAFile == "" && atKeyFile == "" {
+				return errors.New("give --key, --salt, --ssh-ca, --access-token-key, or several")
 			}
 			if sshCAFile != "" {
 				pub, err := generateSSHCA(sshCAFile)
@@ -150,6 +150,12 @@ func newRootCmd(out io.Writer) *cobra.Command {
 				}
 				fmt.Fprintf(out, "wrote %s\n", keyFile)
 			}
+			if atKeyFile != "" {
+				if err := generateECKey(atKeyFile); err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "wrote %s (P-256, ES256 access tokens)\n", atKeyFile)
+			}
 			if saltFile != "" {
 				if err := generateSalt(saltFile); err != nil {
 					return err
@@ -160,6 +166,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 		},
 	}
 	keygen.Flags().StringVar(&keyFile, "key", "", "where to write the RSA signing key")
+	keygen.Flags().StringVar(&atKeyFile, "access-token-key", "", "where to write a P-256 key for ES256 access tokens")
 	keygen.Flags().StringVar(&saltFile, "salt", "", "where to write the subject salt")
 	keygen.Flags().StringVar(&sshCAFile, "ssh-ca", "", "where to write an Ed25519 SSH certificate authority key")
 	root.AddCommand(keygen)

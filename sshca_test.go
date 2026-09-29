@@ -57,6 +57,12 @@ client "rclone" {
 // deviceToken logs in through the device grant for client, with scopes.
 func (f *fixture) deviceToken(client string, scopes ...string) *oauth2.Token {
 	f.t.Helper()
+	return f.deviceTokenAs(client, alice, scopes...)
+}
+
+// deviceTokenAs is deviceToken for whoever o says.
+func (f *fixture) deviceTokenAs(client string, o assertionOpts, scopes ...string) *oauth2.Token {
+	f.t.Helper()
 	ep, err := endpoints(f.t.Context(), f.s.cfg.Issuer)
 	if err != nil {
 		f.t.Fatal(err)
@@ -78,7 +84,7 @@ func (f *fixture) deviceToken(client string, scopes ...string) *oauth2.Token {
 		next = location(f.t, b.get(f.s.cfg.Issuer+"/saml/disco?entityID="+idpEntity))
 	}
 	reqID, relay := authnRequest(f.t, next)
-	b.post(f.s.cfg.Issuer+"/saml/acs", map[string][]string{"SAMLResponse": {f.respond(reqID, alice)}, "RelayState": {relay}})
+	b.post(f.s.cfg.Issuer+"/saml/acs", map[string][]string{"SAMLResponse": {f.respond(reqID, o)}, "RelayState": {relay}})
 	tok, err := cfg.DeviceAccessToken(f.t.Context(), da)
 	if err != nil {
 		f.t.Fatal(err)

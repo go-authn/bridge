@@ -60,6 +60,14 @@ type config struct {
 	// verifier allows.
 	RetiredSigningKeyFiles []string `hcl:"retired_signing_key_files,optional"`
 
+	// AccessTokenKeyFile signs access tokens instead of SigningKeyFile: a P-256
+	// key, for ES256, whose signature is 86 characters where a 3072-bit RSA
+	// one is 512 -- what brings a token under the 1023 characters OpenSSH
+	// takes as a keyboard-interactive answer (ssh-oidc). ID tokens stay RS256.
+	// `bridge keygen --access-token-key` writes one. A retired one goes in
+	// retired_signing_key_files like any other.
+	AccessTokenKeyFile string `hcl:"access_token_key_file,optional"`
+
 	// SubjectSaltFile holds the secret that pairwise subjects are derived
 	// with. ⛔ Required, and a file: SATOSA generates one at random when it
 	// is not configured, and every "sub" then changes at every restart --
@@ -99,7 +107,8 @@ type config struct {
 
 	files []string
 
-	signingKey  *signingKey
+	signingKey  *signingKey // ID tokens, and access tokens unless accessKey
+	accessKey   *signingKey // access tokens: signingKey, or access_token_key_file
 	retiredKeys []*signingKey
 	salt        []byte
 	metaCert    *x509.Certificate
@@ -338,13 +347,25 @@ func (c *config) check() error {
 	if c.signingKey, err = loadSigningKey(c.SigningKeyFile); err != nil {
 		return fmt.Errorf("signing_key_file: %w", err)
 	}
+	if c.signingKey.ec != nil {
+		return errors.New("signing_key_file: ID tokens are RS256 (OpenID Connect requires it, OpenPubkey needs it): an RSA key; a P-256 key goes in access_token_key_file")
+	}
+	c.accessKey = c.signingKey
+	if c.AccessTokenKeyFile != "" {
+		if c.accessKey, err = loadSigningKey(c.AccessTokenKeyFile); err != nil {
+			return fmt.Errorf("access_token_key_file: %w", err)
+		}
+		if c.accessKey.kid == c.signingKey.kid {
+			return errors.New("access_token_key_file is signing_key_file: give it a key of its own, or leave it out")
+		}
+	}
 	for _, f := range c.RetiredSigningKeyFiles {
 		k, err := loadSigningKey(f)
 		if err != nil {
 			return fmt.Errorf("retired_signing_key_files: %w", err)
 		}
-		if k.kid == c.signingKey.kid {
-			return fmt.Errorf("retired_signing_key_files: %s is the current signing key", f)
+		if k.kid == c.signingKey.kid || k.kid == c.accessKey.kid {
+			return fmt.Errorf("retired_signing_key_files: %s is a current signing key", f)
 		}
 		c.retiredKeys = append(c.retiredKeys, k)
 	}
