@@ -384,8 +384,18 @@ them, and older ones are found by their scope when the username is scoped
 (eppn, subject-id).
 
 ⛔ A removed application password stops working in go-fileshare when it next
-reads its directory -- today, at its restart. Everything that comes back to
-this provider is refused at once; SMB and S3 are not until then.
+reads its directory: at its `reload` interval, on SIGHUP, or when asked
+(`fileshare.admin.v1.AdminService/ReloadDirectory`, since fileshare v0.10.0),
+which also closes that person's open SMB, WebDAV and S3 sessions. Call it
+after `DisablePerson` for the effect to be immediate. Everything that comes
+back to this provider is refused at once.
+
+⛔ An SSH certificate already issued is not revoked: go-fileshare checks it
+at login, against the CA, and a disabled person can open SFTP sessions with
+it until it expires -- `ssh_ca { validity }`, 12 hours by default, a week at
+most, and never past the IdP's session when it says when that ends. Keep it
+short where disabling must bite; `bridge token` and opkssh fetch a new one
+without the person noticing.
 
 **There are no users or groups to add or delete here.** People exist
 because their institution vouches for them, and their groups are what it
