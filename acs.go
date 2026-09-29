@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package main
+
+import (
+	"errors"
+	"net/http"
+	"net/url"
+
+	"github.com/go-authn/saml"
+)
+
+// acs is where the IdP POSTs its response.
+func (s *server) acs(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.page(w, http.StatusBadRequest, "The response could not be read.")
+		return
+	}
+	id, l, err := s.current(r)
+	if err != nil {
+		s.page(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// ⛔ The response is for THIS browser's login: the handle the IdP
+	// carried back must be the one in the cookie. See loginCookie.
+	if r.PostForm.Get("RelayState") != id {
+		s.logf("acs: a response for another login arrived in this browser")
+		s.page(w, http.StatusBadRequest, "This response belongs to another login.")
+		return
+	}
+	// The login is used up whatever happens next: a response is accepted
+	// once, and a refused one is not retried against the same request.
+	s.logins.take(id)
+	http.SetCookie(w, s.cookie(loginCookie, "", -1))
+	if !l.started {
+		s.page(w, http.StatusBadRequest, "This login never went to an institution.")
+		return
+	}
+
+	a, err := s.sp.Accept(r.PostForm.Get("SAMLResponse"), l.pending)
+	if err != nil {
+		var se *saml.StatusError
+		if errors.As(err, &se) {
+			s.logf("acs: %s said no: %v", l.pending.IdP, err)
+			code := "access_denied"
+			if se.NoPassive() {
+				// OIDC Core 3.1.2.6: prompt=none and a login was needed.
+				code = "login_required"
+			}
+			s.finishError(w, r, l, code, "the institution did not authenticate you")
+			return
+		}
+		s.logf("acs: a response from %s was refused: %v", l.pending.IdP, err)
+		s.page(w, http.StatusBadRequest, "Your institution's answer could not be accepted.")
+		return
+	}
+	who, err := newPerson(a, s.cfg.Claims)
+	if err != nil {
+		s.logf("acs: %s: %v", a.IdP.EntityID, err)
+		s.finishError(w, r, l, "access_denied", "your institution did not say who you are")
+		return
+	}
+	s.logf("login: %s via %s for %s", orUnnamed(who.username), who.idp, l.client.ID)
+
+	code := token()
+	s.codes.put(code, &grant{
+		client:      l.client,
+		redirectURI: l.redirectURI,
+		challenge:   l.challenge,
+		nonce:       l.nonce,
+		scopes:      l.scopes,
+		who:         who,
+	}, s.now().Add(s.cfg.codeTTL))
+	u, _ := url.Parse(l.redirectURI)
+	v := u.Query()
+	v.Set("code", code)
+	if l.state != "" {
+		v.Set("state", l.state)
+	}
+	v.Set("iss", s.cfg.Issuer)
+	u.RawQuery = v.Encode()
+	http.Redirect(w, r, u.String(), http.StatusFound)
+}
+
+// finishError ends a login by telling the client why.
+func (s *server) finishError(w http.ResponseWriter, r *http.Request, l *login, code, desc string) {
+	s.redirectError(w, r, l.redirectURI, l.state, code, desc)
+}
+
+func orUnnamed(s string) string {
+	if s == "" {
+		return "(no username)"
+	}
+	return s
+}
