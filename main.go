@@ -163,6 +163,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 	root.AddCommand(keygen)
 	root.AddCommand(newTokenCmd(out))
 	root.AddCommand(newSSHCertCmd(out))
+	root.AddCommand(newAppPasswordCmd(out))
 	return root
 }
 

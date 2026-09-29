@@ -65,6 +65,10 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not ask for SSH certificates")
 		return
 	}
+	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not set application passwords")
+		return
+	}
 	dc, uc := token(), userCode()
 	exp := s.now().Add(deviceLifetime)
 	s.devices.put(dc, &deviceGrant{client: client, scopes: scopes, userCode: uc, interval: s.poll}, exp)

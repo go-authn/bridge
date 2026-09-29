@@ -59,6 +59,10 @@ type config struct {
 	// SSHCA certifies SSH keys for federated people.
 	SSHCA *sshCABlock `hcl:"ssh_ca,block"`
 
+	// AppPasswords gives federated people a password for the protocols that
+	// cannot carry a token: SMB and S3.
+	AppPasswords *appPasswordsBlock `hcl:"app_passwords,block"`
+
 	// Lifetimes. The defaults are short on purpose: a bearer token is
 	// whoever holds it, and the federation says nothing when somebody
 	// leaves.
@@ -188,6 +192,10 @@ type clientBlock struct {
 	// an SSH public key certified by the ssh_ca block -- which is how a
 	// federated person reaches go-fileshare over SFTP.
 	SSHCertificates bool `hcl:"ssh_certificates,optional"`
+
+	// AppPasswords lets tokens of this client, with the "app_password"
+	// scope, set the person's application password.
+	AppPasswords bool `hcl:"app_passwords,optional"`
 
 	secret     string
 	refreshTTL time.Duration
@@ -346,6 +354,12 @@ func (c *config) check() error {
 		}
 	}
 
+	if c.AppPasswords != nil {
+		if err := c.AppPasswords.check(); err != nil {
+			return fmt.Errorf("app_passwords: %w", err)
+		}
+	}
+
 	if len(c.Clients) == 0 {
 		return errors.New("no client block: nobody could ask this provider for anything")
 	}
@@ -384,6 +398,9 @@ func (c *config) check() error {
 			if ru.Scheme == "http" && !loopbackHost(ru.Hostname()) {
 				return fmt.Errorf("client %q: redirect URI %q: a code sent over cleartext http is a code anybody on the path has", cl.ID, r)
 			}
+		}
+		if cl.AppPasswords && c.AppPasswords == nil {
+			return fmt.Errorf("client %q: app_passwords needs an app_passwords block", cl.ID)
 		}
 		if cl.SSHCertificates && c.SSHCA == nil {
 			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
