@@ -317,10 +317,20 @@ What to know, read in their sources (not yet run end to end):
 - **`sub` must be public** (the default): motley-cue keys an account on
   `sub`, and a pairwise `sub` is one per client -- the same person through
   two clients would get two accounts.
-- **Tokens are longer than 1023 characters** (RS256 with a 3072-bit key), the
-  most OpenSSH reads as a keyboard-interactive answer. mccli then asks
-  motley-cue for a one-time password instead, which motley-cue allows by
-  default; a token pasted into plain `ssh` does not fit.
+- **Tokens and the 1023 characters** OpenSSH reads as a keyboard-interactive
+  answer: an RS256 access token with a 3072-bit key is about 1150 characters
+  before any group. Sign access tokens with a P-256 key instead -- ID tokens
+  stay RS256 --
+
+  ```hcl
+  access_token_key_file = "/var/lib/bridge/access-token.key"   # bridge keygen --access-token-key
+  ```
+
+  and one with a long eppn and three AARC entitlements is 953 (measured). Past
+  that, mccli asks motley-cue for a one-time password instead, which
+  motley-cue allows by default; a token pasted into plain `ssh` has to fit.
+  go-authn/oidc (go-fileshare), coreos/go-oidc and flaat (motley-cue) all
+  verify ES256.
 - **`/userinfo` is how motley-cue checks every token**, and it answers from
   memory: after this provider restarts, tokens handed out before are refused
   there until the person gets a new one.

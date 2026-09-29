@@ -98,7 +98,7 @@ func (s *server) bearerClaims(r *http.Request) (map[string]any, error) {
 	if !ok {
 		return nil, errors.New("no bearer token")
 	}
-	claims, err := s.cfg.signingKey.verify("at+jwt", strings.TrimSpace(raw))
+	claims, err := s.cfg.accessKey.verify("at+jwt", strings.TrimSpace(raw))
 	if err != nil {
 		return nil, err
 	}

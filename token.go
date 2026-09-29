@@ -183,7 +183,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	if !who.sessionEnd.IsZero() {
 		at["session_end"] = who.sessionEnd.Unix()
 	}
-	access, err := s.cfg.signingKey.sign("at+jwt", at)
+	access, err := s.cfg.accessKey.sign("at+jwt", at)
 	if err != nil {
 		return nil, "", err
 	}
@@ -244,7 +244,7 @@ func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "a bearer token is required", http.StatusUnauthorized)
 		return
 	}
-	claims, err := s.cfg.signingKey.verify("at+jwt", strings.TrimSpace(raw))
+	claims, err := s.cfg.accessKey.verify("at+jwt", strings.TrimSpace(raw))
 	var info map[string]any
 	if err == nil {
 		jti, _ := claims["jti"].(string)

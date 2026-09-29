@@ -4,6 +4,8 @@ package main
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -18,15 +20,35 @@ import (
 	"strings"
 )
 
-// signingKey is the RSA key tokens are signed with.
+// signingKey is a key tokens are signed with: RSA for RS256, or P-256 for
+// ES256.
 //
-// RS256 and nothing else: OpenID Connect Discovery requires RS256 among the
-// algorithms a provider offers, and offering one is what makes a relying
-// party's allowlist short. The key's ID is derived from the key, so that a
-// new key is a new kid without anybody having to remember to change one.
+// ID tokens are RS256 and nothing else: OpenID Connect Discovery requires
+// RS256 among the algorithms a provider offers, OpenPubkey's GQ signatures
+// need it, and offering one is what makes a relying party's allowlist short.
+// Access tokens may be ES256 (access_token_key_file): a 3072-bit RS256
+// signature is 512 characters and an ES256 one 86, which is what brings a
+// token under the 1023 characters OpenSSH reads as a keyboard-interactive
+// answer (ssh-oidc). The key's ID is derived from the key, so that a new key
+// is a new kid without anybody having to remember to change one.
 type signingKey struct {
-	key *rsa.PrivateKey
+	key *rsa.PrivateKey   // RS256, or
+	ec  *ecdsa.PrivateKey // ES256
 	kid string
+}
+
+func (s *signingKey) alg() string {
+	if s.ec != nil {
+		return "ES256"
+	}
+	return "RS256"
+}
+
+func (s *signingKey) public() any {
+	if s.ec != nil {
+		return &s.ec.PublicKey
+	}
+	return &s.key.PublicKey
 }
 
 func loadSigningKey(file string) (*signingKey, error) {
@@ -44,22 +66,33 @@ func loadSigningKey(file string) (*signingKey, error) {
 		k, err = x509.ParsePKCS1PrivateKey(blk.Bytes)
 	case "PRIVATE KEY":
 		k, err = x509.ParsePKCS8PrivateKey(blk.Bytes)
+	case "EC PRIVATE KEY":
+		k, err = x509.ParseECPrivateKey(blk.Bytes)
 	default:
 		return nil, fmt.Errorf("%s holds a %q, not a private key", file, blk.Type)
 	}
 	if err != nil {
 		return nil, err
 	}
-	rk, ok := k.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("%s is not an RSA key", file)
+	s := &signingKey{}
+	switch k := k.(type) {
+	case *rsa.PrivateKey:
+		if k.N.BitLen() < 2048 {
+			return nil, fmt.Errorf("%s is a %d-bit key; relying parties refuse RSA under 2048 bits", file, k.N.BitLen())
+		}
+		s.key = k
+	case *ecdsa.PrivateKey:
+		if k.Curve != elliptic.P256() {
+			return nil, fmt.Errorf("%s is on %s; ES256 is P-256", file, k.Curve.Params().Name)
+		}
+		s.ec = k
+	default:
+		return nil, fmt.Errorf("%s is neither an RSA nor a P-256 key", file)
 	}
-	if rk.N.BitLen() < 2048 {
-		return nil, fmt.Errorf("%s is a %d-bit key; relying parties refuse RSA under 2048 bits", file, rk.N.BitLen())
-	}
-	der, _ := x509.MarshalPKIXPublicKey(&rk.PublicKey)
+	der, _ := x509.MarshalPKIXPublicKey(s.public())
 	sum := sha256.Sum256(der)
-	return &signingKey{key: rk, kid: base64.RawURLEncoding.EncodeToString(sum[:12])}, nil
+	s.kid = base64.RawURLEncoding.EncodeToString(sum[:12])
+	return s, nil
 }
 
 // generateKey writes a new RSA key to file, refusing to overwrite one: a
@@ -69,6 +102,19 @@ func generateKey(file string, bits int) error {
 	if err != nil {
 		return err
 	}
+	return writeKey(file, k)
+}
+
+// generateECKey writes a new P-256 key to file, for ES256 access tokens.
+func generateECKey(file string) error {
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return err
+	}
+	return writeKey(file, k)
+}
+
+func writeKey(file string, k any) error {
 	der, err := x509.MarshalPKCS8PrivateKey(k)
 	if err != nil {
 		return err
@@ -107,6 +153,21 @@ func generateSalt(file string) error {
 func jwks(keys ...*signingKey) []byte {
 	set := make([]map[string]string, 0, len(keys))
 	for _, s := range keys {
+		if s.ec != nil {
+			// RFC 7518 6.2.1.2: x and y are the full 32 bytes, leading
+			// zeros kept.
+			pt, _ := s.ec.PublicKey.Bytes() // 0x04 || x || y
+			set = append(set, map[string]string{
+				"kty": "EC",
+				"crv": "P-256",
+				"use": "sig",
+				"alg": "ES256",
+				"kid": s.kid,
+				"x":   base64.RawURLEncoding.EncodeToString(pt[1:33]),
+				"y":   base64.RawURLEncoding.EncodeToString(pt[33:65]),
+			})
+			continue
+		}
 		set = append(set, map[string]string{
 			"kty": "RSA",
 			"use": "sig",
@@ -124,7 +185,7 @@ func jwks(keys ...*signingKey) []byte {
 // token and "at+jwt" for an access token (RFC 9068 2.1, so that one cannot be
 // passed off as the other).
 func (s *signingKey) sign(typ string, claims map[string]any) (string, error) {
-	h, err := json.Marshal(map[string]string{"alg": "RS256", "kid": s.kid, "typ": typ})
+	h, err := json.Marshal(map[string]string{"alg": s.alg(), "kid": s.kid, "typ": typ})
 	if err != nil {
 		return "", err
 	}
@@ -134,8 +195,17 @@ func (s *signingKey) sign(typ string, claims map[string]any) (string, error) {
 	}
 	input := base64.RawURLEncoding.EncodeToString(h) + "." + base64.RawURLEncoding.EncodeToString(p)
 	sum := sha256.Sum256([]byte(input))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, sum[:])
-	if err != nil {
+	var sig []byte
+	if s.ec != nil {
+		// JWS wants r || s, 32 bytes each (RFC 7518 3.4), not ASN.1.
+		r, ss, err := ecdsa.Sign(rand.Reader, s.ec, sum[:])
+		if err != nil {
+			return "", err
+		}
+		sig = make([]byte, 64)
+		r.FillBytes(sig[:32])
+		ss.FillBytes(sig[32:])
+	} else if sig, err = rsa.SignPKCS1v15(rand.Reader, s.key, crypto.SHA256, sum[:]); err != nil {
 		return "", err
 	}
 	return input + "." + base64.RawURLEncoding.EncodeToString(sig), nil
@@ -157,7 +227,7 @@ func (s *signingKey) verify(typ, raw string) (map[string]any, error) {
 	if err := json.Unmarshal(hb, &h); err != nil {
 		return nil, err
 	}
-	if h.Alg != "RS256" || h.Kid != s.kid || h.Typ != typ {
+	if h.Alg != s.alg() || h.Kid != s.kid || h.Typ != typ {
 		return nil, errors.New("not a token of this provider's kind")
 	}
 	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
@@ -165,7 +235,11 @@ func (s *signingKey) verify(typ, raw string) (map[string]any, error) {
 		return nil, err
 	}
 	sum := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
-	if err := rsa.VerifyPKCS1v15(&s.key.PublicKey, crypto.SHA256, sum[:], sig); err != nil {
+	if s.ec != nil {
+		if len(sig) != 64 || !ecdsa.Verify(&s.ec.PublicKey, sum[:], new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:])) {
+			return nil, errors.New("the signature does not verify")
+		}
+	} else if err := rsa.VerifyPKCS1v15(&s.key.PublicKey, crypto.SHA256, sum[:], sig); err != nil {
 		return nil, errors.New("the signature does not verify")
 	}
 	pb, err := base64.RawURLEncoding.DecodeString(parts[1])
@@ -177,4 +251,14 @@ func (s *signingKey) verify(typ, raw string) (map[string]any, error) {
 		return nil, err
 	}
 	return claims, nil
+}
+
+// publishedKeys is the key set: the ID token key, the access token key when
+// it is another, then the retired ones.
+func (c *config) publishedKeys() []*signingKey {
+	keys := []*signingKey{c.signingKey}
+	if c.accessKey != nil && c.accessKey != c.signingKey {
+		keys = append(keys, c.accessKey)
+	}
+	return append(keys, c.retiredKeys...)
 }
