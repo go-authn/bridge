@@ -191,7 +191,11 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	for name, run := range map[string]func(context.Context) error{"admin": admin, "metrics": metrics} {
+	tc, httpChallenges, err := s.publicTLS()
+	if err != nil {
+		return err
+	}
+	for name, run := range map[string]func(context.Context) error{"admin": admin, "metrics": metrics, "acme": httpChallenges} {
 		if run == nil {
 			continue
 		}
@@ -206,7 +210,7 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second, TLSConfig: tc}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -214,8 +218,9 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 		srv.Shutdown(sctx)
 	}()
 	s.logf("bridge %s: %s on %s", version(), cfg.Issuer, ln.Addr())
-	if cfg.CertFile != "" {
-		err = srv.ServeTLS(ln, cfg.CertFile, cfg.KeyFile)
+	if tc != nil {
+		// The certificate comes from tc.GetCertificate, so no files here.
+		err = srv.ServeTLS(ln, "", "")
 	} else {
 		err = srv.Serve(ln)
 	}

@@ -113,6 +113,10 @@ together with RENATER's discovery service (which cannot be restricted).
 - The **access token is checked by go-authn/oidc** with audience `fileshare`,
   exactly as [go-fileshare](https://github.com/go-fileshare/fileshare) checks
   the tokens WebDAV clients bring it; and the ID token is refused there.
+- The **ACME CA is [Pebble](https://github.com/letsencrypt/pebble)**, Let's
+  Encrypt's test CA, with External Account Binding required: it refuses a
+  wrong MAC key, validates tls-alpn-01 against the listener itself, and the
+  certificate served chains to its root.
 - The refusals were **sabotage-checked**: PKCE made optional, redirect URIs
   matched by prefix, the login found through RelayState, the replay revocation,
   the code's binding to its client, verifier and redirect URI, the scopes, the
@@ -223,6 +227,63 @@ redirect URIs -- because its ID token travels to every server it logs into.
 Judged by the openpubkey library itself: its client makes PK Tokens through
 the device flow, with GQ signatures, and through the loopback code flow; its
 verifier accepts them, and refuses one signed by a key no longer published.
+
+## TLS: from files, or from an ACME CA
+
+The public listener serves TLS itself when told to, or plain HTTP behind a
+reverse proxy. From files -- certbot's, a Kubernetes secret -- which are
+**read again when they change** (looked at every minute; a pair that does not
+load yet, the certificate renewed before its key, keeps the one that did):
+
+```hcl
+cert_file = "/etc/letsencrypt/live/login.example.org/fullchain.pem"
+key_file  = "/etc/letsencrypt/live/login.example.org/privkey.pem"
+```
+
+Or from an ACME CA, for the issuer's host and no other:
+
+```hcl
+acme {
+  accept_terms_of_service = true             # the operator's agreement; no default
+  cache_dir = "/var/lib/bridge/acme"        # account key and certificates
+  email     = "noc@example.org"
+  # Let's Encrypt by default: tls-alpn-01 on the listener itself, which then
+  # has to be the one on port 443; or http-01 with
+  # http_listen = ":80"                      # which also redirects to https
+}
+```
+
+**GÉANT TCS** -- what French institutions get through RENATER, issued by
+HARICA since 2025 -- is ACME with External Account Binding. With an
+*Enterprise Admin* ACME account the domains are validated in HARICA's
+portal beforehand, so no challenge is asked and nothing has to reach the
+provider from outside:
+
+```hcl
+acme {
+  accept_terms_of_service = true
+  directory_url     = "https://acme-v02.harica.gr/acme/<your account>/directory"
+  eab_key_id        = "<key id from cm.harica.gr>"
+  eab_hmac_key_file = "/etc/bridge/harica-eab.key"   # the HMAC key, base64url
+  email             = "noc@example.org"             # HARICA requires one
+  cache_dir         = "/var/lib/bridge/acme"
+}
+```
+
+`directory_ca_file` trusts a private ACME CA (step-ca) for the directory's own
+TLS.
+
+⛔ golang.org/x/crypto/acme (v0.57.0) polls a finalized order at the URL in
+the finalize response's `Location` header, which RFC 8555 does not put there
+([golang/go#77704](https://github.com/golang/go/issues/77704)): Let's
+Encrypt sends one, Pebble and Buypass do not, and a CA that does not gets its
+certificate never fetched. This provider learns each order's URL from the
+new-order response, where RFC 8555 does require it, and supplies it. Whether
+HARICA sends the header is not known here; with this, it does not matter.
+
+⛔ The SAML key and certificate (`saml { key_file cert_file }`) are not this
+certificate and never change with it: they are in the federation's metadata,
+and every IdP encrypts to them.
 
 ## Running it: the admin API, health and metrics
 
