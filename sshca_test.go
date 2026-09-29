@@ -128,7 +128,7 @@ func TestSSHCertificate(t *testing.T) {
 			t.Fatalf("ssh-keygen -L: %v\n%s", err, out)
 		}
 		s := string(out)
-		for _, want := range []string{"Type: ssh-ed25519-cert-v01@openssh.com user certificate", "alice@" + idpScope, "Critical Options: (none)", "Extensions: (none)"} {
+		for _, want := range []string{"Type: ssh-ed25519-cert-v01@openssh.com user certificate", "alice@" + idpScope, "Critical Options: (none)", "groups@go-authn.org"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("ssh-keygen -L does not show %q:\n%s", want, s)
 			}
@@ -153,6 +153,14 @@ func TestSSHCertificate(t *testing.T) {
 	}
 	if _, err := checker.Authenticate(connMeta("root"), cert); err == nil {
 		t.Fatal("the certificate let in another user")
+	}
+	if cert.Extensions[GroupsExtension] != strings.Join(alice.entitlement, "\n") {
+		t.Errorf("groups extension %q", cert.Extensions[GroupsExtension])
+	}
+	for k := range cert.Extensions {
+		if strings.HasPrefix(k, "permit-") {
+			t.Errorf("the certificate permits %s", k)
+		}
 	}
 	if len(cert.ValidPrincipals) != 1 {
 		t.Errorf("principals %q", cert.ValidPrincipals)

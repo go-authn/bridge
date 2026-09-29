@@ -28,6 +28,10 @@ import (
 // disagree.
 const sshSkew = 5 * time.Minute
 
+// GroupsExtension is the certificate extension that carries the person's
+// groups, one per line.
+const GroupsExtension = "groups@go-authn.org"
+
 func (b *sshCABlock) load() error {
 	raw, err := os.ReadFile(b.KeyFile)
 	if err != nil {
@@ -175,9 +179,25 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		ValidPrincipals: []string{user},
 		ValidAfter:      uint64(now.Add(-sshSkew).Unix()),
 		ValidBefore:     uint64(until.Unix()),
-		// No extensions: SFTP needs none, and a certificate that does not
-		// permit a pty, forwarding or an rc file is one that grants file
-		// access and nothing else.
+		// No permit-* extensions: SFTP needs none, and a certificate that
+		// does not permit a pty, forwarding or an rc file is one that grants
+		// file access and nothing else.
+	}
+	// The groups, for a server that authorizes by them (go-fileshare's
+	// oidc:groups: rules): one per line, in an extension OpenSSH ignores,
+	// as PROTOCOL.certkeys says an unrecognised extension must be. It grants
+	// nothing by itself; it is signed, so a server trusting this CA can
+	// believe it.
+	if gs, ok := claims["groups"].([]any); ok && len(gs) > 0 {
+		var lines []string
+		for _, g := range gs {
+			if s, ok := g.(string); ok && s != "" && !strings.ContainsRune(s, '\n') {
+				lines = append(lines, s)
+			}
+		}
+		if len(lines) > 0 {
+			cert.Permissions.Extensions = map[string]string{GroupsExtension: strings.Join(lines, "\n")}
+		}
 	}
 	if err := cert.SignCert(rand.Reader, ca.signer); err != nil {
 		s.logf("ssh: %v", err)
