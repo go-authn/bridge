@@ -64,6 +64,52 @@ func (*StatusRequest) Descriptor() ([]byte, []int) {
 	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{0}
 }
 
+type RefreshMetadataResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// status is the provider after the attempt: its federation says when the
+	// metadata was last fetched, and last_error why this attempt failed.
+	Status        *StatusResponse `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshMetadataResponse) Reset() {
+	*x = RefreshMetadataResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshMetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshMetadataResponse) ProtoMessage() {}
+
+func (x *RefreshMetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshMetadataResponse.ProtoReflect.Descriptor instead.
+func (*RefreshMetadataResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RefreshMetadataResponse) GetStatus() *StatusResponse {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
 type StatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -77,7 +123,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[1]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -89,7 +135,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[1]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -102,7 +148,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{1}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StatusResponse) GetVersion() string {
@@ -158,7 +204,7 @@ type Federation struct {
 
 func (x *Federation) Reset() {
 	*x = Federation{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[2]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -170,7 +216,7 @@ func (x *Federation) String() string {
 func (*Federation) ProtoMessage() {}
 
 func (x *Federation) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[2]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -183,7 +229,7 @@ func (x *Federation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Federation.ProtoReflect.Descriptor instead.
 func (*Federation) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{2}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Federation) GetMetadataUrl() string {
@@ -242,7 +288,7 @@ type Counts struct {
 
 func (x *Counts) Reset() {
 	*x = Counts{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[3]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -254,7 +300,7 @@ func (x *Counts) String() string {
 func (*Counts) ProtoMessage() {}
 
 func (x *Counts) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[3]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -267,7 +313,7 @@ func (x *Counts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Counts.ProtoReflect.Descriptor instead.
 func (*Counts) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{3}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Counts) GetLoginsInProgress() int64 {
@@ -313,7 +359,7 @@ type RefreshMetadataRequest struct {
 
 func (x *RefreshMetadataRequest) Reset() {
 	*x = RefreshMetadataRequest{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[4]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +371,7 @@ func (x *RefreshMetadataRequest) String() string {
 func (*RefreshMetadataRequest) ProtoMessage() {}
 
 func (x *RefreshMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[4]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +384,7 @@ func (x *RefreshMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshMetadataRequest.ProtoReflect.Descriptor instead.
 func (*RefreshMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{4}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{5}
 }
 
 type ListIdPsRequest struct {
@@ -354,7 +400,7 @@ type ListIdPsRequest struct {
 
 func (x *ListIdPsRequest) Reset() {
 	*x = ListIdPsRequest{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[5]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -366,7 +412,7 @@ func (x *ListIdPsRequest) String() string {
 func (*ListIdPsRequest) ProtoMessage() {}
 
 func (x *ListIdPsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[5]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -379,7 +425,7 @@ func (x *ListIdPsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIdPsRequest.ProtoReflect.Descriptor instead.
 func (*ListIdPsRequest) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{5}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListIdPsRequest) GetQuery() string {
@@ -402,15 +448,17 @@ type IdP struct {
 	Name       string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Scopes     []string               `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	Categories []string               `protobuf:"bytes,4,rep,name=categories,proto3" json:"categories,omitempty"`
-	// allowed is whether the configuration lets people log in through it.
+	// allowed is whether people can log in through it: the configuration
+	// lists it (or lists none) and it is not disabled.
 	Allowed       bool `protobuf:"varint,5,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	Disabled      bool `protobuf:"varint,6,opt,name=disabled,proto3" json:"disabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IdP) Reset() {
 	*x = IdP{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[6]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -422,7 +470,7 @@ func (x *IdP) String() string {
 func (*IdP) ProtoMessage() {}
 
 func (x *IdP) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[6]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +483,7 @@ func (x *IdP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IdP.ProtoReflect.Descriptor instead.
 func (*IdP) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{6}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *IdP) GetEntityId() string {
@@ -473,6 +521,13 @@ func (x *IdP) GetAllowed() bool {
 	return false
 }
 
+func (x *IdP) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
+	}
+	return false
+}
+
 type ListIdPsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Idps  []*IdP                 `protobuf:"bytes,1,rep,name=idps,proto3" json:"idps,omitempty"`
@@ -484,7 +539,7 @@ type ListIdPsResponse struct {
 
 func (x *ListIdPsResponse) Reset() {
 	*x = ListIdPsResponse{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[7]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -496,7 +551,7 @@ func (x *ListIdPsResponse) String() string {
 func (*ListIdPsResponse) ProtoMessage() {}
 
 func (x *ListIdPsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[7]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -509,7 +564,7 @@ func (x *ListIdPsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIdPsResponse.ProtoReflect.Descriptor instead.
 func (*ListIdPsResponse) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{7}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListIdPsResponse) GetIdps() []*IdP {
@@ -534,7 +589,7 @@ type ListClientsRequest struct {
 
 func (x *ListClientsRequest) Reset() {
 	*x = ListClientsRequest{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[8]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +601,7 @@ func (x *ListClientsRequest) String() string {
 func (*ListClientsRequest) ProtoMessage() {}
 
 func (x *ListClientsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[8]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +614,7 @@ func (x *ListClientsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClientsRequest.ProtoReflect.Descriptor instead.
 func (*ListClientsRequest) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{8}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{9}
 }
 
 type Client struct {
@@ -580,7 +635,7 @@ type Client struct {
 
 func (x *Client) Reset() {
 	*x = Client{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[9]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -592,7 +647,7 @@ func (x *Client) String() string {
 func (*Client) ProtoMessage() {}
 
 func (x *Client) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[9]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -605,7 +660,7 @@ func (x *Client) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Client.ProtoReflect.Descriptor instead.
 func (*Client) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{9}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Client) GetId() string {
@@ -680,7 +735,7 @@ type ListClientsResponse struct {
 
 func (x *ListClientsResponse) Reset() {
 	*x = ListClientsResponse{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[10]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -692,7 +747,7 @@ func (x *ListClientsResponse) String() string {
 func (*ListClientsResponse) ProtoMessage() {}
 
 func (x *ListClientsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[10]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,7 +760,7 @@ func (x *ListClientsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListClientsResponse.ProtoReflect.Descriptor instead.
 func (*ListClientsResponse) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{10}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListClientsResponse) GetClients() []*Client {
@@ -726,7 +781,7 @@ type RevokePersonRequest struct {
 
 func (x *RevokePersonRequest) Reset() {
 	*x = RevokePersonRequest{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[11]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +793,7 @@ func (x *RevokePersonRequest) String() string {
 func (*RevokePersonRequest) ProtoMessage() {}
 
 func (x *RevokePersonRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[11]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +806,7 @@ func (x *RevokePersonRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokePersonRequest.ProtoReflect.Descriptor instead.
 func (*RevokePersonRequest) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{11}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RevokePersonRequest) GetUsername() string {
@@ -761,19 +816,86 @@ func (x *RevokePersonRequest) GetUsername() string {
 	return ""
 }
 
+// Revoked is what a revocation ended.
+type Revoked struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RefreshFamilies int32                  `protobuf:"varint,1,opt,name=refresh_families,json=refreshFamilies,proto3" json:"refresh_families,omitempty"`
+	AccessTokens    int32                  `protobuf:"varint,2,opt,name=access_tokens,json=accessTokens,proto3" json:"access_tokens,omitempty"`
+	// logins are logins and device grants in progress.
+	Logins        int32 `protobuf:"varint,3,opt,name=logins,proto3" json:"logins,omitempty"`
+	AppPasswords  int32 `protobuf:"varint,4,opt,name=app_passwords,json=appPasswords,proto3" json:"app_passwords,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Revoked) Reset() {
+	*x = Revoked{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Revoked) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Revoked) ProtoMessage() {}
+
+func (x *Revoked) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Revoked.ProtoReflect.Descriptor instead.
+func (*Revoked) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *Revoked) GetRefreshFamilies() int32 {
+	if x != nil {
+		return x.RefreshFamilies
+	}
+	return 0
+}
+
+func (x *Revoked) GetAccessTokens() int32 {
+	if x != nil {
+		return x.AccessTokens
+	}
+	return 0
+}
+
+func (x *Revoked) GetLogins() int32 {
+	if x != nil {
+		return x.Logins
+	}
+	return 0
+}
+
+func (x *Revoked) GetAppPasswords() int32 {
+	if x != nil {
+		return x.AppPasswords
+	}
+	return 0
+}
+
 type RevokePersonResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	RefreshFamilies    int32                  `protobuf:"varint,1,opt,name=refresh_families,json=refreshFamilies,proto3" json:"refresh_families,omitempty"`
-	AccessTokens       int32                  `protobuf:"varint,2,opt,name=access_tokens,json=accessTokens,proto3" json:"access_tokens,omitempty"`
-	Logins             int32                  `protobuf:"varint,3,opt,name=logins,proto3" json:"logins,omitempty"`
-	AppPasswordRemoved bool                   `protobuf:"varint,4,opt,name=app_password_removed,json=appPasswordRemoved,proto3" json:"app_password_removed,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Revoked       *Revoked               `protobuf:"bytes,1,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RevokePersonResponse) Reset() {
 	*x = RevokePersonResponse{}
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[12]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -785,7 +907,7 @@ func (x *RevokePersonResponse) String() string {
 func (*RevokePersonResponse) ProtoMessage() {}
 
 func (x *RevokePersonResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_bridge_admin_v1_admin_proto_msgTypes[12]
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -798,35 +920,593 @@ func (x *RevokePersonResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokePersonResponse.ProtoReflect.Descriptor instead.
 func (*RevokePersonResponse) Descriptor() ([]byte, []int) {
-	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{12}
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *RevokePersonResponse) GetRefreshFamilies() int32 {
+func (x *RevokePersonResponse) GetRevoked() *Revoked {
 	if x != nil {
-		return x.RefreshFamilies
+		return x.Revoked
 	}
-	return 0
+	return nil
 }
 
-func (x *RevokePersonResponse) GetAccessTokens() int32 {
+// Disabled is one person or one institution this provider refuses.
+type Disabled struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Exactly one of username and entity_id is set.
+	Username string `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	EntityId string `protobuf:"bytes,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	Reason   string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// by is who disabled it: cn=<certificate CN> or uid=<peer uid>.
+	By    string                 `protobuf:"bytes,4,opt,name=by,proto3" json:"by,omitempty"`
+	Since *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=since,proto3" json:"since,omitempty"`
+	// until is when it lapses; absent, never.
+	Until         *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=until,proto3" json:"until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Disabled) Reset() {
+	*x = Disabled{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Disabled) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Disabled) ProtoMessage() {}
+
+func (x *Disabled) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[15]
 	if x != nil {
-		return x.AccessTokens
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
 	}
-	return 0
+	return mi.MessageOf(x)
 }
 
-func (x *RevokePersonResponse) GetLogins() int32 {
+// Deprecated: Use Disabled.ProtoReflect.Descriptor instead.
+func (*Disabled) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *Disabled) GetUsername() string {
 	if x != nil {
-		return x.Logins
+		return x.Username
 	}
-	return 0
+	return ""
 }
 
-func (x *RevokePersonResponse) GetAppPasswordRemoved() bool {
+func (x *Disabled) GetEntityId() string {
 	if x != nil {
-		return x.AppPasswordRemoved
+		return x.EntityId
+	}
+	return ""
+}
+
+func (x *Disabled) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *Disabled) GetBy() string {
+	if x != nil {
+		return x.By
+	}
+	return ""
+}
+
+func (x *Disabled) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+func (x *Disabled) GetUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Until
+	}
+	return nil
+}
+
+type DisablePersonRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// username is the person's preferred_username, as RevokePersonRequest.
+	Username string `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Reason   string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// until is when it lapses; absent, it lasts until EnablePerson.
+	Until         *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=until,proto3" json:"until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisablePersonRequest) Reset() {
+	*x = DisablePersonRequest{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisablePersonRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisablePersonRequest) ProtoMessage() {}
+
+func (x *DisablePersonRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisablePersonRequest.ProtoReflect.Descriptor instead.
+func (*DisablePersonRequest) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *DisablePersonRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *DisablePersonRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DisablePersonRequest) GetUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Until
+	}
+	return nil
+}
+
+type DisablePersonResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Disabled      *Disabled              `protobuf:"bytes,1,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	Revoked       *Revoked               `protobuf:"bytes,2,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisablePersonResponse) Reset() {
+	*x = DisablePersonResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisablePersonResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisablePersonResponse) ProtoMessage() {}
+
+func (x *DisablePersonResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisablePersonResponse.ProtoReflect.Descriptor instead.
+func (*DisablePersonResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DisablePersonResponse) GetDisabled() *Disabled {
+	if x != nil {
+		return x.Disabled
+	}
+	return nil
+}
+
+func (x *DisablePersonResponse) GetRevoked() *Revoked {
+	if x != nil {
+		return x.Revoked
+	}
+	return nil
+}
+
+type EnablePersonRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnablePersonRequest) Reset() {
+	*x = EnablePersonRequest{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnablePersonRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnablePersonRequest) ProtoMessage() {}
+
+func (x *EnablePersonRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnablePersonRequest.ProtoReflect.Descriptor instead.
+func (*EnablePersonRequest) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *EnablePersonRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+type EnablePersonResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// was_disabled is false when there was nothing to lift.
+	WasDisabled   bool `protobuf:"varint,1,opt,name=was_disabled,json=wasDisabled,proto3" json:"was_disabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnablePersonResponse) Reset() {
+	*x = EnablePersonResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnablePersonResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnablePersonResponse) ProtoMessage() {}
+
+func (x *EnablePersonResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnablePersonResponse.ProtoReflect.Descriptor instead.
+func (*EnablePersonResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *EnablePersonResponse) GetWasDisabled() bool {
+	if x != nil {
+		return x.WasDisabled
 	}
 	return false
+}
+
+type DisableIdPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EntityId      string                 `protobuf:"bytes,1,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	Until         *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=until,proto3" json:"until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableIdPRequest) Reset() {
+	*x = DisableIdPRequest{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableIdPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableIdPRequest) ProtoMessage() {}
+
+func (x *DisableIdPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableIdPRequest.ProtoReflect.Descriptor instead.
+func (*DisableIdPRequest) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *DisableIdPRequest) GetEntityId() string {
+	if x != nil {
+		return x.EntityId
+	}
+	return ""
+}
+
+func (x *DisableIdPRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DisableIdPRequest) GetUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Until
+	}
+	return nil
+}
+
+type DisableIdPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Disabled      *Disabled              `protobuf:"bytes,1,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	Revoked       *Revoked               `protobuf:"bytes,2,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableIdPResponse) Reset() {
+	*x = DisableIdPResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableIdPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableIdPResponse) ProtoMessage() {}
+
+func (x *DisableIdPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableIdPResponse.ProtoReflect.Descriptor instead.
+func (*DisableIdPResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *DisableIdPResponse) GetDisabled() *Disabled {
+	if x != nil {
+		return x.Disabled
+	}
+	return nil
+}
+
+func (x *DisableIdPResponse) GetRevoked() *Revoked {
+	if x != nil {
+		return x.Revoked
+	}
+	return nil
+}
+
+type EnableIdPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EntityId      string                 `protobuf:"bytes,1,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnableIdPRequest) Reset() {
+	*x = EnableIdPRequest{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnableIdPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnableIdPRequest) ProtoMessage() {}
+
+func (x *EnableIdPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnableIdPRequest.ProtoReflect.Descriptor instead.
+func (*EnableIdPRequest) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *EnableIdPRequest) GetEntityId() string {
+	if x != nil {
+		return x.EntityId
+	}
+	return ""
+}
+
+type EnableIdPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WasDisabled   bool                   `protobuf:"varint,1,opt,name=was_disabled,json=wasDisabled,proto3" json:"was_disabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnableIdPResponse) Reset() {
+	*x = EnableIdPResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnableIdPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnableIdPResponse) ProtoMessage() {}
+
+func (x *EnableIdPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnableIdPResponse.ProtoReflect.Descriptor instead.
+func (*EnableIdPResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *EnableIdPResponse) GetWasDisabled() bool {
+	if x != nil {
+		return x.WasDisabled
+	}
+	return false
+}
+
+type ListDisabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDisabledRequest) Reset() {
+	*x = ListDisabledRequest{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDisabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDisabledRequest) ProtoMessage() {}
+
+func (x *ListDisabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDisabledRequest.ProtoReflect.Descriptor instead.
+func (*ListDisabledRequest) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{24}
+}
+
+type ListDisabledResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	People        []*Disabled            `protobuf:"bytes,1,rep,name=people,proto3" json:"people,omitempty"`
+	Idps          []*Disabled            `protobuf:"bytes,2,rep,name=idps,proto3" json:"idps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDisabledResponse) Reset() {
+	*x = ListDisabledResponse{}
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDisabledResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDisabledResponse) ProtoMessage() {}
+
+func (x *ListDisabledResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_bridge_admin_v1_admin_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDisabledResponse.ProtoReflect.Descriptor instead.
+func (*ListDisabledResponse) Descriptor() ([]byte, []int) {
+	return file_bridge_admin_v1_admin_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ListDisabledResponse) GetPeople() []*Disabled {
+	if x != nil {
+		return x.People
+	}
+	return nil
+}
+
+func (x *ListDisabledResponse) GetIdps() []*Disabled {
+	if x != nil {
+		return x.Idps
+	}
+	return nil
 }
 
 var File_bridge_admin_v1_admin_proto protoreflect.FileDescriptor
@@ -834,7 +1514,9 @@ var File_bridge_admin_v1_admin_proto protoreflect.FileDescriptor
 const file_bridge_admin_v1_admin_proto_rawDesc = "" +
 	"\n" +
 	"\x1bbridge/admin/v1/admin.proto\x12\x0fbridge.admin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x0f\n" +
-	"\rStatusRequest\"\xe6\x01\n" +
+	"\rStatusRequest\"R\n" +
+	"\x17RefreshMetadataResponse\x127\n" +
+	"\x06status\x18\x01 \x01(\v2\x1f.bridge.admin.v1.StatusResponseR\x06status\"\xe6\x01\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06issuer\x18\x02 \x01(\tR\x06issuer\x124\n" +
@@ -862,7 +1544,7 @@ const file_bridge_admin_v1_admin_proto_rawDesc = "" +
 	"\x16RefreshMetadataRequest\"=\n" +
 	"\x0fListIdPsRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\x88\x01\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xa4\x01\n" +
 	"\x03IdP\x12\x1b\n" +
 	"\tentity_id\x18\x01 \x01(\tR\bentityId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
@@ -870,7 +1552,8 @@ const file_bridge_admin_v1_admin_proto_rawDesc = "" +
 	"\n" +
 	"categories\x18\x04 \x03(\tR\n" +
 	"categories\x12\x18\n" +
-	"\aallowed\x18\x05 \x01(\bR\aallowed\"R\n" +
+	"\aallowed\x18\x05 \x01(\bR\aallowed\x12\x1a\n" +
+	"\bdisabled\x18\x06 \x01(\bR\bdisabled\"R\n" +
 	"\x10ListIdPsResponse\x12(\n" +
 	"\x04idps\x18\x01 \x03(\v2\x14.bridge.admin.v1.IdPR\x04idps\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\x14\n" +
@@ -888,18 +1571,59 @@ const file_bridge_admin_v1_admin_proto_rawDesc = "" +
 	"\x13ListClientsResponse\x121\n" +
 	"\aclients\x18\x01 \x03(\v2\x17.bridge.admin.v1.ClientR\aclients\"1\n" +
 	"\x13RevokePersonRequest\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\"\xb0\x01\n" +
-	"\x14RevokePersonResponse\x12)\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"\x96\x01\n" +
+	"\aRevoked\x12)\n" +
 	"\x10refresh_families\x18\x01 \x01(\x05R\x0frefreshFamilies\x12#\n" +
 	"\raccess_tokens\x18\x02 \x01(\x05R\faccessTokens\x12\x16\n" +
-	"\x06logins\x18\x03 \x01(\x05R\x06logins\x120\n" +
-	"\x14app_password_removed\x18\x04 \x01(\bR\x12appPasswordRemoved2\xb7\x03\n" +
-	"\x05Admin\x12I\n" +
-	"\x06Status\x12\x1e.bridge.admin.v1.StatusRequest\x1a\x1f.bridge.admin.v1.StatusResponse\x12[\n" +
-	"\x0fRefreshMetadata\x12'.bridge.admin.v1.RefreshMetadataRequest\x1a\x1f.bridge.admin.v1.StatusResponse\x12O\n" +
+	"\x06logins\x18\x03 \x01(\x05R\x06logins\x12#\n" +
+	"\rapp_passwords\x18\x04 \x01(\x05R\fappPasswords\"J\n" +
+	"\x14RevokePersonResponse\x122\n" +
+	"\arevoked\x18\x01 \x01(\v2\x18.bridge.admin.v1.RevokedR\arevoked\"\xcf\x01\n" +
+	"\bDisabled\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x1b\n" +
+	"\tentity_id\x18\x02 \x01(\tR\bentityId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x0e\n" +
+	"\x02by\x18\x04 \x01(\tR\x02by\x120\n" +
+	"\x05since\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x120\n" +
+	"\x05until\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"|\n" +
+	"\x14DisablePersonRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x120\n" +
+	"\x05until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x82\x01\n" +
+	"\x15DisablePersonResponse\x125\n" +
+	"\bdisabled\x18\x01 \x01(\v2\x19.bridge.admin.v1.DisabledR\bdisabled\x122\n" +
+	"\arevoked\x18\x02 \x01(\v2\x18.bridge.admin.v1.RevokedR\arevoked\"1\n" +
+	"\x13EnablePersonRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"9\n" +
+	"\x14EnablePersonResponse\x12!\n" +
+	"\fwas_disabled\x18\x01 \x01(\bR\vwasDisabled\"z\n" +
+	"\x11DisableIdPRequest\x12\x1b\n" +
+	"\tentity_id\x18\x01 \x01(\tR\bentityId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x120\n" +
+	"\x05until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\x7f\n" +
+	"\x12DisableIdPResponse\x125\n" +
+	"\bdisabled\x18\x01 \x01(\v2\x19.bridge.admin.v1.DisabledR\bdisabled\x122\n" +
+	"\arevoked\x18\x02 \x01(\v2\x18.bridge.admin.v1.RevokedR\arevoked\"/\n" +
+	"\x10EnableIdPRequest\x12\x1b\n" +
+	"\tentity_id\x18\x01 \x01(\tR\bentityId\"6\n" +
+	"\x11EnableIdPResponse\x12!\n" +
+	"\fwas_disabled\x18\x01 \x01(\bR\vwasDisabled\"\x15\n" +
+	"\x13ListDisabledRequest\"x\n" +
+	"\x14ListDisabledResponse\x121\n" +
+	"\x06people\x18\x01 \x03(\v2\x19.bridge.admin.v1.DisabledR\x06people\x12-\n" +
+	"\x04idps\x18\x02 \x03(\v2\x19.bridge.admin.v1.DisabledR\x04idps2\x8c\a\n" +
+	"\fAdminService\x12I\n" +
+	"\x06Status\x12\x1e.bridge.admin.v1.StatusRequest\x1a\x1f.bridge.admin.v1.StatusResponse\x12d\n" +
+	"\x0fRefreshMetadata\x12'.bridge.admin.v1.RefreshMetadataRequest\x1a(.bridge.admin.v1.RefreshMetadataResponse\x12O\n" +
 	"\bListIdPs\x12 .bridge.admin.v1.ListIdPsRequest\x1a!.bridge.admin.v1.ListIdPsResponse\x12X\n" +
 	"\vListClients\x12#.bridge.admin.v1.ListClientsRequest\x1a$.bridge.admin.v1.ListClientsResponse\x12[\n" +
-	"\fRevokePerson\x12$.bridge.admin.v1.RevokePersonRequest\x1a%.bridge.admin.v1.RevokePersonResponseB:Z8github.com/go-authn/bridge/proto/bridge/admin/v1;adminv1b\x06proto3"
+	"\fRevokePerson\x12$.bridge.admin.v1.RevokePersonRequest\x1a%.bridge.admin.v1.RevokePersonResponse\x12^\n" +
+	"\rDisablePerson\x12%.bridge.admin.v1.DisablePersonRequest\x1a&.bridge.admin.v1.DisablePersonResponse\x12[\n" +
+	"\fEnablePerson\x12$.bridge.admin.v1.EnablePersonRequest\x1a%.bridge.admin.v1.EnablePersonResponse\x12U\n" +
+	"\n" +
+	"DisableIdP\x12\".bridge.admin.v1.DisableIdPRequest\x1a#.bridge.admin.v1.DisableIdPResponse\x12R\n" +
+	"\tEnableIdP\x12!.bridge.admin.v1.EnableIdPRequest\x1a\".bridge.admin.v1.EnableIdPResponse\x12[\n" +
+	"\fListDisabled\x12$.bridge.admin.v1.ListDisabledRequest\x1a%.bridge.admin.v1.ListDisabledResponseB:Z8github.com/go-authn/bridge/proto/bridge/admin/v1;adminv1b\x06proto3"
 
 var (
 	file_bridge_admin_v1_admin_proto_rawDescOnce sync.Once
@@ -913,46 +1637,81 @@ func file_bridge_admin_v1_admin_proto_rawDescGZIP() []byte {
 	return file_bridge_admin_v1_admin_proto_rawDescData
 }
 
-var file_bridge_admin_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_bridge_admin_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_bridge_admin_v1_admin_proto_goTypes = []any{
-	(*StatusRequest)(nil),          // 0: bridge.admin.v1.StatusRequest
-	(*StatusResponse)(nil),         // 1: bridge.admin.v1.StatusResponse
-	(*Federation)(nil),             // 2: bridge.admin.v1.Federation
-	(*Counts)(nil),                 // 3: bridge.admin.v1.Counts
-	(*RefreshMetadataRequest)(nil), // 4: bridge.admin.v1.RefreshMetadataRequest
-	(*ListIdPsRequest)(nil),        // 5: bridge.admin.v1.ListIdPsRequest
-	(*IdP)(nil),                    // 6: bridge.admin.v1.IdP
-	(*ListIdPsResponse)(nil),       // 7: bridge.admin.v1.ListIdPsResponse
-	(*ListClientsRequest)(nil),     // 8: bridge.admin.v1.ListClientsRequest
-	(*Client)(nil),                 // 9: bridge.admin.v1.Client
-	(*ListClientsResponse)(nil),    // 10: bridge.admin.v1.ListClientsResponse
-	(*RevokePersonRequest)(nil),    // 11: bridge.admin.v1.RevokePersonRequest
-	(*RevokePersonResponse)(nil),   // 12: bridge.admin.v1.RevokePersonResponse
-	(*timestamppb.Timestamp)(nil),  // 13: google.protobuf.Timestamp
+	(*StatusRequest)(nil),           // 0: bridge.admin.v1.StatusRequest
+	(*RefreshMetadataResponse)(nil), // 1: bridge.admin.v1.RefreshMetadataResponse
+	(*StatusResponse)(nil),          // 2: bridge.admin.v1.StatusResponse
+	(*Federation)(nil),              // 3: bridge.admin.v1.Federation
+	(*Counts)(nil),                  // 4: bridge.admin.v1.Counts
+	(*RefreshMetadataRequest)(nil),  // 5: bridge.admin.v1.RefreshMetadataRequest
+	(*ListIdPsRequest)(nil),         // 6: bridge.admin.v1.ListIdPsRequest
+	(*IdP)(nil),                     // 7: bridge.admin.v1.IdP
+	(*ListIdPsResponse)(nil),        // 8: bridge.admin.v1.ListIdPsResponse
+	(*ListClientsRequest)(nil),      // 9: bridge.admin.v1.ListClientsRequest
+	(*Client)(nil),                  // 10: bridge.admin.v1.Client
+	(*ListClientsResponse)(nil),     // 11: bridge.admin.v1.ListClientsResponse
+	(*RevokePersonRequest)(nil),     // 12: bridge.admin.v1.RevokePersonRequest
+	(*Revoked)(nil),                 // 13: bridge.admin.v1.Revoked
+	(*RevokePersonResponse)(nil),    // 14: bridge.admin.v1.RevokePersonResponse
+	(*Disabled)(nil),                // 15: bridge.admin.v1.Disabled
+	(*DisablePersonRequest)(nil),    // 16: bridge.admin.v1.DisablePersonRequest
+	(*DisablePersonResponse)(nil),   // 17: bridge.admin.v1.DisablePersonResponse
+	(*EnablePersonRequest)(nil),     // 18: bridge.admin.v1.EnablePersonRequest
+	(*EnablePersonResponse)(nil),    // 19: bridge.admin.v1.EnablePersonResponse
+	(*DisableIdPRequest)(nil),       // 20: bridge.admin.v1.DisableIdPRequest
+	(*DisableIdPResponse)(nil),      // 21: bridge.admin.v1.DisableIdPResponse
+	(*EnableIdPRequest)(nil),        // 22: bridge.admin.v1.EnableIdPRequest
+	(*EnableIdPResponse)(nil),       // 23: bridge.admin.v1.EnableIdPResponse
+	(*ListDisabledRequest)(nil),     // 24: bridge.admin.v1.ListDisabledRequest
+	(*ListDisabledResponse)(nil),    // 25: bridge.admin.v1.ListDisabledResponse
+	(*timestamppb.Timestamp)(nil),   // 26: google.protobuf.Timestamp
 }
 var file_bridge_admin_v1_admin_proto_depIdxs = []int32{
-	13, // 0: bridge.admin.v1.StatusResponse.started:type_name -> google.protobuf.Timestamp
-	2,  // 1: bridge.admin.v1.StatusResponse.federation:type_name -> bridge.admin.v1.Federation
-	3,  // 2: bridge.admin.v1.StatusResponse.counts:type_name -> bridge.admin.v1.Counts
-	13, // 3: bridge.admin.v1.Federation.valid_until:type_name -> google.protobuf.Timestamp
-	13, // 4: bridge.admin.v1.Federation.last_refresh:type_name -> google.protobuf.Timestamp
-	6,  // 5: bridge.admin.v1.ListIdPsResponse.idps:type_name -> bridge.admin.v1.IdP
-	9,  // 6: bridge.admin.v1.ListClientsResponse.clients:type_name -> bridge.admin.v1.Client
-	0,  // 7: bridge.admin.v1.Admin.Status:input_type -> bridge.admin.v1.StatusRequest
-	4,  // 8: bridge.admin.v1.Admin.RefreshMetadata:input_type -> bridge.admin.v1.RefreshMetadataRequest
-	5,  // 9: bridge.admin.v1.Admin.ListIdPs:input_type -> bridge.admin.v1.ListIdPsRequest
-	8,  // 10: bridge.admin.v1.Admin.ListClients:input_type -> bridge.admin.v1.ListClientsRequest
-	11, // 11: bridge.admin.v1.Admin.RevokePerson:input_type -> bridge.admin.v1.RevokePersonRequest
-	1,  // 12: bridge.admin.v1.Admin.Status:output_type -> bridge.admin.v1.StatusResponse
-	1,  // 13: bridge.admin.v1.Admin.RefreshMetadata:output_type -> bridge.admin.v1.StatusResponse
-	7,  // 14: bridge.admin.v1.Admin.ListIdPs:output_type -> bridge.admin.v1.ListIdPsResponse
-	10, // 15: bridge.admin.v1.Admin.ListClients:output_type -> bridge.admin.v1.ListClientsResponse
-	12, // 16: bridge.admin.v1.Admin.RevokePerson:output_type -> bridge.admin.v1.RevokePersonResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	2,  // 0: bridge.admin.v1.RefreshMetadataResponse.status:type_name -> bridge.admin.v1.StatusResponse
+	26, // 1: bridge.admin.v1.StatusResponse.started:type_name -> google.protobuf.Timestamp
+	3,  // 2: bridge.admin.v1.StatusResponse.federation:type_name -> bridge.admin.v1.Federation
+	4,  // 3: bridge.admin.v1.StatusResponse.counts:type_name -> bridge.admin.v1.Counts
+	26, // 4: bridge.admin.v1.Federation.valid_until:type_name -> google.protobuf.Timestamp
+	26, // 5: bridge.admin.v1.Federation.last_refresh:type_name -> google.protobuf.Timestamp
+	7,  // 6: bridge.admin.v1.ListIdPsResponse.idps:type_name -> bridge.admin.v1.IdP
+	10, // 7: bridge.admin.v1.ListClientsResponse.clients:type_name -> bridge.admin.v1.Client
+	13, // 8: bridge.admin.v1.RevokePersonResponse.revoked:type_name -> bridge.admin.v1.Revoked
+	26, // 9: bridge.admin.v1.Disabled.since:type_name -> google.protobuf.Timestamp
+	26, // 10: bridge.admin.v1.Disabled.until:type_name -> google.protobuf.Timestamp
+	26, // 11: bridge.admin.v1.DisablePersonRequest.until:type_name -> google.protobuf.Timestamp
+	15, // 12: bridge.admin.v1.DisablePersonResponse.disabled:type_name -> bridge.admin.v1.Disabled
+	13, // 13: bridge.admin.v1.DisablePersonResponse.revoked:type_name -> bridge.admin.v1.Revoked
+	26, // 14: bridge.admin.v1.DisableIdPRequest.until:type_name -> google.protobuf.Timestamp
+	15, // 15: bridge.admin.v1.DisableIdPResponse.disabled:type_name -> bridge.admin.v1.Disabled
+	13, // 16: bridge.admin.v1.DisableIdPResponse.revoked:type_name -> bridge.admin.v1.Revoked
+	15, // 17: bridge.admin.v1.ListDisabledResponse.people:type_name -> bridge.admin.v1.Disabled
+	15, // 18: bridge.admin.v1.ListDisabledResponse.idps:type_name -> bridge.admin.v1.Disabled
+	0,  // 19: bridge.admin.v1.AdminService.Status:input_type -> bridge.admin.v1.StatusRequest
+	5,  // 20: bridge.admin.v1.AdminService.RefreshMetadata:input_type -> bridge.admin.v1.RefreshMetadataRequest
+	6,  // 21: bridge.admin.v1.AdminService.ListIdPs:input_type -> bridge.admin.v1.ListIdPsRequest
+	9,  // 22: bridge.admin.v1.AdminService.ListClients:input_type -> bridge.admin.v1.ListClientsRequest
+	12, // 23: bridge.admin.v1.AdminService.RevokePerson:input_type -> bridge.admin.v1.RevokePersonRequest
+	16, // 24: bridge.admin.v1.AdminService.DisablePerson:input_type -> bridge.admin.v1.DisablePersonRequest
+	18, // 25: bridge.admin.v1.AdminService.EnablePerson:input_type -> bridge.admin.v1.EnablePersonRequest
+	20, // 26: bridge.admin.v1.AdminService.DisableIdP:input_type -> bridge.admin.v1.DisableIdPRequest
+	22, // 27: bridge.admin.v1.AdminService.EnableIdP:input_type -> bridge.admin.v1.EnableIdPRequest
+	24, // 28: bridge.admin.v1.AdminService.ListDisabled:input_type -> bridge.admin.v1.ListDisabledRequest
+	2,  // 29: bridge.admin.v1.AdminService.Status:output_type -> bridge.admin.v1.StatusResponse
+	1,  // 30: bridge.admin.v1.AdminService.RefreshMetadata:output_type -> bridge.admin.v1.RefreshMetadataResponse
+	8,  // 31: bridge.admin.v1.AdminService.ListIdPs:output_type -> bridge.admin.v1.ListIdPsResponse
+	11, // 32: bridge.admin.v1.AdminService.ListClients:output_type -> bridge.admin.v1.ListClientsResponse
+	14, // 33: bridge.admin.v1.AdminService.RevokePerson:output_type -> bridge.admin.v1.RevokePersonResponse
+	17, // 34: bridge.admin.v1.AdminService.DisablePerson:output_type -> bridge.admin.v1.DisablePersonResponse
+	19, // 35: bridge.admin.v1.AdminService.EnablePerson:output_type -> bridge.admin.v1.EnablePersonResponse
+	21, // 36: bridge.admin.v1.AdminService.DisableIdP:output_type -> bridge.admin.v1.DisableIdPResponse
+	23, // 37: bridge.admin.v1.AdminService.EnableIdP:output_type -> bridge.admin.v1.EnableIdPResponse
+	25, // 38: bridge.admin.v1.AdminService.ListDisabled:output_type -> bridge.admin.v1.ListDisabledResponse
+	29, // [29:39] is the sub-list for method output_type
+	19, // [19:29] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_bridge_admin_v1_admin_proto_init() }
@@ -966,7 +1725,7 @@ func file_bridge_admin_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_bridge_admin_v1_admin_proto_rawDesc), len(file_bridge_admin_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

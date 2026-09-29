@@ -69,7 +69,7 @@ func (s *server) ready() bool { return s.fed.Metadata() != nil }
 // revoked is what revokePerson ended.
 type revoked struct {
 	families, tokens, logins int
-	appPassword              bool
+	appPasswords             int64
 }
 
 // revokePerson ends everything this provider still holds for somebody,
@@ -83,13 +83,52 @@ type revoked struct {
 // person gets nothing new; and an SSH certificate already issued lasts its
 // validity, which is why that is short.
 func (s *server) revokePerson(username string) (revoked, error) {
-	var r revoked
+	username = s.normUsername(username)
 	if username == "" {
-		return r, nil
+		return revoked{}, nil
 	}
+	r := s.revokeMatching(func(u, _ string) bool { return u == username })
+	if ap := s.cfg.AppPasswords; ap != nil {
+		n, err := ap.removeCount(username)
+		if err != nil {
+			return r, err
+		}
+		r.appPasswords = n
+	}
+	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords",
+		username, r.families, r.tokens, r.logins, r.appPasswords)
+	return r, nil
+}
+
+// revokeIdP ends everything this provider still holds for the people one
+// institution vouched for, application passwords included.
+func (s *server) revokeIdP(entityID string) (revoked, error) {
+	r := s.revokeMatching(func(_, idp string) bool { return idp == entityID })
+	if ap := s.cfg.AppPasswords; ap != nil {
+		var scopes []string
+		if md := s.fed.Metadata(); md != nil && scopedUsername[s.cfg.Claims.Username] {
+			if i, ok := md.IdPs[entityID]; ok {
+				scopes = i.Scopes
+			}
+		}
+		n, err := ap.removeIdP(entityID, scopes)
+		if err != nil {
+			return r, err
+		}
+		r.appPasswords = n
+	}
+	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d app passwords",
+		entityID, r.families, r.tokens, r.logins, r.appPasswords)
+	return r, nil
+}
+
+// revokeMatching ends the grants, tokens and logins of whoever match says,
+// by username and IdP.
+func (s *server) revokeMatching(match func(username, idp string) bool) revoked {
+	var r revoked
 	var families, rts []string
 	s.refresh.each(func(rt string, g *refreshGrant) {
-		if g.who.username == username {
+		if match(g.who.username, g.who.idp) {
 			families = append(families, g.family)
 			rts = append(rts, rt)
 		}
@@ -107,7 +146,7 @@ func (s *server) revokePerson(username string) (revoked, error) {
 	}
 	var jtis []string
 	s.issued.each(func(jti string, it issuedToken) {
-		if it.username == username {
+		if match(it.username, it.idp) {
 			jtis = append(jtis, jti)
 		}
 	})
@@ -118,12 +157,12 @@ func (s *server) revokePerson(username string) (revoked, error) {
 	}
 	var codes, devices []string
 	s.codes.each(func(c string, g *grant) {
-		if g.who.username == username {
+		if match(g.who.username, g.who.idp) {
 			codes = append(codes, c)
 		}
 	})
 	s.devices.each(func(dc string, g *deviceGrant) {
-		if g.who != nil && g.who.username == username {
+		if g.who != nil && match(g.who.username, g.who.idp) {
 			devices = append(devices, dc)
 		}
 	})
@@ -135,14 +174,5 @@ func (s *server) revokePerson(username string) (revoked, error) {
 		s.devices.take(dc)
 		r.logins++
 	}
-	if ap := s.cfg.AppPasswords; ap != nil {
-		n, err := ap.removeCount(username)
-		if err != nil {
-			return r, err
-		}
-		r.appPassword = n > 0
-	}
-	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, app password %v",
-		username, r.families, r.tokens, r.logins, r.appPassword)
-	return r, nil
+	return r
 }

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func (s *server) openAdmin() (func(context.Context) error, error) {
 func (s *server) serveAdmin(ctx context.Context, ln net.Listener, opts []grpc.ServerOption) error {
 	b := s.cfg.Admin
 	g := grpc.NewServer(opts...)
-	adminv1.RegisterAdminServer(g, &adminServer{s: s})
+	adminv1.RegisterAdminServiceServer(g, &adminServer{s: s})
 	h := health.NewServer()
 	healthpb.RegisterHealthServer(g, h)
 	if b.Reflection {
@@ -65,7 +66,7 @@ func (s *server) serveAdmin(ctx context.Context, ln net.Listener, opts []grpc.Se
 			st = healthpb.HealthCheckResponse_SERVING
 		}
 		h.SetServingStatus("", st)
-		h.SetServingStatus(adminv1.Admin_ServiceDesc.ServiceName, st)
+		h.SetServingStatus(adminv1.AdminService_ServiceDesc.ServiceName, st)
 	}
 	setHealth()
 	go func() {
@@ -87,7 +88,7 @@ func (s *server) serveAdmin(ctx context.Context, ln net.Listener, opts []grpc.Se
 }
 
 type adminServer struct {
-	adminv1.UnimplementedAdminServer
+	adminv1.UnimplementedAdminServiceServer
 	s *server
 }
 
@@ -130,14 +131,15 @@ func (a *adminServer) Status(ctx context.Context, _ *adminv1.StatusRequest) (*ad
 	}, nil
 }
 
-func (a *adminServer) RefreshMetadata(ctx context.Context, _ *adminv1.RefreshMetadataRequest) (*adminv1.StatusResponse, error) {
+func (a *adminServer) RefreshMetadata(ctx context.Context, _ *adminv1.RefreshMetadataRequest) (*adminv1.RefreshMetadataResponse, error) {
 	a.s.logf("admin: %s asked for a metadata refresh", caller(ctx))
 	if err := a.s.refreshMetadata(ctx); err != nil {
 		// The refresh failing is an answer, not an RPC failure: the status
 		// says what failed and what is still in use.
 		a.s.logf("admin: the refresh failed: %v", err)
 	}
-	return a.Status(ctx, nil)
+	st, err := a.Status(ctx, nil)
+	return &adminv1.RefreshMetadataResponse{Status: st}, err
 }
 
 func (a *adminServer) ListIdPs(ctx context.Context, req *adminv1.ListIdPsRequest) (*adminv1.ListIdPsResponse, error) {
@@ -160,6 +162,7 @@ func (a *adminServer) ListIdPs(ctx context.Context, req *adminv1.ListIdPsRequest
 			out.Idps = append(out.Idps, &adminv1.IdP{
 				EntityId: i.EntityID, Name: i.Name("fr", "en"), Scopes: i.Scopes,
 				Categories: i.Categories, Allowed: a.s.allowedIdP(i.EntityID),
+				Disabled: a.s.disabled.idp(i.EntityID, a.s.now()),
 			})
 		}
 	}
@@ -188,10 +191,95 @@ func (a *adminServer) RevokePerson(ctx context.Context, req *adminv1.RevokePerso
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &adminv1.RevokePersonResponse{
+	return &adminv1.RevokePersonResponse{Revoked: revokedPB(r)}, nil
+}
+
+func (a *adminServer) DisablePerson(ctx context.Context, req *adminv1.DisablePersonRequest) (*adminv1.DisablePersonResponse, error) {
+	u := strings.TrimSpace(req.GetUsername())
+	e, r, err := a.s.disablePerson(u, req.GetReason(), caller(ctx), untilOf(req.GetUntil()))
+	if err != nil {
+		return nil, disableError(err)
+	}
+	return &adminv1.DisablePersonResponse{Disabled: disabledPB(u, "", e), Revoked: revokedPB(r)}, nil
+}
+
+func (a *adminServer) EnablePerson(ctx context.Context, req *adminv1.EnablePersonRequest) (*adminv1.EnablePersonResponse, error) {
+	was, err := a.s.enablePerson(strings.TrimSpace(req.GetUsername()), caller(ctx))
+	if err != nil {
+		return nil, disableError(err)
+	}
+	return &adminv1.EnablePersonResponse{WasDisabled: was}, nil
+}
+
+func (a *adminServer) DisableIdP(ctx context.Context, req *adminv1.DisableIdPRequest) (*adminv1.DisableIdPResponse, error) {
+	id := strings.TrimSpace(req.GetEntityId())
+	// An entity ID the metadata does not have is still disabled: the next
+	// metadata may bring it back, and the operator may know that before us.
+	// The log says so.
+	if md := a.s.fed.Metadata(); md != nil && id != "" {
+		if _, ok := md.IdPs[id]; !ok {
+			a.s.logf("admin: %s is not in the metadata in use; disabling it anyway", id)
+		}
+	}
+	e, r, err := a.s.disableIdP(id, req.GetReason(), caller(ctx), untilOf(req.GetUntil()))
+	if err != nil {
+		return nil, disableError(err)
+	}
+	return &adminv1.DisableIdPResponse{Disabled: disabledPB("", id, e), Revoked: revokedPB(r)}, nil
+}
+
+func (a *adminServer) EnableIdP(ctx context.Context, req *adminv1.EnableIdPRequest) (*adminv1.EnableIdPResponse, error) {
+	was, err := a.s.enableIdP(strings.TrimSpace(req.GetEntityId()), caller(ctx))
+	if err != nil {
+		return nil, disableError(err)
+	}
+	return &adminv1.EnableIdPResponse{WasDisabled: was}, nil
+}
+
+func (a *adminServer) ListDisabled(ctx context.Context, _ *adminv1.ListDisabledRequest) (*adminv1.ListDisabledResponse, error) {
+	people, idps := a.s.disabled.list(a.s.now())
+	out := &adminv1.ListDisabledResponse{}
+	for _, p := range people {
+		out.People = append(out.People, disabledPB(p.key, "", p.disabledEntry))
+	}
+	for _, i := range idps {
+		out.Idps = append(out.Idps, disabledPB("", i.key, i.disabledEntry))
+	}
+	return out, nil
+}
+
+func untilOf(t *timestamppb.Timestamp) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return t.AsTime()
+}
+
+func disabledPB(username, entityID string, e disabledEntry) *adminv1.Disabled {
+	pb := &adminv1.Disabled{Username: username, EntityId: entityID, Reason: e.Reason, By: e.By, Since: timestamppb.New(e.Since)}
+	if !e.Until.IsZero() {
+		pb.Until = timestamppb.New(e.Until)
+	}
+	return pb
+}
+
+func revokedPB(r revoked) *adminv1.Revoked {
+	return &adminv1.Revoked{
 		RefreshFamilies: int32(r.families), AccessTokens: int32(r.tokens),
-		Logins: int32(r.logins), AppPasswordRemoved: r.appPassword,
-	}, nil
+		Logins: int32(r.logins), AppPasswords: int32(r.appPasswords),
+	}
+}
+
+// disableError is the status for a disabling that could not be made: no
+// file to keep it in, a request missing its subject, or the file failing.
+func disableError(err error) error {
+	switch {
+	case errors.Is(err, errNoDisabledFile):
+		return status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, errBadDisable):
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	return status.Error(codes.Internal, err.Error())
 }
 
 // control is the admin block as grpc-transports/control reads it.
