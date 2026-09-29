@@ -8,6 +8,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,16 +125,15 @@ func TestConfigRefusals(t *testing.T) {
 		"discovery and idps": {rep(`saml {`, `saml {
   discovery = "https://discovery.renater.fr/renater"
   idps = ["https://idp.example.org"]`), "discovery"},
-		"a username attribute":  {add(`claims { username = "cn" }`), "username"},
-		"a groups attribute":    {add(`claims { groups = ["roles"] }`), "groups"},
-		"no clients":            {func(s string) string { return s[:strings.Index(s, "client")] }, "no client"},
-		"a client twice":        {add(`client "web" { redirect_uris = ["https://x.example/cb"] }`), "twice"},
-		"a short secret":        {rep(c.secret, short), "guess"},
-		"a missing secret file": {rep(c.secret, c.dir+"/none"), "no such file"},
-		"no redirect":           {add(`client "x" {}`), "no redirect_uris"},
-		"an http redirect":      {add(`client "x" { redirect_uris = ["http://app.example.org/cb"] }`), "cleartext"},
-		"a relative redirect":   {add(`client "x" { redirect_uris = ["/cb"] }`), "absolute"},
-		"a fragment":            {add(`client "x" { redirect_uris = ["https://a.example/cb#f"] }`), "fragment"},
+		"a username attribute": {add(`claims { username = "cn" }`), "username"},
+		"a groups attribute":   {add(`claims { groups = ["roles"] }`), "groups"},
+		"no clients":           {func(s string) string { return s[:strings.Index(s, "client")] }, "no client"},
+		"a client twice":       {add(`client "web" { redirect_uris = ["https://x.example/cb"] }`), "twice"},
+		"a short secret":       {rep(c.secret, short), "guess"},
+		"no redirect":          {add(`client "x" {}`), "no redirect_uris"},
+		"an http redirect":     {add(`client "x" { redirect_uris = ["http://app.example.org/cb"] }`), "cleartext"},
+		"a relative redirect":  {add(`client "x" { redirect_uris = ["/cb"] }`), "absolute"},
+		"a fragment":           {add(`client "x" { redirect_uris = ["https://a.example/cb#f"] }`), "fragment"},
 		"a subject type": {add(`client "x" {
   redirect_uris = ["https://a.example/cb"]
   subject = "random"
@@ -157,6 +158,21 @@ func TestConfigRefusals(t *testing.T) {
 			}
 		})
 	}
+	// ⛔ Not in the table above, because that table asserts on a SUBSTRING of
+	// the refusal and an absent file has no portable one: Unix says "no such
+	// file or directory", Windows says "The system cannot find the file
+	// specified". Asserting the message there tested which operating system
+	// ran the test, and failed on windows-latest. The KIND is portable.
+	t.Run("a missing secret file", func(t *testing.T) {
+		_, err := c.load(t, rep(c.secret, c.dir+"/none")(c.hcl(nil)))
+		if err == nil {
+			t.Fatal("ACCEPTED")
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("refused, but: %v (want it to wrap fs.ErrNotExist)", err)
+		}
+	})
+
 	if _, err := loadConfig(nil); err == nil {
 		t.Error("no configuration at all")
 	}
