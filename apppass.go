@@ -132,8 +132,18 @@ func (b *appPasswordsBlock) set(login, password string, expires time.Time) error
 
 // remove deletes a person's application password.
 func (b *appPasswordsBlock) remove(login string) error {
-	_, err := b.db.Exec(`DELETE FROM `+b.Table+` WHERE login = `+b.arg(1), login)
+	_, err := b.removeCount(login)
 	return err
+}
+
+// removeCount deletes a person's application password and says how many
+// there were.
+func (b *appPasswordsBlock) removeCount(login string) (int64, error) {
+	res, err := b.db.Exec(`DELETE FROM `+b.Table+` WHERE login = `+b.arg(1), login)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // passwordAlphabet has no characters that read alike (0/O, 1/l/I) and none
@@ -190,6 +200,7 @@ func (s *server) appPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.logf("app password: removed for %s", user)
+		s.counters.inc("bridge_app_passwords_total", "removed")
 		w.WriteHeader(http.StatusNoContent)
 	case http.MethodPost:
 		pw := newAppPassword()
@@ -199,6 +210,7 @@ func (s *server) appPassword(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the password could not be stored", http.StatusInternalServerError)
 			return
 		}
+		s.counters.inc("bridge_app_passwords_total", "set")
 		s.logf("app password: set for %s until %s", user, exp.UTC().Format(time.RFC3339))
 		writeJSON(w, http.StatusOK, map[string]any{"username": user, "password": pw, "expires": exp.Unix()})
 	default:

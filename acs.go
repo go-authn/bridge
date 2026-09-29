@@ -42,6 +42,7 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		var se *saml.StatusError
 		if errors.As(err, &se) {
 			s.logf("acs: %s said no: %v", l.pending.IdP, err)
+			s.counters.inc("bridge_logins_total", "declined")
 			code := "access_denied"
 			if se.NoPassive() {
 				// OIDC Core 3.1.2.6: prompt=none and a login was needed.
@@ -51,16 +52,19 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.logf("acs: a response from %s was refused: %v", l.pending.IdP, err)
+		s.counters.inc("bridge_logins_total", "refused")
 		s.page(w, http.StatusBadRequest, "Your institution's answer could not be accepted.")
 		return
 	}
 	who, err := newPerson(a, s.cfg.Claims)
 	if err != nil {
 		s.logf("acs: %s: %v", a.IdP.EntityID, err)
+		s.counters.inc("bridge_logins_total", "no_identifier")
 		s.finishError(w, r, l, "access_denied", "your institution did not say who you are")
 		return
 	}
 	s.logf("login: %s via %s for %s", orUnnamed(who.username), who.idp, l.client.ID)
+	s.counters.inc("bridge_logins_total", "ok")
 	if l.kind == "device" {
 		s.deviceDone(w, l, who, "")
 		return

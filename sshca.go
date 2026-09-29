@@ -204,6 +204,7 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the certificate could not be signed", http.StatusInternalServerError)
 		return
 	}
+	s.counters.inc("bridge_ssh_certificates_total", "")
 	s.logf("ssh: certified a %s key for %s until %s", key.Type(), user, until.UTC().Format(time.RFC3339))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

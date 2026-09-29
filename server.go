@@ -37,7 +37,7 @@ type server struct {
 	spent *ttl[[]string]
 	// issued access tokens, by jti: what /userinfo answers with, and what
 	// revocation removes.
-	issued *ttl[map[string]any]
+	issued *ttl[issuedToken]
 
 	// devices waiting for their person, by device code; and the user codes
 	// people type, pointing at them.
@@ -54,6 +54,10 @@ type server struct {
 	families *ttl[[]string]
 
 	logMu sync.Mutex
+
+	fedState fedState
+	counters counters
+	started  time.Time
 }
 
 // A login is somebody on their way to their IdP and back.
@@ -76,6 +80,14 @@ type login struct {
 	started bool
 }
 
+// An issuedToken is an access token this provider still honours: what
+// /userinfo answers with, and whose it is, so that one person's tokens can
+// be found and ended.
+type issuedToken struct {
+	info     map[string]any
+	username string
+}
+
 // A grant is what a code stands for.
 type grant struct {
 	client      *clientBlock
@@ -91,7 +103,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("saml: %w", err)
 	}
-	s := &server{cfg: cfg, log: log, now: time.Now}
+	s := &server{cfg: cfg, log: log, now: time.Now, started: time.Now()}
 	s.fed = &saml.Federation{URL: cfg.SAML.MetadataURL, Cert: cfg.metaCert, Now: func() time.Time { return s.now() }}
 	s.sp = &saml.SP{
 		EntityID:   cfg.SAML.EntityID,
@@ -105,7 +117,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.logins = newTTL[*login](now)
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
-	s.issued = newTTL[map[string]any](now)
+	s.issued = newTTL[issuedToken](now)
 	s.devices = newTTL[*deviceGrant](now)
 	s.poll = deviceInterval * time.Second
 	s.userCodes = newTTL[string](now)

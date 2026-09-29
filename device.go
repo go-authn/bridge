@@ -276,6 +276,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			tokenError(w, http.StatusInternalServerError, "server_error", "")
 			return
 		}
+		s.counters.inc("bridge_tokens_issued_total", "device_code")
 		if rt := s.newRefresh(client, who, scopes, jti); rt != "" {
 			resp["refresh_token"] = rt
 		}

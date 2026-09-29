@@ -88,7 +88,10 @@ jobs:
       - run: |
           export BRIDGE_REQUIRE_JUDGE=1
           FLOOR=88.0
-          go test -coverprofile=cover.out -coverpkg=./... ./... >/dev/null
+          # proto/ is protoc's output: measuring it measures the generator, and
+          # it would pull the total under the floor by code nobody here wrote.
+          pkgs=$(go list ./... | grep -v /proto/ | paste -sd, -)
+          go test -coverprofile=cover.out -coverpkg="$pkgs" ./... >/dev/null
           go tool cover -func=cover.out
           cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "coverage: ${cov}%  floor: ${FLOOR}%  standard: 100%"

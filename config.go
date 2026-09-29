@@ -68,6 +68,14 @@ type config struct {
 	// SSHCA certifies SSH keys for federated people.
 	SSHCA *sshCABlock `hcl:"ssh_ca,block"`
 
+	// Admin serves the gRPC administration API (proto/bridge/admin/v1).
+	// Absent, there is none.
+	Admin *adminBlock `hcl:"admin,block"`
+
+	// Metrics serves /healthz, /readyz and /metrics on a listener of its
+	// own. Absent, there are none.
+	Metrics *metricsBlock `hcl:"metrics,block"`
+
 	// AppPasswords gives federated people a password for the protocols that
 	// cannot carry a token: SMB and S3.
 	AppPasswords *appPasswordsBlock `hcl:"app_passwords,block"`
@@ -129,6 +137,25 @@ type samlBlock struct {
 	InformationURL   string            `hcl:"information_url,optional"`
 	PrivacyStatement string            `hcl:"privacy_statement_url,optional"`
 	Technical        string            `hcl:"technical_contact,optional"`
+}
+
+// The administration API's listener.
+type adminBlock struct {
+	// Listen is unix:///path/to/socket (mode 0600) or host:port. TCP needs
+	// the three TLS files -- mutual TLS -- loopback included: every local
+	// user can reach 127.0.0.1.
+	Listen       string `hcl:"listen"`
+	TLSCertFile  string `hcl:"tls_cert_file,optional"`
+	TLSKeyFile   string `hcl:"tls_key_file,optional"`
+	ClientCAFile string `hcl:"client_ca_file,optional"`
+	// Reflection lets grpcurl and friends list the services. Off by default.
+	Reflection bool `hcl:"reflection,optional"`
+}
+
+// The health and metrics listener.
+type metricsBlock struct {
+	// Listen is host:port, e.g. 127.0.0.1:9101. Never the public listener.
+	Listen string `hcl:"listen"`
 }
 
 // An SSH certificate authority.
@@ -377,6 +404,25 @@ func (c *config) check() error {
 		}
 	}
 
+	if a := c.Admin; a != nil {
+		if !haveGRPC {
+			return errors.New("admin: this binary was built with -tags nogrpc, and would start without the API the configuration asks for")
+		}
+		// TCP without all three TLS files -- loopback included, since every
+		// local user can reach it -- unix with any of them, a relative socket
+		// path, an unknown scheme: grpc-transports/control's rules.
+		if err := checkAdmin(a); err != nil {
+			return fmt.Errorf("admin: %w", err)
+		}
+	}
+	if m := c.Metrics; m != nil {
+		if _, _, err := net.SplitHostPort(m.Listen); err != nil {
+			return fmt.Errorf("metrics: listen = %q: host:port", m.Listen)
+		}
+		if m.Listen == c.Listen {
+			return errors.New("metrics: listen is the public listener; metrics have one of their own")
+		}
+	}
 	if c.AppPasswords != nil {
 		if err := c.AppPasswords.check(); err != nil {
 			return fmt.Errorf("app_passwords: %w", err)
