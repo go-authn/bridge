@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"golang.org/x/crypto/ssh"
 )
 
 // A config is one HCL file, or a directory of them read as one.
@@ -54,6 +55,9 @@ type config struct {
 	SAML    *samlBlock    `hcl:"saml,block"`
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`
+
+	// SSHCA certifies SSH keys for federated people.
+	SSHCA *sshCABlock `hcl:"ssh_ca,block"`
 
 	// Lifetimes. The defaults are short on purpose: a bearer token is
 	// whoever holds it, and the federation says nothing when somebody
@@ -113,6 +117,23 @@ type samlBlock struct {
 	Technical        string            `hcl:"technical_contact,optional"`
 }
 
+// An SSH certificate authority.
+type sshCABlock struct {
+	// KeyFile is the CA's private key in OpenSSH format (`bridge keygen
+	// --ssh-ca`). Its public half is what go-fileshare's
+	// trusted_user_ca_file holds.
+	KeyFile string `hcl:"key_file"`
+
+	// Validity is how long a certificate lives: 12h by default, never
+	// longer than the IdP's session when it said when that ends. A
+	// certificate cannot be revoked by this provider, so its lifetime IS its
+	// revocation.
+	Validity string `hcl:"validity,optional"`
+
+	signer   ssh.Signer
+	validity time.Duration
+}
+
 // How what the IdP said becomes claims.
 type claimsBlock struct {
 	// Username is the SAML attribute that becomes preferred_username: "eppn"
@@ -162,6 +183,11 @@ type clientBlock struct {
 	// The federation is not asked again in that time, so this is how long
 	// somebody who has left keeps access. Off by default.
 	RefreshLifetime string `hcl:"refresh_lifetime,optional"`
+
+	// SSHCertificates lets tokens of this client, with the "ssh" scope, have
+	// an SSH public key certified by the ssh_ca block -- which is how a
+	// federated person reaches go-fileshare over SFTP.
+	SSHCertificates bool `hcl:"ssh_certificates,optional"`
 
 	secret     string
 	refreshTTL time.Duration
@@ -314,6 +340,12 @@ func (c *config) check() error {
 		}
 	}
 
+	if c.SSHCA != nil {
+		if err := c.SSHCA.load(); err != nil {
+			return fmt.Errorf("ssh_ca: %w", err)
+		}
+	}
+
 	if len(c.Clients) == 0 {
 		return errors.New("no client block: nobody could ask this provider for anything")
 	}
@@ -352,6 +384,9 @@ func (c *config) check() error {
 			if ru.Scheme == "http" && !loopbackHost(ru.Hostname()) {
 				return fmt.Errorf("client %q: redirect URI %q: a code sent over cleartext http is a code anybody on the path has", cl.ID, r)
 			}
+		}
+		if cl.SSHCertificates && c.SSHCA == nil {
+			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
 		}
 		switch cl.Subject {
 		case "":

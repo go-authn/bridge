@@ -136,6 +136,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /saml/acs", s.acs)
 	mux.HandleFunc("POST /device_authorization", s.deviceAuthorization)
 	mux.HandleFunc("/device", s.device)
+	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
 	return mux
 }
 

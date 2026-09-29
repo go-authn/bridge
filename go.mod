@@ -8,6 +8,7 @@ require (
 	github.com/go-authn/saml v0.1.0
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.37.0
 )
 
@@ -27,6 +28,7 @@ require (
 	github.com/zclconf/go-cty v1.19.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 )

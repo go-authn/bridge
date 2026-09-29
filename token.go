@@ -168,6 +168,11 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	if len(who.groups) > 0 {
 		at["groups"] = who.groups
 	}
+	// When the IdP said its session ends, the token carries it, so that what
+	// is derived from the token -- an SSH certificate -- does not outlive it.
+	if !who.sessionEnd.IsZero() {
+		at["session_end"] = who.sessionEnd.Unix()
+	}
 	access, err := s.cfg.signingKey.sign("at+jwt", at)
 	if err != nil {
 		return nil, "", err

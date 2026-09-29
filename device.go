@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -59,6 +60,10 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 	scopes := strings.Fields(r.PostForm.Get("scope"))
 	if len(scopes) == 0 {
 		scopes = []string{"openid"}
+	}
+	if slices.Contains(scopes, "ssh") && !client.SSHCertificates {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not ask for SSH certificates")
+		return
 	}
 	dc, uc := token(), userCode()
 	exp := s.now().Add(deviceLifetime)
