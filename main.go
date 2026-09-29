@@ -227,6 +227,10 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	s.logf("bridge %s: %s on %s", version(), cfg.Issuer, ln.Addr())
 	if tc != nil {
 		// The certificate comes from tc.GetCertificate, so no files here.
+		// ⛔ ServeTLS, not Serve(tls.NewListener(ln, tc)): ServeTLS appends
+		// "h2" and "http/1.1" to NextProtos, which with ACME holds
+		// "acme-tls/1" alone -- and a Go server refuses every client whose
+		// ALPN shares nothing with it ("no application protocol").
 		err = srv.ServeTLS(ln, "", "")
 	} else {
 		err = srv.Serve(ln)

@@ -57,80 +57,6 @@ func selfSigned(t *testing.T, dir, name string, names ...string) (certFile, keyF
 	return certFile, keyFile, cert
 }
 
-func servedSerial(t *testing.T, f *fileCert) *big.Int {
-	t.Helper()
-	c, err := f.get(nil)
-	if err != nil || c == nil {
-		t.Fatalf("no certificate: %v", err)
-	}
-	x, _ := x509.ParseCertificate(c.Certificate[0])
-	return x.SerialNumber
-}
-
-// A renewed certificate is served without a restart; a half-renewed pair
-// keeps the one that loads.
-func TestFileCertReloads(t *testing.T) {
-	dir := t.TempDir()
-	certFile, keyFile, first := selfSigned(t, dir, "a", "login.example.org")
-	now := time.Now()
-	var logged []string
-	f, err := newFileCert(certFile, keyFile, func(format string, a ...any) { logged = append(logged, fmt.Sprintf(format, a...)) })
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.now = func() time.Time { return now }
-	if servedSerial(t, f).Cmp(first.SerialNumber) != 0 {
-		t.Fatal("not the first certificate")
-	}
-
-	// Renewed: another pair, copied over the same paths, later.
-	c2, k2, second := selfSigned(t, dir, "b", "login.example.org")
-	replace := func(src, dst string, at time.Time) {
-		b, _ := os.ReadFile(src)
-		os.WriteFile(dst, b, 0o600)
-		os.Chtimes(dst, at, at)
-	}
-	later := now.Add(time.Hour)
-	replace(c2, certFile, later)
-	replace(k2, keyFile, later)
-	if servedSerial(t, f).Cmp(first.SerialNumber) != 0 {
-		t.Error("looked again before certCheckEvery")
-	}
-	now = now.Add(certCheckEvery + time.Second)
-	if servedSerial(t, f).Cmp(second.SerialNumber) != 0 {
-		t.Error("the renewed certificate is not served")
-	}
-
-	// Half-renewed: the certificate replaced, the key not yet.
-	c3, _, _ := selfSigned(t, dir, "c", "login.example.org")
-	replace(c3, certFile, later.Add(time.Hour))
-	now = now.Add(certCheckEvery + time.Second)
-	if servedSerial(t, f).Cmp(second.SerialNumber) != 0 {
-		t.Error("a pair that does not load replaced one that did")
-	}
-	if len(logged) != 2 || !strings.Contains(logged[1], "still serving") {
-		t.Errorf("logged %q", logged)
-	}
-
-	if _, err := newFileCert(filepath.Join(dir, "none.crt"), keyFile, t.Logf); err == nil {
-		t.Error("started with no certificate")
-	}
-}
-
-func TestDecodeMACKey(t *testing.T) {
-	for _, s := range []string{
-		"HjudV5qnbreN-n9WyFSH-t4HXuEx_XFen45zuxY-G1h6fr74V3cUM_dVlwQZBWmc", // Pebble's, base64url
-		"aGVsbG8gd29ybGQ=", // standard, padded
-	} {
-		if k, err := decodeMACKey(s); err != nil || len(k) == 0 {
-			t.Errorf("%q: %v", s, err)
-		}
-	}
-	if _, err := decodeMACKey("not a key!"); err == nil {
-		t.Error("accepted a key that is not base64")
-	}
-}
-
 func TestACMEConfigRefusals(t *testing.T) {
 	c := newConf(t)
 	mac := filepath.ToSlash(filepath.Join(c.dir, "mac"))
@@ -152,16 +78,9 @@ cache_dir = ""`)},
 		{"eab half", "go together", block(`accept_terms_of_service = true
 cache_dir = "` + cache + `"
 eab_key_id = "kid-1"`)},
-		{"eab key", "base64", block(`accept_terms_of_service = true
-cache_dir = "` + cache + `"
-eab_key_id = "kid-1"
-eab_hmac_key_file = "` + bad + `"`)},
 		{"http directory", "https URL", block(`accept_terms_of_service = true
 cache_dir = "` + cache + `"
 directory_url = "http://ca.example/dir"`)},
-		{"renew", "renew_before", block(`accept_terms_of_service = true
-cache_dir = "` + cache + `"
-renew_before = "soon"`)},
 		{"http listen", "http_listen", block(`accept_terms_of_service = true
 cache_dir = "` + cache + `"
 http_listen = "80"`)},
@@ -169,7 +88,7 @@ http_listen = "80"`)},
 			return block(`accept_terms_of_service = true
 cache_dir = "`+cache+`"`)(s) + "cert_file = \"" + c.spCert + "\"\nkey_file = \"" + c.spKey + "\"\n"
 		}},
-		{"ip issuer", "not an address", func(s string) string {
+		{"ip issuer", "IP address", func(s string) string {
 			return strings.Replace(block(`accept_terms_of_service = true
 cache_dir = "`+cache+`"`)(s), "https://login.example.org/", "https://192.0.2.1/", 1)
 		}},
@@ -178,7 +97,8 @@ cache_dir = "`+cache+`"`)(s), "https://login.example.org/", "https://192.0.2.1/"
 			t.Errorf("%s: %v, want %q", tc.name, err, tc.want)
 		}
 	}
-	// And one that loads, with EAB: Let's Encrypt's directory by default.
+	// And one that loads, with EAB: the issuer's host is the one domain, and
+	// the paths go to servercert absolute.
 	cfg, err := c.load(t, c.hcl(block(`accept_terms_of_service = true
 cache_dir = "`+cache+`"
 email = "noc@example.org"
@@ -187,8 +107,22 @@ eab_hmac_key_file = "`+mac+`"`)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a := cfg.ACME; a.eab == nil || a.eab.KID != "kid-1" || len(a.eab.Key) != 48 || a.host != "login.example.org" || !strings.Contains(a.DirectoryURL, "letsencrypt") {
-		t.Errorf("acme %+v", a)
+	// A MAC key that is not base64 loads -- servercert reads the file in New,
+	// not in Check -- and the provider does not start: publicTLS runs before
+	// anything is served.
+	badCfg, err := c.load(t, c.hcl(block(`accept_terms_of_service = true
+cache_dir = "`+cache+`"
+eab_key_id = "kid-1"
+eab_hmac_key_file = "`+bad+`"`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := (&server{cfg: badCfg, log: io.Discard}).publicTLS(); err == nil {
+		t.Error("started with an EAB MAC key that is not base64")
+	}
+	sc, ok := cfg.certConfig(t.Logf)
+	if !ok || sc.ACME == nil || len(sc.ACME.Domains) != 1 || sc.ACME.Domains[0] != "login.example.org" || sc.ACME.EABKeyID != "kid-1" || !filepath.IsAbs(sc.ACME.CacheDir) || !filepath.IsAbs(sc.ACME.EABHMACKeyFile) {
+		t.Errorf("servercert config %+v %+v", sc, sc.ACME)
 	}
 }
 
@@ -369,6 +303,27 @@ func TestACMEAgainstPebble(t *testing.T) {
 	if _, err := chain[0].Verify(x509.VerifyOptions{DNSName: "bridge.test", Roots: roots, Intermediates: inter}); err != nil {
 		t.Errorf("the served certificate does not chain to Pebble's root: %v", err)
 	}
+	// A browser's ALPN (h2, http/1.1) is served: with ACME, servercert's
+	// NextProtos is acme-tls/1 alone, and a Go server refuses a client that
+	// shares none of them unless ServeTLS has appended its own.
+	for _, protos := range [][]string{{"h2", "http/1.1"}, {"http/1.1"}} {
+		hc := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{
+			ForceAttemptHTTP2: protos[0] == "h2",
+			TLSClientConfig:   &tls.Config{RootCAs: withInter(roots, chain[1:]), NextProtos: protos},
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, network, "127.0.0.1:"+port)
+			},
+		}}
+		res, err := hc.Get("https://bridge.test:" + port + "/")
+		if err != nil {
+			t.Errorf("ALPN %v: %v", protos, err)
+			continue
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("ALPN %v: %s", protos, res.Status)
+		}
+	}
 	// And a name other than the issuer's is not asked for.
 	if _, err := tls.Dial("tcp", "127.0.0.1:"+port, &tls.Config{ServerName: "elsewhere.example", InsecureSkipVerify: true}); err == nil {
 		t.Error("a certificate for a host that is not the issuer's")
@@ -439,71 +394,6 @@ func dnsAnswer(q []byte) []byte {
 		resp = append(resp, 0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 127, 0, 0, 1)
 	}
 	return resp
-}
-
-type fakeCA map[string]*http.Response
-
-func (f fakeCA) RoundTrip(req *http.Request) (*http.Response, error) {
-	r := *f[req.Method+" "+req.URL.String()]
-	r.Header = r.Header.Clone()
-	return &r, nil
-}
-
-func jsonResponse(body, location string) *http.Response {
-	h := http.Header{"Content-Type": {"application/json"}}
-	if location != "" {
-		h.Set("Location", location)
-	}
-	return &http.Response{StatusCode: 200, Header: h, Body: io.NopCloser(strings.NewReader(body))}
-}
-
-// The order's URL, learned from new-order, is given to a finalize response
-// that has none; one that has its own keeps it.
-func TestOrderLocation(t *testing.T) {
-	const order, fin = "https://ca.test/order/1", "https://ca.test/finalize/1"
-	body := `{"status":"processing","finalize":"` + fin + `"}`
-	send := func(o *orderLocation, method, u string) *http.Response {
-		req, _ := http.NewRequest(method, u, nil)
-		res, err := o.RoundTrip(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return res
-	}
-
-	o := &orderLocation{next: fakeCA{
-		"POST https://ca.test/new-order": jsonResponse(`{"status":"pending","finalize":"`+fin+`"}`, order),
-		"POST " + fin:                    jsonResponse(body, ""),
-	}}
-	send(o, "POST", "https://ca.test/new-order")
-	res := send(o, "POST", fin)
-	if got := res.Header.Get("Location"); got != order {
-		t.Errorf("finalize Location %q, want %q", got, order)
-	}
-	if b, _ := io.ReadAll(res.Body); string(b) != body {
-		t.Errorf("the body was not handed on whole: %q", b)
-	}
-
-	// Learned from fetching the order instead.
-	o = &orderLocation{next: fakeCA{
-		"POST " + order: jsonResponse(body, ""),
-		"POST " + fin:   jsonResponse(body, ""),
-	}}
-	send(o, "POST", order)
-	if got := send(o, "POST", fin).Header.Get("Location"); got != order {
-		t.Errorf("after a fetch: %q", got)
-	}
-
-	// A CA that sends its own is left alone, and nothing is made up for an
-	// order never seen.
-	o = &orderLocation{next: fakeCA{"POST " + fin: jsonResponse(body, "https://ca.test/theirs")}}
-	if got := send(o, "POST", fin).Header.Get("Location"); got != "https://ca.test/theirs" {
-		t.Errorf("the CA's own Location replaced: %q", got)
-	}
-	o = &orderLocation{next: fakeCA{"POST " + fin: jsonResponse(body, "")}}
-	if got := send(o, "POST", fin).Header.Get("Location"); got != "" {
-		t.Errorf("a Location made up: %q", got)
-	}
 }
 
 // http_listen: challenges there, and everything else sent to https.
@@ -597,4 +487,14 @@ func TestServeTLSFromFiles(t *testing.T) {
 	if err := serve(t.Context(), cfg, io.Discard); err == nil {
 		t.Error("served TLS with no certificate")
 	}
+}
+
+// withInter is roots with the served intermediates added as roots too:
+// Pebble's chain is leaf, intermediate, and its root is fetched apart.
+func withInter(roots *x509.CertPool, inter []*x509.Certificate) *x509.CertPool {
+	p := roots.Clone()
+	for _, c := range inter {
+		p.AddCert(c)
+	}
+	return p
 }

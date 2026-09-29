@@ -230,10 +230,12 @@ verifier accepts them, and refuses one signed by a key no longer published.
 
 ## TLS: from files, or from an ACME CA
 
-The public listener serves TLS itself when told to, or plain HTTP behind a
+Both are [go-authn/servercert](https://github.com/go-authn/servercert)'s,
+shared with go-fileshare. The public listener serves TLS itself when told to, or plain HTTP behind a
 reverse proxy. From files -- certbot's, a Kubernetes secret -- which are
-**read again when they change** (looked at every minute; a pair that does not
-load yet, the certificate renewed before its key, keeps the one that did):
+**read again when they change** (compared by content at most every 10 seconds;
+a pair that does not load yet, the certificate renewed before its key, keeps
+the one that did):
 
 ```hcl
 cert_file = "/etc/letsencrypt/live/login.example.org/fullchain.pem"
@@ -262,7 +264,7 @@ provider from outside:
 ```hcl
 acme {
   accept_terms_of_service = true
-  directory_url     = "https://acme-v02.harica.gr/acme/<your account>/directory"
+  directory_url     = "<the ACME directory URL cm.harica.gr shows for the account>"
   eab_key_id        = "<key id from cm.harica.gr>"
   eab_hmac_key_file = "/etc/bridge/harica-eab.key"   # the HMAC key, base64url
   email             = "noc@example.org"             # HARICA requires one
@@ -277,7 +279,7 @@ TLS.
 the finalize response's `Location` header, which RFC 8555 does not put there
 ([golang/go#77704](https://github.com/golang/go/issues/77704)): Let's
 Encrypt sends one, Pebble and Buypass do not, and a CA that does not gets its
-certificate never fetched. This provider learns each order's URL from the
+certificate never fetched. servercert learns each order's URL from the
 new-order response, where RFC 8555 does require it, and supplies it. Whether
 HARICA sends the header is not known here; with this, it does not matter.
 
