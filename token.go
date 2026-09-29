@@ -161,7 +161,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	at := map[string]any{
 		"iss":       s.cfg.Issuer,
 		"sub":       sub,
-		"aud":       client.Audience,
+		"aud":       audience(client.Audience),
 		"client_id": client.ID,
 		"exp":       now.Add(s.cfg.tokenTTL).Unix(),
 		"iat":       now.Unix(),
@@ -261,4 +261,16 @@ func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, info)
+}
+
+// audience is "aud" as a string when there is one, a list otherwise (RFC
+// 7519 4.1.3 allows either). One string is what most tokens carry, and
+// what some verifiers compare against: mccli, the KIT ssh-oidc client,
+// tests `token_audience != audience` as strings (mccli init_utils.py), so
+// a one-element list never matches there.
+func audience(aud []string) any {
+	if len(aud) == 1 {
+		return aud[0]
+	}
+	return aud
 }
