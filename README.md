@@ -284,6 +284,46 @@ HARICA sends the header is not known here; with this, it does not matter.
 ⛔ The SAML key and certificate (`saml { key_file cert_file }`) are not this
 certificate and never change with it: they are in the federation's metadata,
 and every IdP encrypts to them.
+## ssh-oidc (KIT: oidc-agent, mccli, motley-cue, pam-ssh-oidc)
+
+[ssh-oidc](https://ssh-oidc-doc.data.kit.edu/) logs people into SSH with an
+access token: oidc-agent gets it, mccli sends it, motley-cue on the server
+checks it at this provider's `/userinfo` and maps the person to a local account.
+It needs nothing this provider lacks -- no dynamic registration, no
+introspection, no token exchange -- only a client for oidc-agent:
+
+```hcl
+client "oidc-agent" {
+  # public: oidc-gen --pub --client-id oidc-agent
+  redirect_uris    = ["http://localhost:8080", "http://localhost:4242", "http://localhost:43985"]
+  device           = true
+  refresh_lifetime = "720h"   # oidc-agent refuses a provider that gives no refresh token
+  audience         = ["ssh"]  # what motley-cue's audience says
+}
+```
+
+and on the server, in `motley_cue.conf`:
+
+```ini
+[authorisation.bridge]
+op_url = https://login.example.org
+scopes = ["openid", "profile", "email", "eduperson"]
+vo_claim = eduperson_entitlement   # or groups
+audience = ssh
+```
+
+What to know, read in their sources (not yet run end to end):
+
+- **`sub` must be public** (the default): motley-cue keys an account on
+  `sub`, and a pairwise `sub` is one per client -- the same person through
+  two clients would get two accounts.
+- **Tokens are longer than 1023 characters** (RS256 with a 3072-bit key), the
+  most OpenSSH reads as a keyboard-interactive answer. mccli then asks
+  motley-cue for a one-time password instead, which motley-cue allows by
+  default; a token pasted into plain `ssh` does not fit.
+- **`/userinfo` is how motley-cue checks every token**, and it answers from
+  memory: after this provider restarts, tokens handed out before are refused
+  there until the person gets a new one.
 
 ## Running it: the admin API, health and metrics
 

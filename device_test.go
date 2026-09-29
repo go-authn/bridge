@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -328,5 +329,31 @@ func TestTokenCommand(t *testing.T) {
 	}
 	if _, err := endpoints(t.Context(), f.s.cfg.Issuer+"/other"); err == nil {
 		t.Error("a discovery document fetched from elsewhere than its issuer")
+	}
+}
+
+// "aud" is a string for one audience and a list for several, and
+// go-authn/oidc -- what go-fileshare verifies with -- accepts both.
+func TestAccessTokenAudience(t *testing.T) {
+	for _, tc := range []struct {
+		aud  []string
+		want string
+	}{
+		{[]string{"fileshare"}, `"fileshare"`},
+		{[]string{"fileshare", "motley-cue"}, `["fileshare","motley-cue"]`},
+	} {
+		b, _ := json.Marshal(audience(tc.aud))
+		if string(b) != tc.want {
+			t.Errorf("%v: %s, want %s", tc.aud, b, tc.want)
+		}
+	}
+	f, _ := deviceFixture(t)
+	tok := f.deviceToken("rclone", "openid")
+	parts := strings.Split(tok.AccessToken, ".")
+	payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	var claims map[string]json.RawMessage
+	json.Unmarshal(payload, &claims)
+	if string(claims["aud"]) != `"fileshare"` {
+		t.Errorf("aud %s in the access token", claims["aud"])
 	}
 }
