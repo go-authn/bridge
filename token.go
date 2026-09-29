@@ -133,6 +133,7 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		return
 	}
 	s.spent.put(code, []string{jti}, s.now().Add(s.cfg.tokenTTL))
+	s.counters.inc("bridge_tokens_issued_total", "authorization_code")
 	if rt := s.newRefresh(client, g.who, g.scopes, jti); rt != "" {
 		resp["refresh_token"] = rt
 	}
@@ -180,7 +181,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 
 	info := who.claimsFor(scopes)
 	info["sub"] = sub
-	s.issued.put(jti, info, now.Add(s.cfg.tokenTTL))
+	s.issued.put(jti, issuedToken{info: info, username: who.username}, now.Add(s.cfg.tokenTTL))
 
 	// The ID token is for the CLIENT: aud is its ID, and it carries the
 	// nonce back (OIDC Core 2, 3.1.3.6).
@@ -238,7 +239,9 @@ func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
 	var info map[string]any
 	if err == nil {
 		jti, _ := claims["jti"].(string)
-		info, ok = s.issued.get(jti)
+		var it issuedToken
+		it, ok = s.issued.get(jti)
+		info = it.info
 		if !ok {
 			err = errRevoked
 		}

@@ -95,3 +95,22 @@ func token() string {
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// each calls f for every live entry, under the lock: f must not call back
+// into t.
+func (t *ttl[V]) each(f func(k string, v V)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sweep()
+	for k, e := range t.m {
+		f(k, e.v)
+	}
+}
+
+// count is how many live entries there are.
+func (t *ttl[V]) count() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sweep()
+	return len(t.m)
+}

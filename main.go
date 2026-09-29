@@ -179,10 +179,28 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	// The metadata is fetched before listening: a provider that cannot
 	// name a single institution is one nobody can log in through, and it
 	// should say so rather than start.
-	if err := s.fed.Refresh(ctx); err != nil {
+	if err := s.refreshMetadata(ctx); err != nil {
 		return fmt.Errorf("the federation's metadata: %w", err)
 	}
-	go s.fed.Run(ctx, func(err error) { s.logf("metadata refresh: %v", err) })
+	go s.refreshLoop(ctx)
+	admin, err := s.openAdmin()
+	if err != nil {
+		return err
+	}
+	metrics, err := s.openMetrics()
+	if err != nil {
+		return err
+	}
+	for name, run := range map[string]func(context.Context) error{"admin": admin, "metrics": metrics} {
+		if run == nil {
+			continue
+		}
+		go func() {
+			if err := run(ctx); err != nil {
+				s.logf("%s: %v", name, err)
+			}
+		}()
+	}
 
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
