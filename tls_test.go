@@ -498,3 +498,25 @@ func withInter(roots *x509.CertPool, inter []*x509.Certificate) *x509.CertPool {
 	}
 	return p
 }
+
+// `bridge check` reads the certificate pair, as the provider would at start:
+// servercert's Check alone does not.
+func TestCheckReadsTheCertificate(t *testing.T) {
+	f := newFixture(t, "")
+	dir := t.TempDir()
+	good, goodKey, _ := selfSigned(t, dir, "a", "127.0.0.1")
+	_, otherKey, _ := selfSigned(t, dir, "b", "127.0.0.1")
+	base, _ := os.ReadFile(f.cfgFile)
+	write := func(cert, key string) string {
+		p := filepath.Join(dir, cert[len(cert)-5:]+filepath.Base(key)+".hcl")
+		os.WriteFile(p, append(append([]byte{}, base...), []byte("cert_file = \""+filepath.ToSlash(cert)+"\"\nkey_file = \""+filepath.ToSlash(key)+"\"\n")...), 0o600)
+		return p
+	}
+	out, err := runCmd(t, "check", "--config", write(good, goodKey))
+	if err != nil || !strings.Contains(out, "tls           from ") {
+		t.Errorf("a good pair: %v\n%s", err, out)
+	}
+	if _, err := runCmd(t, "check", "--config", write(good, otherKey)); err == nil || !strings.Contains(err.Error(), "tls") {
+		t.Errorf("a key that is not the certificate's passed check: %v", err)
+	}
+}
