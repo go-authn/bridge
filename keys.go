@@ -102,16 +102,21 @@ func generateSalt(file string) error {
 	return f.Close()
 }
 
-// jwks is the key set relying parties verify with.
-func (s *signingKey) jwks() []byte {
-	b, _ := json.Marshal(map[string]any{"keys": []map[string]string{{
-		"kty": "RSA",
-		"use": "sig",
-		"alg": "RS256",
-		"kid": s.kid,
-		"n":   base64.RawURLEncoding.EncodeToString(s.key.N.Bytes()),
-		"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(s.key.E)).Bytes()),
-	}}})
+// jwks is the key set relying parties verify with: the current key, then
+// the retired ones.
+func jwks(keys ...*signingKey) []byte {
+	set := make([]map[string]string, 0, len(keys))
+	for _, s := range keys {
+		set = append(set, map[string]string{
+			"kty": "RSA",
+			"use": "sig",
+			"alg": "RS256",
+			"kid": s.kid,
+			"n":   base64.RawURLEncoding.EncodeToString(s.key.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(s.key.E)).Bytes()),
+		})
+	}
+	b, _ := json.Marshal(map[string]any{"keys": set})
 	return b
 }
 

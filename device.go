@@ -35,6 +35,11 @@ type deviceGrant struct {
 	client   *clientBlock
 	scopes   []string
 	userCode string
+	// nonce comes back in the ID token, as in the code flow. OpenPubkey
+	// puts its commitment to the user's key there (the SHA3-256 of the
+	// client instance claims), and sends it on THIS request in the device
+	// flow: a nonce dropped here is a PK Token that never verifies.
+	nonce string
 
 	who      *person // set when the person has logged in
 	denied   bool
@@ -71,7 +76,7 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 	}
 	dc, uc := token(), userCode()
 	exp := s.now().Add(deviceLifetime)
-	s.devices.put(dc, &deviceGrant{client: client, scopes: scopes, userCode: uc, interval: s.poll}, exp)
+	s.devices.put(dc, &deviceGrant{client: client, scopes: scopes, userCode: uc, nonce: r.PostForm.Get("nonce"), interval: s.poll}, exp)
 	s.userCodes.put(uc, dc, exp)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_code":               dc,
@@ -239,6 +244,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 	var tooSoon, denied bool
 	var who *person
 	var scopes []string
+	var nonce string
 	s.devices.update(dc, func(p **deviceGrant) {
 		// RFC 8628 3.5: polling faster than the interval earns slow_down,
 		// and the interval grows by five seconds for good.
@@ -247,7 +253,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			(*p).interval += 5 * time.Second
 		}
 		(*p).lastPoll = now
-		denied, who, scopes = (*p).denied, (*p).who, (*p).scopes
+		denied, who, scopes, nonce = (*p).denied, (*p).who, (*p).scopes, (*p).nonce
 	})
 	switch {
 	case denied:
@@ -264,7 +270,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			tokenError(w, http.StatusBadRequest, "expired_token", "")
 			return
 		}
-		resp, jti, err := s.issue(client, who, scopes, "")
+		resp, jti, err := s.issue(client, who, scopes, nonce)
 		if err != nil {
 			s.logf("token: %v", err)
 			tokenError(w, http.StatusInternalServerError, "server_error", "")

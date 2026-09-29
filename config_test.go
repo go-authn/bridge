@@ -255,7 +255,7 @@ func TestKeys(t *testing.T) {
 	if _, err := loadSigningKey(filepath.Join(dir, "none")); err == nil {
 		t.Error("a missing key file")
 	}
-	if !bytes.Contains(k.jwks(), []byte(`"alg":"RS256"`)) {
+	if !bytes.Contains(jwks(k), []byte(`"alg":"RS256"`)) {
 		t.Error("the key set does not say RS256")
 	}
 }

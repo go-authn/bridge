@@ -46,6 +46,15 @@ type config struct {
 	// at every restart invalidates every token every relying party holds.
 	SigningKeyFile string `hcl:"signing_key_file"`
 
+	// RetiredSigningKeyFiles are keys that signed before the current one.
+	// They sign nothing any more and stay PUBLISHED, because a verifier can
+	// only check a signature whose key it can still fetch: an OpenPubkey PK
+	// Token lives a day or a week, long after the ID token inside it
+	// expired, and the openpubkey verifier never looks for old keys. Keep a
+	// retired key here at least as long as the longest PK Token lifetime any
+	// verifier allows.
+	RetiredSigningKeyFiles []string `hcl:"retired_signing_key_files,optional"`
+
 	// SubjectSaltFile holds the secret that pairwise subjects are derived
 	// with. ⛔ Required, and a file: SATOSA generates one at random when it
 	// is not configured, and every "sub" then changes at every restart --
@@ -72,12 +81,13 @@ type config struct {
 
 	files []string
 
-	signingKey *signingKey
-	salt       []byte
-	metaCert   *x509.Certificate
-	codeTTL    time.Duration
-	tokenTTL   time.Duration
-	idTokenTTL time.Duration
+	signingKey  *signingKey
+	retiredKeys []*signingKey
+	salt        []byte
+	metaCert    *x509.Certificate
+	codeTTL     time.Duration
+	tokenTTL    time.Duration
+	idTokenTTL  time.Duration
 }
 
 // The SAML side: who this is in the federation, and which federation.
@@ -279,6 +289,16 @@ func (c *config) check() error {
 
 	if c.signingKey, err = loadSigningKey(c.SigningKeyFile); err != nil {
 		return fmt.Errorf("signing_key_file: %w", err)
+	}
+	for _, f := range c.RetiredSigningKeyFiles {
+		k, err := loadSigningKey(f)
+		if err != nil {
+			return fmt.Errorf("retired_signing_key_files: %w", err)
+		}
+		if k.kid == c.signingKey.kid {
+			return fmt.Errorf("retired_signing_key_files: %s is the current signing key", f)
+		}
+		c.retiredKeys = append(c.retiredKeys, k)
 	}
 	if c.salt, err = os.ReadFile(c.SubjectSaltFile); err != nil {
 		return fmt.Errorf("subject_salt_file: %w", err)
