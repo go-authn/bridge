@@ -189,6 +189,18 @@ app_passwords {
 What is stored is what the protocols need: the NT hash for SMB, the password
 itself only when S3 is asked for.
 
+The table is `login, password, nt_hash, expires, idp` (`idp`, the institution
+that vouched, since v0.4.0). Name the columns in go-fileshare's query, never
+`*`: go-authn/directory's sqldir reads them by position and refuses more than
+it knows, so a `*` breaks at the first restart after a column is added:
+
+```sql
+-- sqlite; PostgreSQL: expires > extract(epoch from now())
+select login, password, nt_hash from app_passwords where expires > strftime('%s','now')
+```
+
+(This is the query the tests run through sqldir.)
+
 ## OpenPubkey and opkssh
 
 [OpenPubkey](https://github.com/openpubkey/openpubkey) commits the user's key in
@@ -257,6 +269,10 @@ reason. Disabling an institution also removes its people's application
 passwords: those set from this version on carry the IdP that vouched for
 them, and older ones are found by their scope when the username is scoped
 (eppn, subject-id).
+
+⛔ A removed application password stops working in go-fileshare when it next
+reads its directory -- today, at its restart. Everything that comes back to
+this provider is refused at once; SMB and S3 are not until then.
 
 **There are no users or groups to add or delete here.** People exist
 because their institution vouches for them, and their groups are what it
