@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-authn/servercert"
 	"github.com/spf13/cobra"
 )
 
@@ -78,6 +79,20 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// servercert's Check touches nothing on disk; New reads the
+			// certificate pair or the EAB key, which is what a check is for.
+			tlsLine := "none (a reverse proxy in front)"
+			if sc, ok := cfg.certConfig(s.logf); ok {
+				src, err := servercert.New(sc)
+				if err != nil {
+					return fmt.Errorf("tls: %w", err)
+				}
+				src.Close()
+				tlsLine = "from " + cfg.CertFile
+				if a := cfg.ACME; a != nil {
+					tlsLine = "ACME, " + a.host + " from " + orDefault(a.DirectoryURL, "Let's Encrypt")
+				}
+			}
 			if err := s.fed.Refresh(cmd.Context()); err != nil {
 				return fmt.Errorf("the federation's metadata: %w", err)
 			}
@@ -90,6 +105,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			}
 			fmt.Fprintf(out, "issuer        %s\n", cfg.Issuer)
 			fmt.Fprintf(out, "SAML entity   %s\n", cfg.SAML.EntityID)
+			fmt.Fprintf(out, "tls           %s\n", tlsLine)
 			fmt.Fprintf(out, "federation    %d IdPs, %d usable here, valid until %s\n", len(md.IdPs), usable, md.ValidUntil.Format(time.RFC3339))
 			for _, id := range cfg.SAML.IdPs {
 				if _, ok := md.IdPs[id]; !ok {
@@ -227,6 +243,10 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	s.logf("bridge %s: %s on %s", version(), cfg.Issuer, ln.Addr())
 	if tc != nil {
 		// The certificate comes from tc.GetCertificate, so no files here.
+		// ⛔ ServeTLS, not Serve(tls.NewListener(ln, tc)): ServeTLS appends
+		// "h2" and "http/1.1" to NextProtos, which with ACME holds
+		// "acme-tls/1" alone -- and a Go server refuses every client whose
+		// ALPN shares nothing with it ("no application protocol").
 		err = srv.ServeTLS(ln, "", "")
 	} else {
 		err = srv.Serve(ln)

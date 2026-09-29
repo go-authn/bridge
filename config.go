@@ -343,6 +343,11 @@ func (c *config) check() error {
 			return fmt.Errorf("acme: %w", err)
 		}
 	}
+	if sc, ok := c.certConfig(func(string, ...any) {}); ok {
+		if err := sc.Check(); err != nil {
+			return fmt.Errorf("tls: %w", err)
+		}
+	}
 
 	if c.signingKey, err = loadSigningKey(c.SigningKeyFile); err != nil {
 		return fmt.Errorf("signing_key_file: %w", err)
