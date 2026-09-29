@@ -212,6 +212,62 @@ Judged by the openpubkey library itself: its client makes PK Tokens through
 the device flow, with GQ signatures, and through the loopback code flow; its
 verifier accepts them, and refuses one signed by a key no longer published.
 
+## Running it: the admin API, health and metrics
+
+Both are off unless the configuration asks for them, and neither is ever on
+the public listener:
+
+```hcl
+admin {
+  listen = "unix:///run/bridge/admin.sock"      # mode 0600
+  # or, over the network, mutual TLS and nothing less (loopback included):
+  # listen         = "10.0.0.5:9443"
+  # tls_cert_file  = "/etc/bridge/admin.crt"
+  # tls_key_file   = "/etc/bridge/admin.key"
+  # client_ca_file = "/etc/bridge/operators-ca.crt"
+  # reflection     = true                       # for grpcurl; off by default
+}
+
+metrics { listen = "127.0.0.1:9101" }           # /healthz /readyz /metrics
+```
+
+**The admin API** is gRPC, `bridge.admin.v1`
+([`proto/bridge/admin/v1/admin.proto`](proto/bridge/admin/v1/admin.proto)),
+with `grpc.health.v1` beside it:
+
+| | |
+|---|---|
+| `Status` | version, the federation's metadata (IdPs, valid until, last refresh, last error), what is held in memory |
+| `RefreshMetadata` | fetch the federation's metadata now |
+| `ListIdPs`, `ListClients` | what the institution list shows, and the configured relying parties |
+| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their logins in progress and their application password |
+
+Every call that changes something is logged with who made it: the client
+certificate's `cn=` over TLS, the peer's `uid=` on the socket. The listener is
+[grpc-transports/control](https://github.com/grpc-transports/control), shared
+with go-fileshare: the socket is never reachable by another user, not even
+between bind and chmod, and never taken from an instance still running.
+
+⛔ **What `RevokePerson` cannot end**: an access token already handed out is a
+signed statement a resource server checks on its own, valid there until it
+expires (an hour by default). Everything that comes back to this provider --
+a refresh, `/userinfo`, an SSH certificate or an application password asked
+with that token -- is refused at once; an SSH certificate already issued lasts
+its validity, which is why that is short.
+
+**Health and metrics** are
+[go-net-health/endpoint](https://github.com/go-net-health/endpoint)'s, as in
+go-fileshare: `/healthz` is up while the process answers; `/readyz` is ready
+while the federation's metadata is loaded and still valid (a provider past
+its `validUntil` knows no IdP); `/metrics` is Prometheus text 0.0.4 with
+`bridge_*` families -- logins by outcome, tokens by grant, SSH certificates,
+application passwords, metadata validity and refreshes, what is held in
+memory. **No label names a person or an institution**: which universities'
+people use the service, and when, is not this provider's to publish.
+
+`-tags nogrpc` leaves gRPC out (4.1 MB of the binary) and refuses a
+configuration with an `admin` block, rather than starting without it.
+
 ## What it is not, yet
 
 - **One process.** Logins in progress, codes, device grants, refresh tokens

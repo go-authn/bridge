@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+syntax = "proto3";
+
+// The administration API of go-authn/bridge: what an operator asks a running
+// provider, and the few things it may tell it to do. It is served only when
+// the configuration has an admin block, on a unix socket or over mutual TLS.
+package bridge.admin.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/go-authn/bridge/proto/bridge/admin/v1;adminv1";
+
+service Admin {
+  // Status is what the provider is, and how it is doing.
+  rpc Status(StatusRequest) returns (StatusResponse);
+  // RefreshMetadata fetches the federation's metadata now, rather than at
+  // the next scheduled refresh, and says how it went.
+  rpc RefreshMetadata(RefreshMetadataRequest) returns (StatusResponse);
+  // ListIdPs lists the federation's identity providers, as the institution
+  // list shows them.
+  rpc ListIdPs(ListIdPsRequest) returns (ListIdPsResponse);
+  // ListClients lists the relying parties the configuration declares.
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse);
+  // RevokePerson ends everything this provider still holds for somebody:
+  // their refresh token families, the access tokens those bought, their
+  // logins and device grants in progress, and their application password.
+  rpc RevokePerson(RevokePersonRequest) returns (RevokePersonResponse);
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string version = 1;
+  string issuer = 2;
+  google.protobuf.Timestamp started = 3;
+  Federation federation = 4;
+  Counts counts = 5;
+}
+
+message Federation {
+  string metadata_url = 1;
+  // idps is how many SAML 2.0 IdPs the metadata lists; usable those the
+  // configuration lets people log in through.
+  int32 idps = 2;
+  int32 usable = 3;
+  google.protobuf.Timestamp valid_until = 4;
+  google.protobuf.Timestamp last_refresh = 5;
+  // last_error is the last refresh that failed, empty when the last one
+  // succeeded.
+  string last_error = 6;
+}
+
+// Counts are what the provider holds in memory right now.
+message Counts {
+  int64 logins_in_progress = 1;
+  int64 codes = 2;
+  int64 devices_waiting = 3;
+  int64 refresh_families = 4;
+  int64 access_tokens = 5;
+}
+
+message RefreshMetadataRequest {}
+
+message ListIdPsRequest {
+  // query matches display names, domains and entity IDs, as the
+  // institution list's search does. Empty lists them all.
+  string query = 1;
+  // limit bounds the answer; 0 is 100.
+  int32 limit = 2;
+}
+
+message IdP {
+  string entity_id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  repeated string categories = 4;
+  // allowed is whether the configuration lets people log in through it.
+  bool allowed = 5;
+}
+
+message ListIdPsResponse {
+  repeated IdP idps = 1;
+  // total is how many matched, of which idps is the first limit.
+  int32 total = 2;
+}
+
+message ListClientsRequest {}
+
+message Client {
+  string id = 1;
+  string name = 2;
+  bool public = 3;
+  string subject = 4;
+  repeated string audience = 5;
+  bool device = 6;
+  bool ssh_certificates = 7;
+  bool app_passwords = 8;
+  // refresh_lifetime_seconds is 0 when the client has no refresh tokens.
+  int64 refresh_lifetime_seconds = 9;
+}
+
+message ListClientsResponse {
+  repeated Client clients = 1;
+}
+
+message RevokePersonRequest {
+  // username is the person's preferred_username (eppn by default), as the
+  // tokens and certificates this provider issued name them.
+  string username = 1;
+}
+
+message RevokePersonResponse {
+  int32 refresh_families = 1;
+  int32 access_tokens = 2;
+  int32 logins = 3;
+  bool app_password_removed = 4;
+}

@@ -77,14 +77,20 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	s.rotated.put(rt, g.family, g.until)
 	s.families.update(g.family, func(j *[]string) { *j = append(*j, jti) })
 	resp["refresh_token"] = next
+	s.counters.inc("bridge_tokens_issued_total", "refresh_token")
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // revokeFamily ends a family: its refresh tokens stop rotating, and the
-// access tokens it bought stop working at /userinfo.
-func (s *server) revokeFamily(family string) {
+// access tokens it bought stop working at /userinfo. It says how many of
+// those were still alive.
+func (s *server) revokeFamily(family string) int {
 	jtis, _ := s.families.take(family)
+	n := 0
 	for _, j := range jtis {
-		s.issued.take(j)
+		if _, ok := s.issued.take(j); ok {
+			n++
+		}
 	}
+	return n
 }
