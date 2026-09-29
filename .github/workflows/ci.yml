@@ -35,6 +35,10 @@ jobs:
       - name: xmlsec1
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
+      # The ACME CA is Pebble, Let's Encrypt's test CA, with External Account
+      # Binding required as HARICA requires it. Pure Go, so every OS has it.
+      - name: pebble
+        run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - name: the judge is there
         if: matrix.os == 'ubuntu-latest'
         run: xmlsec1 --version
@@ -73,6 +77,8 @@ jobs:
       # wherever the judge is supposed to be there.
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
+      - name: pebble
+        run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: go test -race -count=1 ./...
         env:
           BRIDGE_REQUIRE_JUDGE: "1"
@@ -90,6 +96,8 @@ jobs:
       # wherever the judge is supposed to be there.
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
+      - name: pebble
+        run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: |
           export BRIDGE_REQUIRE_JUDGE=1
           FLOOR=88.0
