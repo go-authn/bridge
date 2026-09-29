@@ -29,7 +29,8 @@ func (s *server) discovery(w http.ResponseWriter, r *http.Request) {
 		"jwks_uri":                              i + "/jwks",
 		"response_types_supported":              []string{"code"},
 		"response_modes_supported":              []string{"query"},
-		"grant_types_supported":                 []string{"authorization_code"},
+		"grant_types_supported":                 []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"},
+		"device_authorization_endpoint":         i + "/device_authorization",
 		"subject_types_supported":               []string{"public", "pairwise"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
@@ -104,7 +105,27 @@ button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
 <form method="get" action="choose"><input name="q" value="{{.Q}}" placeholder="Nom ou domaine / name or domain" autofocus></form>
 <ul>{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}">{{.Name "fr" "en"}}</a></li>{{else}}<li>Aucun établissement ne correspond.</li>{{end}}</ul>
 {{if .More}}<p>{{.More}} autres : précisez la recherche.</p>{{end}}</body></html>{{end}}
+{{define "device"}}{{template "head" "Connecter un appareil"}}
+<h1>Connecter un appareil</h1><p lang="en">Connect a device.</p>
+{{if .Error}}<p><strong>{{.Error}}</strong></p>{{end}}
+<form method="post" action="device"><label>Code affiché sur l'appareil / code shown on the device<input name="user_code" value="{{.Code}}" autocomplete="off" autocapitalize="characters" autofocus></label>
+<p><button>Continuer / Continue</button></p></form></body></html>{{end}}
+{{define "confirm"}}{{template "head" "Confirmer"}}
+<h1>{{.Client}} demande à se connecter en votre nom</h1>
+<p lang="en">{{.Client}} is asking to sign in as you.</p>
+<p>Code : <strong>{{.Code}}</strong></p>
+<p><strong>Ne continuez que si c'est vous qui avez lancé cette connexion, sur votre propre appareil.</strong> Si quelqu'un vous a transmis ce code, refusez : il obtiendrait l'accès à votre place.</p>
+<p lang="en"><strong>Only continue if you started this on your own device.</strong> If somebody sent you this code, refuse: they would get the access, not you.</p>
+<form method="post" action="device"><input type="hidden" name="user_code" value="{{.Code}}"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<button name="confirm" value="yes">Oui, c'est moi / Yes, it is me</button> <button name="confirm" value="no">Non / No</button></form></body></html>{{end}}
 `))
+
+// render shows one of the pages above.
+func (s *server) render(w http.ResponseWriter, status int, name string, data any) {
+	headers(w)
+	w.WriteHeader(status)
+	tmpl.ExecuteTemplate(w, name, data)
+}
 
 // page shows a message. Messages are for people; the detail is in the log.
 func (s *server) page(w http.ResponseWriter, status int, msg string) {

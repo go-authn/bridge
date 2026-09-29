@@ -153,6 +153,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 	keygen.Flags().StringVar(&keyFile, "key", "", "where to write the RSA signing key")
 	keygen.Flags().StringVar(&saltFile, "salt", "", "where to write the subject salt")
 	root.AddCommand(keygen)
+	root.AddCommand(newTokenCmd(out))
 	return root
 }
 

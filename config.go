@@ -151,7 +151,20 @@ type clientBlock struct {
 	// Name is shown to people when they are asked to approve a device.
 	Name string `hcl:"name,optional"`
 
-	secret string
+	// Device lets this client use the device authorization grant (RFC 8628):
+	// a command-line tool or a WebDAV client with no browser of its own shows
+	// a code, and the person logs in on any other device. A client that only
+	// does this needs no redirect URI.
+	Device bool `hcl:"device,optional"`
+
+	// RefreshLifetime turns on refresh tokens, and bounds them: a refresh
+	// token lives this long from the LOGIN, however often it is rotated.
+	// The federation is not asked again in that time, so this is how long
+	// somebody who has left keeps access. Off by default.
+	RefreshLifetime string `hcl:"refresh_lifetime,optional"`
+
+	secret     string
+	refreshTTL time.Duration
 }
 
 func (c *clientBlock) public() bool { return c.secret == "" }
@@ -321,8 +334,15 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: a secret of %d characters is a password somebody can guess", cl.ID, len(cl.secret))
 			}
 		}
-		if len(cl.RedirectURIs) == 0 {
-			return fmt.Errorf("client %q: no redirect_uris", cl.ID)
+		if len(cl.RedirectURIs) == 0 && !cl.Device {
+			return fmt.Errorf("client %q: no redirect_uris, and not a device client", cl.ID)
+		}
+		if cl.RefreshLifetime != "" {
+			d, err := time.ParseDuration(cl.RefreshLifetime)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("client %q: refresh_lifetime = %q: a positive duration like \"720h\"", cl.ID, cl.RefreshLifetime)
+			}
+			cl.refreshTTL = d
 		}
 		for _, r := range cl.RedirectURIs {
 			ru, err := url.Parse(r)

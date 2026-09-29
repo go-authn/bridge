@@ -61,6 +61,10 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.logf("login: %s via %s for %s", orUnnamed(who.username), who.idp, l.client.ID)
+	if l.kind == "device" {
+		s.deviceDone(w, l, who, "")
+		return
+	}
 
 	code := token()
 	s.codes.put(code, &grant{
@@ -82,8 +86,14 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-// finishError ends a login by telling the client why.
+// finishError ends a login by telling the client why -- through its redirect
+// URI, or, for a device, on the page the person is looking at (the device
+// learns access_denied when it next polls).
 func (s *server) finishError(w http.ResponseWriter, r *http.Request, l *login, code, desc string) {
+	if l.kind == "device" {
+		s.deviceDone(w, l, nil, "Refusé : "+desc+".")
+		return
+	}
 	s.redirectError(w, r, l.redirectURI, l.state, code, desc)
 }
 

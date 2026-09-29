@@ -134,6 +134,10 @@ func TestConfigRefusals(t *testing.T) {
 		"an http redirect":     {add(`client "x" { redirect_uris = ["http://app.example.org/cb"] }`), "cleartext"},
 		"a relative redirect":  {add(`client "x" { redirect_uris = ["/cb"] }`), "absolute"},
 		"a fragment":           {add(`client "x" { redirect_uris = ["https://a.example/cb#f"] }`), "fragment"},
+		"a refresh lifetime": {add(`client "x" {
+  device = true
+  refresh_lifetime = "long"
+}`), "refresh_lifetime"},
 		"a subject type": {add(`client "x" {
   redirect_uris = ["https://a.example/cb"]
   subject = "random"
