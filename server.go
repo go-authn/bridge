@@ -22,10 +22,12 @@ import (
 // talk to, and the SAML side that people log in through.
 type server struct {
 	cfg *config
-	sp  *saml.SP
-	fed *saml.Federation
-	log io.Writer
-	now func() time.Time
+	// disabled is who this provider refuses (disable.go).
+	disabled *disabledList
+	sp       *saml.SP
+	fed      *saml.Federation
+	log      io.Writer
+	now      func() time.Time
 
 	// logins in progress, keyed by the handle the browser carries in a
 	// cookie and the IdP carries in RelayState.
@@ -86,6 +88,7 @@ type login struct {
 type issuedToken struct {
 	info     map[string]any
 	username string
+	idp      string
 }
 
 // A grant is what a code stands for.
@@ -125,6 +128,9 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.refresh = newTTL[*refreshGrant](now)
 	s.rotated = newTTL[string](now)
 	s.families = newTTL[[]string](now)
+	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
+		return nil, fmt.Errorf("disabled_file: %w", err)
+	}
 	return s, nil
 }
 

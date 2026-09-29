@@ -5,6 +5,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -121,10 +122,26 @@ type attempts struct {
 	now func() time.Time
 }
 
-// allow says whether addr may try another code, and counts this one.
-func (a *attempts) allow(addr string) bool {
+// blocked says whether addr has typed codeAttempts wrong codes lately: it
+// may then try none, right or wrong.
+//
+// ⛔ Only WRONG codes count. Counting every code locked out a whole
+// building behind one NAT address after ten people had connected a device
+// in ten minutes, and guarding against nobody: a right code is not a guess.
+func (a *attempts) blocked(addr string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return len(a.recentLocked(addr)) >= codeAttempts
+}
+
+// failed counts a wrong code from addr.
+func (a *attempts) failed(addr string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.m[addr] = append(a.recentLocked(addr), a.now())
+}
+
+func (a *attempts) recentLocked(addr string) []time.Time {
 	now := a.now()
 	var recent []time.Time
 	for _, t := range a.m[addr] {
@@ -132,12 +149,12 @@ func (a *attempts) allow(addr string) bool {
 			recent = append(recent, t)
 		}
 	}
-	if len(recent) >= codeAttempts {
+	if len(recent) == 0 {
+		delete(a.m, addr)
+	} else {
 		a.m[addr] = recent
-		return false
 	}
-	a.m[addr] = append(recent, now)
-	return true
+	return recent
 }
 
 func clientAddr(r *http.Request) string {
@@ -166,7 +183,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusOK, "device", map[string]any{})
 		return
 	}
-	if !s.tries.allow(clientAddr(r)) {
+	if s.tries.blocked(clientAddr(r)) {
 		s.render(w, http.StatusTooManyRequests, "device", map[string]any{"Error": "Trop d'essais. Réessayez dans quelques minutes."})
 		return
 	}
@@ -176,6 +193,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 		g, ok = s.devices.get(dc)
 	}
 	if !ok {
+		s.tries.failed(clientAddr(r))
 		s.render(w, http.StatusBadRequest, "device", map[string]any{"Error": "Ce code n'est pas valide, ou a expiré.", "Code": r.Form.Get("user_code")})
 		return
 	}
@@ -273,6 +291,10 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 		resp, jti, err := s.issue(client, who, scopes, nonce)
 		if err != nil {
 			s.logf("token: %v", err)
+			if errors.Is(err, errDisabled) {
+				tokenError(w, http.StatusBadRequest, "invalid_grant", "access has been disabled")
+				return
+			}
 			tokenError(w, http.StatusInternalServerError, "server_error", "")
 			return
 		}

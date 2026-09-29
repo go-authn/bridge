@@ -7,6 +7,8 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -129,6 +131,10 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 	resp, jti, err := s.issue(client, g.who, g.scopes, g.nonce)
 	if err != nil {
 		s.logf("token: %v", err)
+		if errors.Is(err, errDisabled) {
+			tokenError(w, http.StatusBadRequest, "invalid_grant", "access has been disabled")
+			return
+		}
 		tokenError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}
@@ -142,6 +148,9 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 
 // issue makes an access token and an ID token for who, for client.
 func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce string) (map[string]any, string, error) {
+	if why := s.refused(who); why != "" {
+		return nil, "", fmt.Errorf("%w: %s (%s via %s)", errDisabled, why, orUnnamed(who.username), who.idp)
+	}
 	now := s.now()
 	sub := who.sub(s.cfg.salt, client)
 	jti := token()
@@ -181,7 +190,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 
 	info := who.claimsFor(scopes)
 	info["sub"] = sub
-	s.issued.put(jti, issuedToken{info: info, username: who.username}, now.Add(s.cfg.tokenTTL))
+	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp}, now.Add(s.cfg.tokenTTL))
 
 	// The ID token is for the CLIENT: aud is its ID, and it carries the
 	// nonce back (OIDC Core 2, 3.1.3.6).

@@ -27,7 +27,7 @@ import (
 
 // adminFixture is a provider with an admin socket and a metrics listener,
 // serving; and a gRPC client on the socket.
-func adminFixture(t *testing.T, extra string) (*fixture, adminv1.AdminClient, *grpc.ClientConn, string) {
+func adminFixture(t *testing.T, extra string) (*fixture, adminv1.AdminServiceClient, *grpc.ClientConn, string) {
 	t.Helper()
 	// A short path: a unix socket's is limited to about a hundred bytes.
 	dir, err := os.MkdirTemp("", "ba")
@@ -58,7 +58,7 @@ metrics { listen = "127.0.0.1:0" }
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cc.Close() })
-	return f, adminv1.NewAdminClient(cc), cc, "http://" + metrics.addr
+	return f, adminv1.NewAdminServiceClient(cc), cc, "http://" + metrics.addr
 }
 
 func TestAdminStatusAndLists(t *testing.T) {
@@ -72,7 +72,8 @@ func TestAdminStatusAndLists(t *testing.T) {
 		t.Errorf("status %+v", st)
 	}
 	// A refresh now: recorded, with its time.
-	st, err = c.RefreshMetadata(ctx, &adminv1.RefreshMetadataRequest{})
+	rm, err := c.RefreshMetadata(ctx, &adminv1.RefreshMetadataRequest{})
+	st = rm.GetStatus()
 	if err != nil || st.Federation.LastRefresh == nil || st.Federation.LastError != "" {
 		t.Fatalf("refresh: %v %+v", err, st.GetFederation())
 	}
@@ -89,7 +90,7 @@ func TestAdminStatusAndLists(t *testing.T) {
 	}
 	// grpc.health.v1, overall and by service.
 	h := healthpb.NewHealthClient(cc)
-	for _, svc := range []string{"", adminv1.Admin_ServiceDesc.ServiceName} {
+	for _, svc := range []string{"", adminv1.AdminService_ServiceDesc.ServiceName} {
 		r, err := h.Check(ctx, &healthpb.HealthCheckRequest{Service: svc})
 		if err != nil || r.Status != healthpb.HealthCheckResponse_SERVING {
 			t.Errorf("health %q: %v %v", svc, err, r.GetStatus())
@@ -109,7 +110,8 @@ func TestAdminStatusAndLists(t *testing.T) {
 	// A refresh that fails is an answer, not an RPC error, and the metadata
 	// in use stays.
 	f.s.fed.URL = "https://127.0.0.1:1/gone.xml"
-	st, err = c.RefreshMetadata(ctx, &adminv1.RefreshMetadataRequest{})
+	rm, err = c.RefreshMetadata(ctx, &adminv1.RefreshMetadataRequest{})
+	st = rm.GetStatus()
 	if err != nil || st.Federation.LastError == "" || st.Federation.Idps != 2 {
 		t.Errorf("a failed refresh: %v %+v", err, st.GetFederation())
 	}
@@ -146,7 +148,7 @@ client "files" {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.RefreshFamilies != 1 || r.AccessTokens < 1 || !r.AppPasswordRemoved {
+	if v := r.Revoked; v.RefreshFamilies != 1 || v.AccessTokens < 1 || v.AppPasswords != 1 {
 		t.Errorf("revoked %+v", r)
 	}
 	ep, _ := endpoints(t.Context(), f.s.cfg.Issuer)
@@ -163,7 +165,7 @@ client "files" {
 		t.Error("a revoked person's application password is still there")
 	}
 	// Nobody to revoke is not an error; no name is.
-	if r, err := c.RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "nobody@x"}); err != nil || r.RefreshFamilies != 0 {
+	if r, err := c.RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "nobody@x"}); err != nil || r.Revoked.RefreshFamilies != 0 {
 		t.Errorf("revoking nobody: %v %+v", err, r)
 	}
 	if _, err := c.RevokePerson(t.Context(), &adminv1.RevokePersonRequest{}); err == nil {
@@ -319,7 +321,7 @@ admin {
 		t.Fatal(err)
 	}
 	defer cc.Close()
-	if _, err := adminv1.NewAdminClient(cc).RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "nobody@x"}); err != nil {
+	if _, err := adminv1.NewAdminServiceClient(cc).RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "nobody@x"}); err != nil {
 		t.Fatalf("a client with a certificate: %v", err)
 	}
 	if !strings.Contains(log.String(), "cn=operator revokes nobody@x") {
@@ -331,7 +333,7 @@ admin {
 		defer bare.Close()
 		ctx2, c2 := context.WithTimeout(t.Context(), 5*time.Second)
 		defer c2()
-		if _, err := adminv1.NewAdminClient(bare).Status(ctx2, &adminv1.StatusRequest{}); err == nil {
+		if _, err := adminv1.NewAdminServiceClient(bare).Status(ctx2, &adminv1.StatusRequest{}); err == nil {
 			t.Error("a client without a certificate was served")
 		}
 	}

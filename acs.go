@@ -63,6 +63,12 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.finishError(w, r, l, "access_denied", "your institution did not say who you are")
 		return
 	}
+	if why := s.refused(who); why != "" {
+		s.logf("acs: %s via %s refused: %s", orUnnamed(who.username), who.idp, why)
+		s.counters.inc("bridge_logins_total", "disabled")
+		s.finishError(w, r, l, "access_denied", "your access to this service has been disabled")
+		return
+	}
 	s.logf("login: %s via %s for %s", orUnnamed(who.username), who.idp, l.client.ID)
 	s.counters.inc("bridge_logins_total", "ok")
 	if l.kind == "device" {

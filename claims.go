@@ -166,3 +166,8 @@ func (p *person) claimsFor(scopes []string) map[string]any {
 	}
 	return out
 }
+
+// scopedUsername is the username attributes go-authn/saml holds to the
+// scopes the federation grants each IdP: a login in one of them was
+// vouched for by an IdP that holds the scope.
+var scopedUsername = map[string]bool{"eppn": true, "subject_id": true}

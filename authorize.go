@@ -222,9 +222,15 @@ func (s *server) current(r *http.Request) (string, *login, error) {
 	return c.Value, l, nil
 }
 
-// allowedIdP says whether the configuration lets people log in through idp.
+// allowedIdP says whether people can log in through idp: the configuration
+// lets them, and it is not disabled.
 func (s *server) allowedIdP(entityID string) bool {
-	return len(s.cfg.SAML.IdPs) == 0 || slices.Contains(s.cfg.SAML.IdPs, entityID)
+	return !s.disabled.idp(entityID, s.now()) && configuredIdP(s.cfg, entityID)
+}
+
+// configuredIdP says whether the configuration lists the IdP, or lists none.
+func configuredIdP(cfg *config, entityID string) bool {
+	return len(cfg.SAML.IdPs) == 0 || slices.Contains(cfg.SAML.IdPs, entityID)
 }
 
 // toIdP sends the person to their IdP with an AuthnRequest.

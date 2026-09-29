@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"time"
 )
@@ -68,6 +69,10 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	resp, jti, err := s.issue(client, g.who, g.scopes, "")
 	if err != nil {
 		s.logf("token: %v", err)
+		if errors.Is(err, errDisabled) {
+			tokenError(w, http.StatusBadRequest, "invalid_grant", "access has been disabled")
+			return
+		}
 		tokenError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}

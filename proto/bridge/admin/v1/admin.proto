@@ -11,12 +11,12 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/go-authn/bridge/proto/bridge/admin/v1;adminv1";
 
-service Admin {
+service AdminService {
   // Status is what the provider is, and how it is doing.
   rpc Status(StatusRequest) returns (StatusResponse);
   // RefreshMetadata fetches the federation's metadata now, rather than at
   // the next scheduled refresh, and says how it went.
-  rpc RefreshMetadata(RefreshMetadataRequest) returns (StatusResponse);
+  rpc RefreshMetadata(RefreshMetadataRequest) returns (RefreshMetadataResponse);
   // ListIdPs lists the federation's identity providers, as the institution
   // list shows them.
   rpc ListIdPs(ListIdPsRequest) returns (ListIdPsResponse);
@@ -26,9 +26,29 @@ service Admin {
   // their refresh token families, the access tokens those bought, their
   // logins and device grants in progress, and their application password.
   rpc RevokePerson(RevokePersonRequest) returns (RevokePersonResponse);
+  // DisablePerson stops somebody logging in and getting tokens here, and
+  // revokes what they still hold (as RevokePerson). Their institution still
+  // vouches for them: this is this provider refusing, until EnablePerson or
+  // the end the request gave. It is kept in the configuration's
+  // disabled_file, and refused when there is none: a person disabled until
+  // the next restart is worse than one never disabled.
+  rpc DisablePerson(DisablePersonRequest) returns (DisablePersonResponse);
+  rpc EnablePerson(EnablePersonRequest) returns (EnablePersonResponse);
+  // DisableIdP stops everybody logging in through one institution, and
+  // revokes what its people still hold. Metadata refreshes do not lift it.
+  rpc DisableIdP(DisableIdPRequest) returns (DisableIdPResponse);
+  rpc EnableIdP(EnableIdPRequest) returns (EnableIdPResponse);
+  // ListDisabled lists the people and institutions disabled here.
+  rpc ListDisabled(ListDisabledRequest) returns (ListDisabledResponse);
 }
 
 message StatusRequest {}
+
+message RefreshMetadataResponse {
+  // status is the provider after the attempt: its federation says when the
+  // metadata was last fetched, and last_error why this attempt failed.
+  StatusResponse status = 1;
+}
 
 message StatusResponse {
   string version = 1;
@@ -75,8 +95,10 @@ message IdP {
   string name = 2;
   repeated string scopes = 3;
   repeated string categories = 4;
-  // allowed is whether the configuration lets people log in through it.
+  // allowed is whether people can log in through it: the configuration
+  // lists it (or lists none) and it is not disabled.
   bool allowed = 5;
+  bool disabled = 6;
 }
 
 message ListIdPsResponse {
@@ -110,9 +132,76 @@ message RevokePersonRequest {
   string username = 1;
 }
 
-message RevokePersonResponse {
+// Revoked is what a revocation ended.
+message Revoked {
   int32 refresh_families = 1;
   int32 access_tokens = 2;
+  // logins are logins and device grants in progress.
   int32 logins = 3;
-  bool app_password_removed = 4;
+  int32 app_passwords = 4;
+}
+
+message RevokePersonResponse {
+  Revoked revoked = 1;
+}
+
+// Disabled is one person or one institution this provider refuses.
+message Disabled {
+  // Exactly one of username and entity_id is set.
+  string username = 1;
+  string entity_id = 2;
+  string reason = 3;
+  // by is who disabled it: cn=<certificate CN> or uid=<peer uid>.
+  string by = 4;
+  google.protobuf.Timestamp since = 5;
+  // until is when it lapses; absent, never.
+  google.protobuf.Timestamp until = 6;
+}
+
+message DisablePersonRequest {
+  // username is the person's preferred_username, as RevokePersonRequest.
+  string username = 1;
+  string reason = 2;
+  // until is when it lapses; absent, it lasts until EnablePerson.
+  google.protobuf.Timestamp until = 3;
+}
+
+message DisablePersonResponse {
+  Disabled disabled = 1;
+  Revoked revoked = 2;
+}
+
+message EnablePersonRequest {
+  string username = 1;
+}
+
+message EnablePersonResponse {
+  // was_disabled is false when there was nothing to lift.
+  bool was_disabled = 1;
+}
+
+message DisableIdPRequest {
+  string entity_id = 1;
+  string reason = 2;
+  google.protobuf.Timestamp until = 3;
+}
+
+message DisableIdPResponse {
+  Disabled disabled = 1;
+  Revoked revoked = 2;
+}
+
+message EnableIdPRequest {
+  string entity_id = 1;
+}
+
+message EnableIdPResponse {
+  bool was_disabled = 1;
+}
+
+message ListDisabledRequest {}
+
+message ListDisabledResponse {
+  repeated Disabled people = 1;
+  repeated Disabled idps = 2;
 }

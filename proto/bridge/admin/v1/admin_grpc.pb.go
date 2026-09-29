@@ -25,22 +25,27 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Admin_Status_FullMethodName          = "/bridge.admin.v1.Admin/Status"
-	Admin_RefreshMetadata_FullMethodName = "/bridge.admin.v1.Admin/RefreshMetadata"
-	Admin_ListIdPs_FullMethodName        = "/bridge.admin.v1.Admin/ListIdPs"
-	Admin_ListClients_FullMethodName     = "/bridge.admin.v1.Admin/ListClients"
-	Admin_RevokePerson_FullMethodName    = "/bridge.admin.v1.Admin/RevokePerson"
+	AdminService_Status_FullMethodName          = "/bridge.admin.v1.AdminService/Status"
+	AdminService_RefreshMetadata_FullMethodName = "/bridge.admin.v1.AdminService/RefreshMetadata"
+	AdminService_ListIdPs_FullMethodName        = "/bridge.admin.v1.AdminService/ListIdPs"
+	AdminService_ListClients_FullMethodName     = "/bridge.admin.v1.AdminService/ListClients"
+	AdminService_RevokePerson_FullMethodName    = "/bridge.admin.v1.AdminService/RevokePerson"
+	AdminService_DisablePerson_FullMethodName   = "/bridge.admin.v1.AdminService/DisablePerson"
+	AdminService_EnablePerson_FullMethodName    = "/bridge.admin.v1.AdminService/EnablePerson"
+	AdminService_DisableIdP_FullMethodName      = "/bridge.admin.v1.AdminService/DisableIdP"
+	AdminService_EnableIdP_FullMethodName       = "/bridge.admin.v1.AdminService/EnableIdP"
+	AdminService_ListDisabled_FullMethodName    = "/bridge.admin.v1.AdminService/ListDisabled"
 )
 
-// AdminClient is the client API for Admin service.
+// AdminServiceClient is the client API for AdminService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AdminClient interface {
+type AdminServiceClient interface {
 	// Status is what the provider is, and how it is doing.
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	// RefreshMetadata fetches the federation's metadata now, rather than at
 	// the next scheduled refresh, and says how it went.
-	RefreshMetadata(ctx context.Context, in *RefreshMetadataRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	RefreshMetadata(ctx context.Context, in *RefreshMetadataRequest, opts ...grpc.CallOption) (*RefreshMetadataResponse, error)
 	// ListIdPs lists the federation's identity providers, as the institution
 	// list shows them.
 	ListIdPs(ctx context.Context, in *ListIdPsRequest, opts ...grpc.CallOption) (*ListIdPsResponse, error)
@@ -50,75 +55,139 @@ type AdminClient interface {
 	// their refresh token families, the access tokens those bought, their
 	// logins and device grants in progress, and their application password.
 	RevokePerson(ctx context.Context, in *RevokePersonRequest, opts ...grpc.CallOption) (*RevokePersonResponse, error)
+	// DisablePerson stops somebody logging in and getting tokens here, and
+	// revokes what they still hold (as RevokePerson). Their institution still
+	// vouches for them: this is this provider refusing, until EnablePerson or
+	// the end the request gave. It is kept in the configuration's
+	// disabled_file, and refused when there is none: a person disabled until
+	// the next restart is worse than one never disabled.
+	DisablePerson(ctx context.Context, in *DisablePersonRequest, opts ...grpc.CallOption) (*DisablePersonResponse, error)
+	EnablePerson(ctx context.Context, in *EnablePersonRequest, opts ...grpc.CallOption) (*EnablePersonResponse, error)
+	// DisableIdP stops everybody logging in through one institution, and
+	// revokes what its people still hold. Metadata refreshes do not lift it.
+	DisableIdP(ctx context.Context, in *DisableIdPRequest, opts ...grpc.CallOption) (*DisableIdPResponse, error)
+	EnableIdP(ctx context.Context, in *EnableIdPRequest, opts ...grpc.CallOption) (*EnableIdPResponse, error)
+	// ListDisabled lists the people and institutions disabled here.
+	ListDisabled(ctx context.Context, in *ListDisabledRequest, opts ...grpc.CallOption) (*ListDisabledResponse, error)
 }
 
-type adminClient struct {
+type adminServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAdminClient(cc grpc.ClientConnInterface) AdminClient {
-	return &adminClient{cc}
+func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
+	return &adminServiceClient{cc}
 }
 
-func (c *adminClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *adminServiceClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, Admin_Status_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AdminService_Status_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminClient) RefreshMetadata(ctx context.Context, in *RefreshMetadataRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *adminServiceClient) RefreshMetadata(ctx context.Context, in *RefreshMetadataRequest, opts ...grpc.CallOption) (*RefreshMetadataResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, Admin_RefreshMetadata_FullMethodName, in, out, cOpts...)
+	out := new(RefreshMetadataResponse)
+	err := c.cc.Invoke(ctx, AdminService_RefreshMetadata_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminClient) ListIdPs(ctx context.Context, in *ListIdPsRequest, opts ...grpc.CallOption) (*ListIdPsResponse, error) {
+func (c *adminServiceClient) ListIdPs(ctx context.Context, in *ListIdPsRequest, opts ...grpc.CallOption) (*ListIdPsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListIdPsResponse)
-	err := c.cc.Invoke(ctx, Admin_ListIdPs_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AdminService_ListIdPs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminClient) ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error) {
+func (c *adminServiceClient) ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListClientsResponse)
-	err := c.cc.Invoke(ctx, Admin_ListClients_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AdminService_ListClients_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *adminClient) RevokePerson(ctx context.Context, in *RevokePersonRequest, opts ...grpc.CallOption) (*RevokePersonResponse, error) {
+func (c *adminServiceClient) RevokePerson(ctx context.Context, in *RevokePersonRequest, opts ...grpc.CallOption) (*RevokePersonResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevokePersonResponse)
-	err := c.cc.Invoke(ctx, Admin_RevokePerson_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AdminService_RevokePerson_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AdminServer is the server API for Admin service.
-// All implementations must embed UnimplementedAdminServer
+func (c *adminServiceClient) DisablePerson(ctx context.Context, in *DisablePersonRequest, opts ...grpc.CallOption) (*DisablePersonResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DisablePersonResponse)
+	err := c.cc.Invoke(ctx, AdminService_DisablePerson_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) EnablePerson(ctx context.Context, in *EnablePersonRequest, opts ...grpc.CallOption) (*EnablePersonResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnablePersonResponse)
+	err := c.cc.Invoke(ctx, AdminService_EnablePerson_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DisableIdP(ctx context.Context, in *DisableIdPRequest, opts ...grpc.CallOption) (*DisableIdPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DisableIdPResponse)
+	err := c.cc.Invoke(ctx, AdminService_DisableIdP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) EnableIdP(ctx context.Context, in *EnableIdPRequest, opts ...grpc.CallOption) (*EnableIdPResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnableIdPResponse)
+	err := c.cc.Invoke(ctx, AdminService_EnableIdP_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ListDisabled(ctx context.Context, in *ListDisabledRequest, opts ...grpc.CallOption) (*ListDisabledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDisabledResponse)
+	err := c.cc.Invoke(ctx, AdminService_ListDisabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AdminServiceServer is the server API for AdminService service.
+// All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility.
-type AdminServer interface {
+type AdminServiceServer interface {
 	// Status is what the provider is, and how it is doing.
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	// RefreshMetadata fetches the federation's metadata now, rather than at
 	// the next scheduled refresh, and says how it went.
-	RefreshMetadata(context.Context, *RefreshMetadataRequest) (*StatusResponse, error)
+	RefreshMetadata(context.Context, *RefreshMetadataRequest) (*RefreshMetadataResponse, error)
 	// ListIdPs lists the federation's identity providers, as the institution
 	// list shows them.
 	ListIdPs(context.Context, *ListIdPsRequest) (*ListIdPsResponse, error)
@@ -128,168 +197,307 @@ type AdminServer interface {
 	// their refresh token families, the access tokens those bought, their
 	// logins and device grants in progress, and their application password.
 	RevokePerson(context.Context, *RevokePersonRequest) (*RevokePersonResponse, error)
-	mustEmbedUnimplementedAdminServer()
+	// DisablePerson stops somebody logging in and getting tokens here, and
+	// revokes what they still hold (as RevokePerson). Their institution still
+	// vouches for them: this is this provider refusing, until EnablePerson or
+	// the end the request gave. It is kept in the configuration's
+	// disabled_file, and refused when there is none: a person disabled until
+	// the next restart is worse than one never disabled.
+	DisablePerson(context.Context, *DisablePersonRequest) (*DisablePersonResponse, error)
+	EnablePerson(context.Context, *EnablePersonRequest) (*EnablePersonResponse, error)
+	// DisableIdP stops everybody logging in through one institution, and
+	// revokes what its people still hold. Metadata refreshes do not lift it.
+	DisableIdP(context.Context, *DisableIdPRequest) (*DisableIdPResponse, error)
+	EnableIdP(context.Context, *EnableIdPRequest) (*EnableIdPResponse, error)
+	// ListDisabled lists the people and institutions disabled here.
+	ListDisabled(context.Context, *ListDisabledRequest) (*ListDisabledResponse, error)
+	mustEmbedUnimplementedAdminServiceServer()
 }
 
-// UnimplementedAdminServer must be embedded to have
+// UnimplementedAdminServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedAdminServer struct{}
+type UnimplementedAdminServiceServer struct{}
 
-func (UnimplementedAdminServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
+func (UnimplementedAdminServiceServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
 }
-func (UnimplementedAdminServer) RefreshMetadata(context.Context, *RefreshMetadataRequest) (*StatusResponse, error) {
+func (UnimplementedAdminServiceServer) RefreshMetadata(context.Context, *RefreshMetadataRequest) (*RefreshMetadataResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshMetadata not implemented")
 }
-func (UnimplementedAdminServer) ListIdPs(context.Context, *ListIdPsRequest) (*ListIdPsResponse, error) {
+func (UnimplementedAdminServiceServer) ListIdPs(context.Context, *ListIdPsRequest) (*ListIdPsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListIdPs not implemented")
 }
-func (UnimplementedAdminServer) ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error) {
+func (UnimplementedAdminServiceServer) ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListClients not implemented")
 }
-func (UnimplementedAdminServer) RevokePerson(context.Context, *RevokePersonRequest) (*RevokePersonResponse, error) {
+func (UnimplementedAdminServiceServer) RevokePerson(context.Context, *RevokePersonRequest) (*RevokePersonResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokePerson not implemented")
 }
-func (UnimplementedAdminServer) mustEmbedUnimplementedAdminServer() {}
-func (UnimplementedAdminServer) testEmbeddedByValue()               {}
+func (UnimplementedAdminServiceServer) DisablePerson(context.Context, *DisablePersonRequest) (*DisablePersonResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisablePerson not implemented")
+}
+func (UnimplementedAdminServiceServer) EnablePerson(context.Context, *EnablePersonRequest) (*EnablePersonResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnablePerson not implemented")
+}
+func (UnimplementedAdminServiceServer) DisableIdP(context.Context, *DisableIdPRequest) (*DisableIdPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DisableIdP not implemented")
+}
+func (UnimplementedAdminServiceServer) EnableIdP(context.Context, *EnableIdPRequest) (*EnableIdPResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnableIdP not implemented")
+}
+func (UnimplementedAdminServiceServer) ListDisabled(context.Context, *ListDisabledRequest) (*ListDisabledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDisabled not implemented")
+}
+func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
+func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
 
-// UnsafeAdminServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AdminServer will
+// UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AdminServiceServer will
 // result in compilation errors.
-type UnsafeAdminServer interface {
-	mustEmbedUnimplementedAdminServer()
+type UnsafeAdminServiceServer interface {
+	mustEmbedUnimplementedAdminServiceServer()
 }
 
-func RegisterAdminServer(s grpc.ServiceRegistrar, srv AdminServer) {
-	// If the following call panics, it indicates UnimplementedAdminServer was
+func RegisterAdminServiceServer(s grpc.ServiceRegistrar, srv AdminServiceServer) {
+	// If the following call panics, it indicates UnimplementedAdminServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&Admin_ServiceDesc, srv)
+	s.RegisterService(&AdminService_ServiceDesc, srv)
 }
 
-func _Admin_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AdminService_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServer).Status(ctx, in)
+		return srv.(AdminServiceServer).Status(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Admin_Status_FullMethodName,
+		FullMethod: AdminService_Status_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServer).Status(ctx, req.(*StatusRequest))
+		return srv.(AdminServiceServer).Status(ctx, req.(*StatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Admin_RefreshMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AdminService_RefreshMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefreshMetadataRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServer).RefreshMetadata(ctx, in)
+		return srv.(AdminServiceServer).RefreshMetadata(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Admin_RefreshMetadata_FullMethodName,
+		FullMethod: AdminService_RefreshMetadata_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServer).RefreshMetadata(ctx, req.(*RefreshMetadataRequest))
+		return srv.(AdminServiceServer).RefreshMetadata(ctx, req.(*RefreshMetadataRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Admin_ListIdPs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AdminService_ListIdPs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListIdPsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServer).ListIdPs(ctx, in)
+		return srv.(AdminServiceServer).ListIdPs(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Admin_ListIdPs_FullMethodName,
+		FullMethod: AdminService_ListIdPs_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServer).ListIdPs(ctx, req.(*ListIdPsRequest))
+		return srv.(AdminServiceServer).ListIdPs(ctx, req.(*ListIdPsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Admin_ListClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AdminService_ListClients_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListClientsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServer).ListClients(ctx, in)
+		return srv.(AdminServiceServer).ListClients(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Admin_ListClients_FullMethodName,
+		FullMethod: AdminService_ListClients_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServer).ListClients(ctx, req.(*ListClientsRequest))
+		return srv.(AdminServiceServer).ListClients(ctx, req.(*ListClientsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Admin_RevokePerson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AdminService_RevokePerson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RevokePersonRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AdminServer).RevokePerson(ctx, in)
+		return srv.(AdminServiceServer).RevokePerson(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Admin_RevokePerson_FullMethodName,
+		FullMethod: AdminService_RevokePerson_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AdminServer).RevokePerson(ctx, req.(*RevokePersonRequest))
+		return srv.(AdminServiceServer).RevokePerson(ctx, req.(*RevokePersonRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Admin_ServiceDesc is the grpc.ServiceDesc for Admin service.
+func _AdminService_DisablePerson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisablePersonRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DisablePerson(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DisablePerson_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DisablePerson(ctx, req.(*DisablePersonRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_EnablePerson_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnablePersonRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).EnablePerson(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_EnablePerson_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).EnablePerson(ctx, req.(*EnablePersonRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DisableIdP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableIdPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DisableIdP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DisableIdP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DisableIdP(ctx, req.(*DisableIdPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_EnableIdP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableIdPRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).EnableIdP(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_EnableIdP_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).EnableIdP(ctx, req.(*EnableIdPRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ListDisabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDisabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ListDisabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_ListDisabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ListDisabled(ctx, req.(*ListDisabledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Admin_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "bridge.admin.v1.Admin",
-	HandlerType: (*AdminServer)(nil),
+var AdminService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "bridge.admin.v1.AdminService",
+	HandlerType: (*AdminServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Status",
-			Handler:    _Admin_Status_Handler,
+			Handler:    _AdminService_Status_Handler,
 		},
 		{
 			MethodName: "RefreshMetadata",
-			Handler:    _Admin_RefreshMetadata_Handler,
+			Handler:    _AdminService_RefreshMetadata_Handler,
 		},
 		{
 			MethodName: "ListIdPs",
-			Handler:    _Admin_ListIdPs_Handler,
+			Handler:    _AdminService_ListIdPs_Handler,
 		},
 		{
 			MethodName: "ListClients",
-			Handler:    _Admin_ListClients_Handler,
+			Handler:    _AdminService_ListClients_Handler,
 		},
 		{
 			MethodName: "RevokePerson",
-			Handler:    _Admin_RevokePerson_Handler,
+			Handler:    _AdminService_RevokePerson_Handler,
+		},
+		{
+			MethodName: "DisablePerson",
+			Handler:    _AdminService_DisablePerson_Handler,
+		},
+		{
+			MethodName: "EnablePerson",
+			Handler:    _AdminService_EnablePerson_Handler,
+		},
+		{
+			MethodName: "DisableIdP",
+			Handler:    _AdminService_DisableIdP_Handler,
+		},
+		{
+			MethodName: "EnableIdP",
+			Handler:    _AdminService_EnableIdP_Handler,
+		},
+		{
+			MethodName: "ListDisabled",
+			Handler:    _AdminService_ListDisabled_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

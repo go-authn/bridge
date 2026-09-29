@@ -189,6 +189,18 @@ app_passwords {
 What is stored is what the protocols need: the NT hash for SMB, the password
 itself only when S3 is asked for.
 
+The table is `login, password, nt_hash, expires, idp` (`idp`, the institution
+that vouched, since v0.4.0). Name the columns in go-fileshare's query, never
+`*`: go-authn/directory's sqldir reads them by position and refuses more than
+it knows, so a `*` breaks at the first restart after a column is added:
+
+```sql
+-- sqlite; PostgreSQL: expires > extract(epoch from now())
+select login, password, nt_hash from app_passwords where expires > strftime('%s','now')
+```
+
+(This is the query the tests run through sqldir.)
+
 ## OpenPubkey and opkssh
 
 [OpenPubkey](https://github.com/openpubkey/openpubkey) commits the user's key in
@@ -231,7 +243,7 @@ admin {
 metrics { listen = "127.0.0.1:9101" }           # /healthz /readyz /metrics
 ```
 
-**The admin API** is gRPC, `bridge.admin.v1`
+**The admin API** is gRPC, `bridge.admin.v1.AdminService`
 ([`proto/bridge/admin/v1/admin.proto`](proto/bridge/admin/v1/admin.proto)),
 with `grpc.health.v1` beside it:
 
@@ -241,6 +253,33 @@ with `grpc.health.v1` beside it:
 | `RefreshMetadata` | fetch the federation's metadata now |
 | `ListIdPs`, `ListClients` | what the institution list shows, and the configured relying parties |
 | `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their logins in progress and their application password |
+| `DisablePerson`, `EnablePerson` | refuse somebody here -- at login and at every token, whatever their institution says -- and revoke what they hold; optionally until a given time |
+| `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
+| `ListDisabled` | who is disabled, why, by whom, until when |
+
+Disabling is kept in a file, and refused without one -- somebody disabled
+until the next restart would be let back in by the next deployment:
+
+```hcl
+disabled_file = "/var/lib/bridge/disabled.json"   # written whole, mode 0600
+```
+
+A file that cannot be read stops the provider from starting, for the same
+reason. Disabling an institution also removes its people's application
+passwords: those set from this version on carry the IdP that vouched for
+them, and older ones are found by their scope when the username is scoped
+(eppn, subject-id).
+
+⛔ A removed application password stops working in go-fileshare when it next
+reads its directory -- today, at its restart. Everything that comes back to
+this provider is refused at once; SMB and S3 are not until then.
+
+**There are no users or groups to add or delete here.** People exist
+because their institution vouches for them, and their groups are what it
+asserts; the closest provider to this one, Dex, has no call to change them
+either. Who may use what is decided by the service they reach -- a share in
+go-fileshare names the groups it admits -- and a local list of people and
+groups is [go-authn/directory](https://github.com/go-authn/directory)'s.
 
 Every call that changes something is logged with who made it: the client
 certificate's `cn=` over TLS, the peer's `uid=` on the socket. The listener is
