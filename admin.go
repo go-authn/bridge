@@ -62,7 +62,7 @@ func (s *server) serveAdmin(ctx context.Context, ln net.Listener, opts []grpc.Se
 	// vouched for, for the whole server and for the admin service by name.
 	setHealth := func() {
 		st := healthpb.HealthCheckResponse_NOT_SERVING
-		if s.ready() {
+		if s.readiness() == nil {
 			st = healthpb.HealthCheckResponse_SERVING
 		}
 		h.SetServingStatus("", st)
