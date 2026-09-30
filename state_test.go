@@ -282,7 +282,7 @@ func TestStateDropsACorruptRow(t *testing.T) {
 	f, _ := stateFixture(t)
 	db := f.s.cfg.State.db
 	for _, kind := range []string{"refresh", "family", "rotated", "issued"} {
-		if _, err := db.Exec(`INSERT INTO bridge_state (kind, k, v, expires) VALUES ('`+kind+`', 'bad', '{not json', 4102444800)`); err != nil {
+		if _, err := db.Exec(`INSERT INTO bridge_state (kind, k, v, expires) VALUES ('` + kind + `', 'bad', '{not json', 4102444800)`); err != nil {
 			t.Fatal(err)
 		}
 	}
