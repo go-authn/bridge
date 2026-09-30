@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -134,6 +135,8 @@ type fixture struct {
 	s        *server
 	cfgFile  string
 	redirect string // the test client's redirect URI
+	// setHandler puts another provider behind the same URL: a restart.
+	setHandler func(http.Handler)
 }
 
 // newFixture writes a configuration and starts the provider. extra is HCL
@@ -161,8 +164,9 @@ func newFixture(t *testing.T, extra string) *fixture {
 
 	// The provider's own URL is only known once it listens, so it listens
 	// first and is handed its handler after.
-	var handler http.Handler
-	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
+	var handler atomic.Value // http.Handler; a test may swap it for a restarted provider
+	f.setHandler = func(h http.Handler) { handler.Store(&h) }
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { (*handler.Load().(*http.Handler)).ServeHTTP(w, r) }))
 	t.Cleanup(f.srv.Close)
 	f.redirect = "http://127.0.0.1:9/callback"
 
@@ -221,7 +225,7 @@ client "cli" {
 	if err := f.s.fed.Refresh(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	handler = f.s.handler()
+	f.setHandler(f.s.handler())
 	return f
 }
 

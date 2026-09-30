@@ -74,6 +74,11 @@ type config struct {
 	// every relying party sees everybody as a new person.
 	SubjectSaltFile string `hcl:"subject_salt_file"`
 
+	// State keeps refresh tokens and the access tokens honoured at /userinfo
+	// in a database, so that a restart logs nobody out (state.go). Absent,
+	// they live in memory.
+	State *stateBlock `hcl:"state,block"`
+
 	// DisabledFile keeps the people and institutions an operator has
 	// disabled through the admin API. Without it the API refuses to
 	// disable anybody: a restart would forget them.
@@ -489,6 +494,11 @@ func (c *config) check() error {
 			return errors.New("metrics: listen is the public listener; metrics have one of their own")
 		}
 	}
+	if c.State != nil {
+		if err := c.State.check(); err != nil {
+			return fmt.Errorf("state: %w", err)
+		}
+	}
 	if c.AppPasswords != nil {
 		if err := c.AppPasswords.check(); err != nil {
 			return fmt.Errorf("app_passwords: %w", err)
@@ -600,8 +610,12 @@ func loopbackHost(h string) bool {
 // database. A *sql.DB left open is a file Windows will not delete and a
 // connection pool a server never gives back.
 func (c *config) close() error {
+	var err error
 	if c.AppPasswords != nil && c.AppPasswords.db != nil {
-		return c.AppPasswords.db.Close()
+		err = c.AppPasswords.db.Close()
 	}
-	return nil
+	if c.State != nil && c.State.db != nil {
+		err = errors.Join(err, c.State.db.Close())
+	}
+	return err
 }

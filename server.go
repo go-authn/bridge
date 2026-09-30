@@ -26,6 +26,8 @@ type server struct {
 	disabled *disabledList
 	// certs is every certificate issued, and the revoked (certstore.go).
 	certs *certStore
+	// state writes the long-lived stores through to a database (state.go).
+	state *persister
 	sp    *saml.SP
 	fed   *saml.Federation
 	log   io.Writer
@@ -135,6 +137,9 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	}
 	if s.certs, err = loadCertStore(cfg.CertificatesFile); err != nil {
 		return nil, fmt.Errorf("certificates_file: %w", err)
+	}
+	if err := s.persistStores(); err != nil {
+		return nil, err
 	}
 	return s, nil
 }

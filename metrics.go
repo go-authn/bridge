@@ -70,8 +70,14 @@ func (s *server) readiness() error {
 	if !s.ready() {
 		return errNotReady
 	}
+	if s.state != nil && !s.state.healthy() {
+		return errStateBehind
+	}
 	return nil
 }
+
+// errStateBehind is /readyz while a revocation has not reached the database.
+var errStateBehind = errors.New("a revocation has not reached the state database yet")
 
 func (s *server) metricsHandler() http.Handler {
 	return endpoint.Handler(endpoint.Options{

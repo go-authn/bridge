@@ -398,9 +398,34 @@ What to know, read in their sources (not yet run end to end):
   motley-cue allows by default; a token pasted into plain `ssh` has to fit.
   go-authn/oidc (go-fileshare), coreos/go-oidc and flaat (motley-cue) all
   verify ES256.
-- **`/userinfo` is how motley-cue checks every token**, and it answers from
-  memory: after this provider restarts, tokens handed out before are refused
-  there until the person gets a new one.
+- **`/userinfo` is how motley-cue checks every token.** Give the provider a
+  `state` block (below) so that a restart does not refuse every token handed
+  out before it.
+
+## State: what a restart must not forget
+
+```hcl
+state {
+  driver   = "postgres"                  # or sqlite, mysql
+  dsn_file = "/etc/bridge/state.dsn"
+}
+```
+
+Refresh token families, the refresh tokens and the retired ones (so that one
+used again after a restart still revokes its family), and the access tokens
+honoured at `/userinfo` and for certificates, written through to one table,
+`bridge_state`, and read at start. Without it they live in memory, and a
+restart logs everybody out.
+
+- A refresh token is kept as its **SHA-256**, never as itself: whoever reads
+  the database cannot use what is in it (Ory Hydra's fosite keeps a signature
+  for the same reason). Access tokens are kept by their `jti`, not a secret.
+- A revocation the database did not take would come back at the next start: a
+  delete that fails is retried at every later write, and until it succeeds
+  the provider is **not ready** (`/readyz`, the gRPC health).
+- Tested across restarts on SQLite and PostgreSQL: tokens still work, revoked
+  ones stay revoked, a retired refresh token used again still revokes its
+  family; with no `state` block the same restart forgets, which is the control.
 
 ## Running it: the admin API, health and metrics
 
@@ -500,9 +525,11 @@ configuration with an `admin` block, rather than starting without it.
 
 ## What it is not, yet
 
-- **One process.** Logins in progress, codes, device grants, refresh tokens
-  and issued tokens live in memory: a restart costs people one login, and two
-  instances behind a load balancer would each know half of them.
+- **One process.** With a `state` block, refresh tokens and the access tokens
+  honoured at `/userinfo` survive a restart; logins in progress, codes and
+  device grants (minutes) do not. It is written through and read at start, so
+  two instances on one database would each miss what the other wrote since:
+  one instance still.
 - No dynamic registration, no front- or back-channel logout.
 
 ## Licence
