@@ -20,6 +20,8 @@ type ttl[V any] struct {
 	mu  sync.Mutex
 	m   map[string]entry[V]
 	now func() time.Time
+	// store, when set, is where it is written through (state.go).
+	store *persistent[V]
 }
 
 type entry[V any] struct {
@@ -37,6 +39,7 @@ func (t *ttl[V]) put(k string, v V, expires time.Time) {
 	defer t.mu.Unlock()
 	t.sweep()
 	t.m[k] = entry[V]{v, expires}
+	t.write(k, v, expires)
 }
 
 // get returns the value under k if it has not expired.
@@ -58,6 +61,9 @@ func (t *ttl[V]) take(k string) (V, bool) {
 	defer t.mu.Unlock()
 	e, ok := t.m[k]
 	delete(t.m, k)
+	if ok {
+		t.forget(k)
+	}
 	if !ok || !t.now().Before(e.expires) {
 		var zero V
 		return zero, false
@@ -75,6 +81,7 @@ func (t *ttl[V]) update(k string, f func(*V)) bool {
 	}
 	f(&e.v)
 	t.m[k] = e
+	t.write(k, e.v, e.expires)
 	return true
 }
 

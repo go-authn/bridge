@@ -67,6 +67,38 @@ jobs:
           # passing for the wrong reason.
           BRIDGE_REQUIRE_JUDGE: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
 
+  # The state database on PostgreSQL, not only SQLite: placeholders, types
+  # and transactions are the driver's, and SQLite forgives what PostgreSQL
+  # does not.
+  postgres:
+    name: state on PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with: { go-version: stable, check-latest: true, cache: true }
+      - name: xmlsec1
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
+      # shell: bash is -eo pipefail; the default is -e alone, and tee would
+      # hide a failing test.
+      - shell: bash
+        run: go test -count=1 -run 'TestState' -v ./... | tee state.log
+        env:
+          BRIDGE_REQUIRE_JUDGE: "1"
+          BRIDGE_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      # A lane that passed on SQLite because the variable did not arrive
+      # would say nothing about PostgreSQL.
+      - name: it ran on PostgreSQL
+        run: |
+          grep -q "made read-only through its file: SQLite only" state.log
+
   race:
     name: race detector
     runs-on: ubuntu-latest

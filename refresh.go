@@ -38,7 +38,7 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, j
 	}
 	family := token()
 	rt := token()
-	s.refresh.put(rt, &refreshGrant{client: client, who: who, scopes: scopes, family: family, until: until}, until)
+	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, family: family, until: until}, until)
 	s.families.put(family, []string{jti}, until.Add(s.cfg.tokenTTL))
 	return rt
 }
@@ -46,9 +46,10 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, j
 // rotate is the token request with grant_type refresh_token.
 func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBlock) {
 	rt := r.PostForm.Get("refresh_token")
-	g, ok := s.refresh.take(rt)
+	// Kept under their hashes (state.go): what the store holds is no token.
+	g, ok := s.refresh.take(hashToken(rt))
 	if !ok {
-		if family, reused := s.rotated.take(rt); reused {
+		if family, reused := s.rotated.take(hashToken(rt)); reused {
 			s.revokeFamily(family)
 			s.logf("token: a rotated refresh token of %s was used again; its family is revoked", client.ID)
 		}
@@ -78,8 +79,8 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	}
 	// A rotation stays in its family, with the family's end.
 	next := token()
-	s.refresh.put(next, g, g.until)
-	s.rotated.put(rt, g.family, g.until)
+	s.refresh.put(hashToken(next), g, g.until)
+	s.rotated.put(hashToken(rt), g.family, g.until)
 	s.families.update(g.family, func(j *[]string) { *j = append(*j, jti) })
 	resp["refresh_token"] = next
 	s.counters.inc("bridge_tokens_issued_total", "refresh_token")
