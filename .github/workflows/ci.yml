@@ -96,7 +96,8 @@ jobs:
       # A lane that passed on SQLite because the variable did not arrive
       # would say nothing about PostgreSQL.
       - name: it ran on PostgreSQL
-        run: grep -q "made read-only through its file: SQLite only" state.log
+        run: |
+          grep -q "made read-only through its file: SQLite only" state.log
 
   race:
     name: race detector
