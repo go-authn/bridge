@@ -157,6 +157,7 @@ golang.org/x/oauth2's device client, not one written here.
 ## SSH certificates, for SFTP
 
 ```hcl
+certificates_file = "/var/lib/bridge/certificates.json"   # every certificate issued, and the revoked
 ssh_ca {
   key_file = "/var/lib/bridge/ssh-ca"   # bridge keygen --ssh-ca
   validity = "12h"
@@ -174,6 +175,65 @@ an empty list valid for ANY user, so there is never one -- no `permit-*`
 extension, the person's groups in `groups@go-authn.org`, and it ends with the
 IdP's session when that is sooner. go-fileshare trusts it with `oidc {
 ssh_ca_file }`.
+
+## X.509 certificates, for NFS over TLS
+
+NFS over TLS (RFC 9289) can name the client by its certificate. This
+provider issues one to a person who logged in, for a key made on their machine:
+
+```hcl
+certificates_file = "/var/lib/bridge/certificates.json"
+x509_ca {
+  key_file  = "/var/lib/bridge/nfs-ca/ca.key"    # bridge keygen --x509-ca /var/lib/bridge/nfs-ca
+  cert_file = "/var/lib/bridge/nfs-ca/ca.crt"    # what go-fileshare trusts
+  validity  = "12h"
+}
+client "nfs" {
+  device            = true
+  x509_certificates = true
+}
+```
+
+`bridge nfs-cert --issuer ... --client nfs` makes a P-256 key, sends a
+certificate request with the "nfs" scope, and writes the certificate and key
+in PEM, and in the DER the kernel keyring takes, with the mount command.
+
+- The person is a subjectAltName **otherName 1.3.6.1.4.1.2238.1.1.1**, a
+  UTF8String `user@domain`, exactly one: what FreeBSD's `rpc.tlsservd -u`
+  reads (draft-cel-nfsv4-rpc-tls-othername). FreeBSD maps it only when
+  `domain` is its own NFSv4 domain and `user` is in its passwd; go-fileshare
+  maps the whole name.
+- The groups are URI names beside it,
+  `tag:go-authn.github.io,2026:group:<group, percent-encoded>` (RFC 4151). Not
+  an extension of the UUID arc: `x509.ParseCertificate` refuses a whole
+  certificate whose extension OID has an arc larger than an `int` (measured),
+  so every Go server would.
+- Client authentication only, the CN the username (empty, and the SAN
+  critical, past 64 characters), a CRL distribution point, and no longer than
+  `validity`, the IdP's session or the CA's own certificate.
+- **`GET /x509/crl`**: DER, signed by the CA that signs the certificates,
+  `NextUpdate` an hour on, its number the revocation counter, `ETag` that
+  number. Disabling or revoking a person lists their certificates there until
+  they expire; enabling them again takes nothing off. openssl verifies the
+  certificates and says `revoked` once they are listed.
+
+⛔ **A certificate names the machine, not the user of it.** RFC 9289: the
+server 'cannot utilize the remote TLS peer identity to authenticate RPC
+users'. Linux sets the client certificate per mount (`cert_serial`,
+`privkey_serial`), so everybody using that mount is the person it names:
+this is for a machine one person uses, and `bridge nfs-cert` says so.
+
+On the Linux client (measured by go-fileshare against Linux 6.17 and
+ktls-utils 0.9): tlshd verifies the SERVER's certificate against the system
+trust store only, ignoring `x509.truststore`; certificate files named in
+`/etc/tlshd.conf` must be root's, the key mode 600 -- either mistake shows
+only as `gnutls: Error in the certificate (-43)`; and MOUNT's MNT goes in the
+clear, so a refused person sees "access denied" at the first access, not at
+mount. `bridge nfs-cert` prints all three.
+
+Every certificate, SSH and X.509, is recorded in `certificates_file` before it
+is handed out: one that cannot be recorded is not issued, since it could
+never be revoked. The file is required with `ssh_ca` or `x509_ca`.
 
 ## Application passwords, for SMB and S3
 
@@ -390,12 +450,15 @@ which also closes that person's open SMB, WebDAV and S3 sessions. Call it
 after `DisablePerson` for the effect to be immediate. Everything that comes
 back to this provider is refused at once.
 
-⛔ An SSH certificate already issued is not revoked: go-fileshare checks it
-at login, against the CA, and a disabled person can open SFTP sessions with
-it until it expires -- `ssh_ca { validity }`, 12 hours by default, a week at
-most, and never past the IdP's session when it says when that ends. Keep it
-short where disabling must bite; `bridge token` and opkssh fetch a new one
-without the person noticing.
+SSH and X.509 certificates already issued are revoked with their person or
+institution: they are listed in **`GET /ssh/krl`** (an OpenSSH KRL, what
+`sshd`'s `RevokedKeys` and `ssh-keygen -Q` read) and `GET /x509/crl` until
+they expire, and go-fileshare refuses them at login -- failing closed when it
+cannot fetch a list recent enough. The KRL is not signed: OpenSSH no longer
+verifies KRL signatures, so its integrity is the HTTPS it is fetched over.
+Written by [go-authn/krl](https://github.com/go-authn/krl) and checked here
+with `ssh-keygen -Q`. A plain `sshd` can use it too, fetched by cron into
+`RevokedKeys`.
 
 **There are no users or groups to add or delete here.** People exist
 because their institution vouches for them, and their groups are what it

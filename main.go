@@ -145,13 +145,13 @@ func newRootCmd(out io.Writer) *cobra.Command {
 		},
 	})
 
-	var keyFile, saltFile, sshCAFile, atKeyFile string
+	var keyFile, saltFile, sshCAFile, atKeyFile, x509CADir string
 	keygen := &cobra.Command{
 		Use:   "keygen",
 		Short: "write a new token signing key and subject salt, refusing to overwrite either",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if keyFile == "" && saltFile == "" && sshCAFile == "" && atKeyFile == "" {
-				return errors.New("give --key, --salt, --ssh-ca, --access-token-key, or several")
+			if keyFile == "" && saltFile == "" && sshCAFile == "" && atKeyFile == "" && x509CADir == "" {
+				return errors.New("give --key, --salt, --ssh-ca, --access-token-key, --x509-ca, or several")
 			}
 			if sshCAFile != "" {
 				pub, err := generateSSHCA(sshCAFile)
@@ -165,6 +165,13 @@ func newRootCmd(out io.Writer) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(out, "wrote %s\n", keyFile)
+			}
+			if x509CADir != "" {
+				crt, err := generateX509CA(x509CADir, "go-authn bridge NFS client CA")
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "wrote %s and its key; the certificate is what go-fileshare trusts for NFS over TLS\n", crt)
 			}
 			if atKeyFile != "" {
 				if err := generateECKey(atKeyFile); err != nil {
@@ -183,11 +190,13 @@ func newRootCmd(out io.Writer) *cobra.Command {
 	}
 	keygen.Flags().StringVar(&keyFile, "key", "", "where to write the RSA signing key")
 	keygen.Flags().StringVar(&atKeyFile, "access-token-key", "", "where to write a P-256 key for ES256 access tokens")
+	keygen.Flags().StringVar(&x509CADir, "x509-ca", "", "a directory to write an X.509 CA in (ca.key, ca.crt), for NFS client certificates")
 	keygen.Flags().StringVar(&saltFile, "salt", "", "where to write the subject salt")
 	keygen.Flags().StringVar(&sshCAFile, "ssh-ca", "", "where to write an Ed25519 SSH certificate authority key")
 	root.AddCommand(keygen)
 	root.AddCommand(newTokenCmd(out))
 	root.AddCommand(newSSHCertCmd(out))
+	root.AddCommand(newNFSCertCmd(out))
 	root.AddCommand(newAppPasswordCmd(out))
 	return root
 }

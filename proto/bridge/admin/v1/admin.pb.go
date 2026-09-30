@@ -822,8 +822,11 @@ type Revoked struct {
 	RefreshFamilies int32                  `protobuf:"varint,1,opt,name=refresh_families,json=refreshFamilies,proto3" json:"refresh_families,omitempty"`
 	AccessTokens    int32                  `protobuf:"varint,2,opt,name=access_tokens,json=accessTokens,proto3" json:"access_tokens,omitempty"`
 	// logins are logins and device grants in progress.
-	Logins        int32 `protobuf:"varint,3,opt,name=logins,proto3" json:"logins,omitempty"`
-	AppPasswords  int32 `protobuf:"varint,4,opt,name=app_passwords,json=appPasswords,proto3" json:"app_passwords,omitempty"`
+	Logins       int32 `protobuf:"varint,3,opt,name=logins,proto3" json:"logins,omitempty"`
+	AppPasswords int32 `protobuf:"varint,4,opt,name=app_passwords,json=appPasswords,proto3" json:"app_passwords,omitempty"`
+	// certificates are the SSH and X.509 certificates revoked: listed in
+	// /ssh/krl and /x509/crl until they expire.
+	Certificates  int32 `protobuf:"varint,5,opt,name=certificates,proto3" json:"certificates,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -882,6 +885,13 @@ func (x *Revoked) GetLogins() int32 {
 func (x *Revoked) GetAppPasswords() int32 {
 	if x != nil {
 		return x.AppPasswords
+	}
+	return 0
+}
+
+func (x *Revoked) GetCertificates() int32 {
+	if x != nil {
+		return x.Certificates
 	}
 	return 0
 }
@@ -1571,12 +1581,13 @@ const file_bridge_admin_v1_admin_proto_rawDesc = "" +
 	"\x13ListClientsResponse\x121\n" +
 	"\aclients\x18\x01 \x03(\v2\x17.bridge.admin.v1.ClientR\aclients\"1\n" +
 	"\x13RevokePersonRequest\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\"\x96\x01\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"\xba\x01\n" +
 	"\aRevoked\x12)\n" +
 	"\x10refresh_families\x18\x01 \x01(\x05R\x0frefreshFamilies\x12#\n" +
 	"\raccess_tokens\x18\x02 \x01(\x05R\faccessTokens\x12\x16\n" +
 	"\x06logins\x18\x03 \x01(\x05R\x06logins\x12#\n" +
-	"\rapp_passwords\x18\x04 \x01(\x05R\fappPasswords\"J\n" +
+	"\rapp_passwords\x18\x04 \x01(\x05R\fappPasswords\x12\"\n" +
+	"\fcertificates\x18\x05 \x01(\x05R\fcertificates\"J\n" +
 	"\x14RevokePersonResponse\x122\n" +
 	"\arevoked\x18\x01 \x01(\v2\x18.bridge.admin.v1.RevokedR\arevoked\"\xcf\x01\n" +
 	"\bDisabled\x12\x1a\n" +

@@ -71,6 +71,10 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not ask for SSH certificates")
 		return
 	}
+	if slices.Contains(scopes, "nfs") && !client.X509Certificates {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not ask for NFS certificates")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not set application passwords")
 		return

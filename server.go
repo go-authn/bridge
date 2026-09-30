@@ -24,10 +24,12 @@ type server struct {
 	cfg *config
 	// disabled is who this provider refuses (disable.go).
 	disabled *disabledList
-	sp       *saml.SP
-	fed      *saml.Federation
-	log      io.Writer
-	now      func() time.Time
+	// certs is every certificate issued, and the revoked (certstore.go).
+	certs *certStore
+	sp    *saml.SP
+	fed   *saml.Federation
+	log   io.Writer
+	now   func() time.Time
 
 	// logins in progress, keyed by the handle the browser carries in a
 	// cookie and the IdP carries in RelayState.
@@ -131,6 +133,9 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
 		return nil, fmt.Errorf("disabled_file: %w", err)
 	}
+	if s.certs, err = loadCertStore(cfg.CertificatesFile); err != nil {
+		return nil, fmt.Errorf("certificates_file: %w", err)
+	}
 	return s, nil
 }
 
@@ -155,6 +160,9 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /device_authorization", s.deviceAuthorization)
 	mux.HandleFunc("/device", s.device)
 	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
+	mux.HandleFunc("GET /ssh/krl", s.sshKRL)
+	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
+	mux.HandleFunc("GET /x509/crl", s.x509CRL)
 	mux.HandleFunc("/app-password", s.appPassword)
 	return mux
 }

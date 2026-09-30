@@ -139,6 +139,9 @@ message Revoked {
   // logins are logins and device grants in progress.
   int32 logins = 3;
   int32 app_passwords = 4;
+  // certificates are the SSH and X.509 certificates revoked: listed in
+  // /ssh/krl and /x509/crl until they expire.
+  int32 certificates = 5;
 }
 
 message RevokePersonResponse {

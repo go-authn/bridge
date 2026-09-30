@@ -79,12 +79,19 @@ type config struct {
 	// disable anybody: a restart would forget them.
 	DisabledFile string `hcl:"disabled_file,optional"`
 
+	// CertificatesFile records every SSH and X.509 certificate issued, and
+	// which are revoked (certstore.go). Required with ssh_ca or x509_ca.
+	CertificatesFile string `hcl:"certificates_file,optional"`
+
 	SAML    *samlBlock    `hcl:"saml,block"`
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`
 
 	// SSHCA certifies SSH keys for federated people.
 	SSHCA *sshCABlock `hcl:"ssh_ca,block"`
+
+	// X509CA issues X.509 client certificates for NFS over TLS (x509ca.go).
+	X509CA *x509CABlock `hcl:"x509_ca,block"`
 
 	// Admin serves the gRPC administration API (proto/bridge/admin/v1).
 	// Absent, there is none.
@@ -185,9 +192,8 @@ type sshCABlock struct {
 	KeyFile string `hcl:"key_file"`
 
 	// Validity is how long a certificate lives: 12h by default, never
-	// longer than the IdP's session when it said when that ends. A
-	// certificate cannot be revoked by this provider, so its lifetime IS its
-	// revocation.
+	// longer than the IdP's session when it said when that ends. Revoked
+	// ones are listed in /ssh/krl until then, for servers that fetch it.
 	Validity string `hcl:"validity,optional"`
 
 	signer   ssh.Signer
@@ -248,6 +254,11 @@ type clientBlock struct {
 	// an SSH public key certified by the ssh_ca block -- which is how a
 	// federated person reaches go-fileshare over SFTP.
 	SSHCertificates bool `hcl:"ssh_certificates,optional"`
+
+	// X509Certificates lets tokens of this client, with the "nfs" scope,
+	// have an X.509 client certificate issued by the x509_ca block -- which
+	// is how NFS over TLS (RFC 9289) names a federated person.
+	X509Certificates bool `hcl:"x509_certificates,optional"`
 
 	// AppPasswords lets tokens of this client, with the "app_password"
 	// scope, set the person's application password.
@@ -442,6 +453,17 @@ func (c *config) check() error {
 		}
 	}
 
+	if c.SSHCA != nil && c.CertificatesFile == "" {
+		return fmt.Errorf("ssh_ca: %w", errNoCertStore)
+	}
+	if c.X509CA != nil {
+		if c.CertificatesFile == "" {
+			return fmt.Errorf("x509_ca: %w", errNoCertStore)
+		}
+		if err := c.X509CA.load(); err != nil {
+			return fmt.Errorf("x509_ca: %w", err)
+		}
+	}
 	if c.SSHCA != nil {
 		if err := c.SSHCA.load(); err != nil {
 			return fmt.Errorf("ssh_ca: %w", err)
@@ -517,6 +539,9 @@ func (c *config) check() error {
 		}
 		if cl.SSHCertificates && c.SSHCA == nil {
 			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
+		}
+		if cl.X509Certificates && c.X509CA == nil {
+			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
 		}
 		switch cl.Subject {
 		case "":
