@@ -79,6 +79,10 @@ type config struct {
 	// they live in memory.
 	State *stateBlock `hcl:"state,block"`
 
+	// SSF is a Shared Signals transmitter: session-revoked events for
+	// receivers that verify this provider's tokens on their own (ssf.go).
+	SSF *ssfBlock `hcl:"ssf,block"`
+
 	// DisabledFile keeps the people and institutions an operator has
 	// disabled through the admin API. Without it the API refuses to
 	// disable anybody: a restart would forget them.
@@ -264,6 +268,10 @@ type clientBlock struct {
 	// have an X.509 client certificate issued by the x509_ca block -- which
 	// is how NFS over TLS (RFC 9289) names a federated person.
 	X509Certificates bool `hcl:"x509_certificates,optional"`
+
+	// SSFReceiver lets this confidential client get a token for the ssf
+	// scope with client credentials, and poll the SSF transmitter.
+	SSFReceiver bool `hcl:"ssf_receiver,optional"`
 
 	// AppPasswords lets tokens of this client, with the "app_password"
 	// scope, set the person's application password.
@@ -499,6 +507,11 @@ func (c *config) check() error {
 			return fmt.Errorf("state: %w", err)
 		}
 	}
+	if c.SSF != nil {
+		if err := c.SSF.check(c); err != nil {
+			return fmt.Errorf("ssf: %w", err)
+		}
+	}
 	if c.AppPasswords != nil {
 		if err := c.AppPasswords.check(); err != nil {
 			return fmt.Errorf("app_passwords: %w", err)
@@ -525,7 +538,9 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: a secret of %d characters is a password somebody can guess", cl.ID, len(cl.secret))
 			}
 		}
-		if len(cl.RedirectURIs) == 0 && !cl.Device {
+		// An SSF receiver is a machine with client credentials: no person
+		// logs in through it.
+		if len(cl.RedirectURIs) == 0 && !cl.Device && !cl.SSFReceiver {
 			return fmt.Errorf("client %q: no redirect_uris, and not a device client", cl.ID)
 		}
 		if cl.RefreshLifetime != "" {
@@ -552,6 +567,9 @@ func (c *config) check() error {
 		}
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
+		}
+		if cl.SSFReceiver && (c.SSF == nil || cl.SecretFile == "") {
+			return fmt.Errorf("client %q: ssf_receiver needs an ssf block and a secret_file", cl.ID)
 		}
 		switch cl.Subject {
 		case "":
