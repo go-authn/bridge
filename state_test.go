@@ -238,10 +238,14 @@ func TestStateConfigRefusals(t *testing.T) {
 	c := newConf(t)
 	dsn := filepath.ToSlash(filepath.Join(c.dir, "dsn"))
 	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(c.dir, "s.db"))), 0o600)
+	// A directory is no database, on any system; random bytes as a name
+	// were one on Linux, created in the working directory.
+	dirDSN := filepath.ToSlash(filepath.Join(c.dir, "dirdsn"))
+	os.WriteFile(dirDSN, []byte("file:"+filepath.ToSlash(c.dir)), 0o600)
 	for name, block := range map[string]string{
 		"a driver it has not":  `state {` + "\n" + `driver = "oracle"` + "\n" + `dsn_file = "` + dsn + `"` + "\n}",
 		"no dsn file":          `state {` + "\n" + `driver = "sqlite"` + "\n" + `dsn_file = "` + c.dir + `/none"` + "\n}",
-		"a database it cannot": `state {` + "\n" + `driver = "sqlite"` + "\n" + `dsn_file = "` + c.salt + `"` + "\n}",
+		"a database it cannot": `state {` + "\n" + `driver = "sqlite"` + "\n" + `dsn_file = "` + dirDSN + `"` + "\n}",
 	} {
 		if _, err := c.load(t, c.hcl(nil)+block); err == nil {
 			t.Errorf("%s: ACCEPTED", name)
