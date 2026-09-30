@@ -113,6 +113,11 @@ together with RENATER's discovery service (which cannot be restricted).
 - The **access token is checked by go-authn/oidc** with audience `fileshare`,
   exactly as [go-fileshare](https://github.com/go-fileshare/fileshare) checks
   the tokens WebDAV clients bring it; and the ID token is refused there.
+- **go-fileshare itself**, the released binary: an X.509 certificate issued here
+  opens a share over NFS with TLS, an SSH certificate over SFTP, and once the
+  person is disabled here the next NFS call, the SFTP session already open and
+  a new SFTP login are all refused within seconds -- through the CRL and the
+  KRL go-fileshare fetches from this provider.
 - The **ACME CA is [Pebble](https://github.com/letsencrypt/pebble)**, Let's
   Encrypt's test CA, with External Account Binding required: it refuses a
   wrong MAC key, validates tls-alpn-01 against the listener itself, and the

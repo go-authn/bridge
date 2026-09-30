@@ -1,0 +1,326 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package main
+
+import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+)
+
+// The two halves together: what this provider issues, go-fileshare
+// (the real binary, a release) accepts -- and refuses once the person is
+// disabled here, through the KRL and the CRL it fetches from this provider.
+// Neither repository can see this alone.
+
+// fileshareBin is the go-fileshare binary, when it is installed.
+func fileshareBin(t *testing.T) string {
+	t.Helper()
+	if p, err := exec.LookPath("fileshare"); err == nil {
+		return p
+	}
+	if gp, _ := exec.Command("go", "env", "GOPATH").Output(); len(gp) > 0 {
+		for _, name := range []string{"fileshare", "fileshare.exe"} {
+			if p := filepath.Join(strings.TrimSpace(string(gp)), "bin", name); fileExists(p) {
+				return p
+			}
+		}
+	}
+	if os.Getenv("BRIDGE_REQUIRE_JUDGE") != "" {
+		t.Fatal("fileshare is required here (go install github.com/go-fileshare/fileshare@v0.12.0)")
+	}
+	t.Skip("fileshare is not installed")
+	return ""
+}
+
+type interop struct {
+	f          *fixture
+	front      *httptest.Server // this provider over https, for the lists
+	frontCA    string
+	sshCAPub   string
+	x509CA     string
+	serverCert string
+	serverKey  string
+	serverPool *x509.CertPool
+	dir        string
+}
+
+func newInterop(t *testing.T) *interop {
+	t.Helper()
+	dir := t.TempDir()
+	sshCA := filepath.ToSlash(filepath.Join(dir, "ssh-ca"))
+	pub, err := generateSSHCA(sshCA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x509CA, err := generateX509CA(dir, "interop NFS CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t, `
+certificates_file = "`+filepath.ToSlash(filepath.Join(dir, "certs.json"))+`"
+disabled_file     = "`+filepath.ToSlash(filepath.Join(dir, "disabled.json"))+`"
+ssh_ca { key_file = "`+sshCA+`" }
+x509_ca {
+  key_file  = "`+filepath.ToSlash(filepath.Join(dir, "ca.key"))+`"
+  cert_file = "`+filepath.ToSlash(x509CA)+`"
+}
+client "sftp" {
+  device           = true
+  ssh_certificates = true
+}
+client "nfs" {
+  device            = true
+  x509_certificates = true
+}
+`)
+	f.s.poll = time.Second
+	// The lists are fetched over https only: the same provider, behind TLS.
+	front := httptest.NewTLSServer(f.s.handler())
+	t.Cleanup(front.Close)
+	frontCA := filepath.Join(dir, "front.pem")
+	os.WriteFile(frontCA, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: front.Certificate().Raw}), 0o644)
+	pubFile := filepath.Join(dir, "ssh-ca.pub")
+	os.WriteFile(pubFile, []byte(pub+"\n"), 0o644)
+	certFile, keyFile, cert := selfSigned(t, dir, "fileshare", "localhost", "127.0.0.1")
+	pool := x509.NewCertPool()
+	pool.AddCert(cert)
+	return &interop{f: f, front: front, frontCA: frontCA, sshCAPub: pubFile, x509CA: x509CA,
+		serverCert: certFile, serverKey: keyFile, serverPool: pool, dir: dir}
+}
+
+func hclP(p string) string { return filepath.ToSlash(p) }
+
+// config is a fileshare configuration with one share alice may use, served
+// over NFS (identities from certificates) and SFTP (certificates from this
+// provider), both checking this provider's lists every second.
+func (i *interop) config(t *testing.T, nfsAddr, sftpAddr string) string {
+	t.Helper()
+	share := filepath.Join(i.dir, "share")
+	os.MkdirAll(share, 0o755)
+	os.WriteFile(filepath.Join(share, "x.txt"), []byte("hello from fileshare\n"), 0o644)
+	lists := i.front.URL
+	body := fmt.Sprintf(`
+share "t" {
+  directory = %q
+  allow     = ["oidc:user:alice@%s"]
+}
+tls {
+  cert_file = %q
+  key_file  = %q
+}
+oidc {
+  issuer          = %q
+  audience        = "fileshare"
+  ssh_ca_file     = %q
+  ssh_krl_url     = %q
+  ssh_krl_ca_file = %q
+  ssh_krl_refresh = "1s"
+}
+serve "nfs" {
+  addr           = %q
+  tls            = true
+  client_ca_file = %q
+  identity       = "certificate"
+  crl_url        = %q
+  crl_ca_file    = %q
+  crl_refresh    = "1s"
+}
+serve "sftp" { addr = %q }
+`, hclP(share), idpScope, hclP(i.serverCert), hclP(i.serverKey),
+		i.f.s.cfg.Issuer, hclP(i.sshCAPub), lists+"/ssh/krl", hclP(i.frontCA),
+		nfsAddr, hclP(i.x509CA), lists+"/x509/crl", hclP(i.frontCA), sftpAddr)
+	d := filepath.Join(i.dir, "fileshare.d")
+	os.MkdirAll(d, 0o700)
+	p := filepath.Join(d, "fileshare.hcl")
+	os.WriteFile(p, []byte(body), 0o600)
+	return d
+}
+
+func TestInteropFileshareCheck(t *testing.T) {
+	bin := fileshareBin(t)
+	i := newInterop(t)
+	d := i.config(t, "127.0.0.1:"+freePort(t), "127.0.0.1:"+freePort(t))
+	out, err := exec.Command(bin, "check", d).CombinedOutput()
+	if err != nil {
+		t.Fatalf("fileshare check: %v\n%s", err, out)
+	}
+	for _, want := range []string{"/ssh/krl", "/x509/crl", "this configuration can be served"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("fileshare check does not say %q:\n%s", want, out)
+		}
+	}
+}
+
+// A person accepted by go-fileshare with what this provider issued -- an
+// X.509 certificate over NFS, an SSH certificate over SFTP -- and refused
+// once disabled here: NFS calls, the SFTP session already open, and a new
+// SFTP login, each within a few seconds (fileshare refetches both lists
+// every second).
+func TestInteropRevocation(t *testing.T) {
+	bin := fileshareBin(t)
+	i := newInterop(t)
+	nfsAddr, sftpAddr := "127.0.0.1:"+freePort(t), "127.0.0.1:"+freePort(t)
+	d := i.config(t, nfsAddr, sftpAddr)
+	var log syncWriter
+	cmd := exec.Command(bin, "--config", d)
+	cmd.Stdout, cmd.Stderr = &log, &log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		if t.Failed() {
+			t.Logf("fileshare:\n%s", log.String())
+		}
+	})
+	for _, a := range []string{nfsAddr, sftpAddr} {
+		for n := 0; ; n++ {
+			if c, err := net.DialTimeout("tcp", a, time.Second); err == nil {
+				c.Close()
+				break
+			}
+			if n == 100 {
+				t.Fatalf("fileshare does not listen on %s:\n%s", a, log.String())
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	// NFS: an X.509 certificate for alice, from this provider.
+	tok := i.f.deviceTokenAs("nfs", alice, "openid", "nfs")
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	status, body := postCSR(t, i.f, tok.AccessToken, csrFor(t, key))
+	if status != http.StatusOK {
+		t.Fatalf("x509: %d %s", status, body)
+	}
+	blk, _ := pem.Decode(body)
+	nfsCert := &tls.Certificate{Certificate: [][]byte{blk.Bytes}, PrivateKey: key}
+	if st, err := nfsMount(nfsAddr, i.serverPool, nfsCert, "/t"); err != nil || st != 0 {
+		t.Fatalf("NFS with alice's certificate: status %d, %v", st, err)
+	}
+
+	// SFTP: an SSH certificate for alice, from this provider.
+	sshTok := i.f.deviceTokenAs("sftp", alice, "openid", "ssh")
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	status, body = certify(t, i.f, sshTok.AccessToken, authorizedKey(t, pub))
+	if status != http.StatusOK {
+		t.Fatalf("ssh: %d %s", status, body)
+	}
+	sftpc, err := sftpDial(sftpAddr, "alice@"+idpScope, body, priv)
+	if err != nil {
+		t.Fatalf("SFTP with alice's certificate: %v", err)
+	}
+	defer sftpc.Close()
+	// The shares are directories at the root.
+	open, err := sftpc.Open("/t/x.txt")
+	if err != nil {
+		t.Fatalf("SFTP open: %v", err)
+	}
+	buf := make([]byte, 5)
+	if _, err := open.ReadAt(buf, 0); err != nil || string(buf) != "hello" {
+		t.Fatalf("SFTP read: %q %v", buf, err)
+	}
+
+	// Disabled here.
+	if _, r, err := i.f.s.disablePerson("alice@"+idpScope, "interop", "test", time.Time{}); err != nil || r.certificates != 2 {
+		t.Fatalf("disabling: %v, %d certificates revoked", err, r.certificates)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	refusedNFS, refusedOpen, refusedLogin := false, false, false
+	for time.Now().Before(deadline) && !(refusedNFS && refusedOpen && refusedLogin) {
+		if !refusedNFS {
+			st, err := nfsMount(nfsAddr, i.serverPool, nfsCert, "/t")
+			refusedNFS = err != nil || st == 13
+		}
+		if !refusedOpen {
+			_, err := open.ReadAt(buf, 0)
+			refusedOpen = err != nil
+		}
+		if !refusedLogin {
+			c, err := sftpDial(sftpAddr, "alice@"+idpScope, body, priv)
+			if err != nil {
+				refusedLogin = true
+			} else {
+				c.Close()
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !refusedNFS {
+		t.Error("NFS still serves alice after she was disabled")
+	}
+	if !refusedOpen {
+		t.Error("the SFTP session alice already had still reads")
+	}
+	if !refusedLogin {
+		t.Error("alice still logs in over SFTP after she was disabled")
+	}
+}
+
+type syncWriter struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (w *syncWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
+func (w *syncWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
+}
+
+func sftpDial(addr, user string, certLine []byte, priv ed25519.PrivateKey) (*sftp.Client, error) {
+	k, _, _, _, err := ssh.ParseAuthorizedKey(certLine)
+	if err != nil {
+		return nil, err
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := ssh.NewCertSigner(k.(*ssh.Certificate), signer)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := ssh.Dial("tcp", addr, &ssh.ClientConfig{
+		User: user, Auth: []ssh.AuthMethod{ssh.PublicKeys(cs)},
+		// The host key is fileshare's, made for this test: not what is judged.
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         5 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c, err := sftp.NewClient(conn)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return c, nil
+}
