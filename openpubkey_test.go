@@ -57,13 +57,13 @@ func (f *fixture) deviceApprove(complete string) {
 }
 
 // deviceAuth runs the openpubkey client's device flow to a PK Token.
-func (f *fixture) deviceAuth(op providers.BrowserOpenIdProvider) *pktoken.PKToken {
+func (f *fixture) deviceAuth(op providers.BrowserOpenIdProvider, opts ...client.ClientOpts) *pktoken.PKToken {
 	f.t.Helper()
 	pr, pw := io.Pipe()
 	if err := providers.SetOutWriter(op, pw); err != nil {
 		f.t.Fatal(err)
 	}
-	c, err := client.New(op)
+	c, err := client.New(op, opts...)
 	if err != nil {
 		f.t.Fatal(err)
 	}
