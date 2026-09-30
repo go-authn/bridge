@@ -18,6 +18,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -46,7 +48,7 @@ func fileshareBin(t *testing.T) string {
 		}
 	}
 	if os.Getenv("BRIDGE_REQUIRE_JUDGE") != "" {
-		t.Fatal("fileshare is required here (go install github.com/go-fileshare/fileshare@v0.12.0)")
+		t.Fatal("fileshare is required here (go install github.com/go-fileshare/fileshare@v0.13.0)")
 	}
 	t.Skip("fileshare is not installed")
 	return ""
@@ -323,4 +325,159 @@ func sftpDial(addr, user string, certLine []byte, priv ed25519.PrivateKey) (*sft
 		return nil, err
 	}
 	return c, nil
+}
+
+// Shared Signals between the two: go-fileshare (the release) is an SSF
+// receiver of this provider, verifies its access tokens on its own over
+// WebDAV, and stops accepting them once the person -- or their institution,
+// for somebody this provider has no trace of any more -- is disabled here.
+//
+// Linux only: the provider is https with a certificate made for the test,
+// which go-fileshare's token verifier trusts through SSL_CERT_FILE, and Go
+// honours that variable everywhere but macOS and Windows.
+func TestInteropSSF(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("go-fileshare trusts the test's certificate through SSL_CERT_FILE, which Go reads on Linux only")
+	}
+	bin := fileshareBin(t)
+	dir := t.TempDir()
+	dsn := filepath.Join(dir, "dsn")
+	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(dir, "state.db"))), 0o600)
+	secret := filepath.Join(dir, "ssf.secret")
+	os.WriteFile(secret, []byte("an-ssf-receiver-secret-long-enough"), 0o600)
+	f := newFixtureTLS(t, deviceClients+`
+disabled_file = "`+hclP(filepath.Join(dir, "disabled.json"))+`"
+state {
+  driver   = "sqlite"
+  dsn_file = "`+hclP(dsn)+`"
+}
+ssf {}
+client "fileshare-ssf" {
+  secret_file  = "`+hclP(secret)+`"
+  ssf_receiver = true
+  audience     = ["fileshare"]
+}
+`)
+	f.s.poll = 1e9
+	caFile := filepath.Join(dir, "issuer.pem")
+	os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.srv.Certificate().Raw}), 0o644)
+
+	share := filepath.Join(dir, "share")
+	os.MkdirAll(share, 0o755)
+	os.WriteFile(filepath.Join(share, "x.txt"), []byte("hello"), 0o644)
+	davAddr := "127.0.0.1:" + freePort(t)
+	d := filepath.Join(dir, "fileshare.d")
+	os.MkdirAll(d, 0o700)
+	os.WriteFile(filepath.Join(d, "fileshare.hcl"), []byte(fmt.Sprintf(`
+share "t" {
+  directory = %q
+  allow     = ["oidc:user:alice@%[2]s", "oidc:user:bob@%[2]s"]
+}
+oidc {
+  issuer   = %q
+  audience = "fileshare"
+}
+ssf {
+  transmitter        = %[3]q
+  audience           = "fileshare"
+  client_id          = "fileshare-ssf"
+  client_secret_file = %q
+  state_file         = %q
+  ca_file            = %q
+  max_age            = "5m"
+}
+serve "webdav" { addr = %q }
+`, hclP(share), idpScope, f.s.cfg.Issuer, hclP(secret), hclP(filepath.Join(dir, "revocations.json")), hclP(caFile), davAddr)), 0o600)
+
+	var log syncWriter
+	cmd := exec.Command(bin, "--config", d)
+	cmd.Env = append(os.Environ(), "SSL_CERT_FILE="+caFile)
+	cmd.Stdout, cmd.Stderr = &log, &log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		if t.Failed() {
+			t.Logf("fileshare:\n%s", log.String())
+		}
+	})
+	// Up, and its stream made here: events before it would reach nobody.
+	deadline := time.Now().Add(20 * time.Second)
+	for f.s.ssfStreams.count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("fileshare made no stream:\n%s", log.String())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	get := func(tok string) int {
+		req, _ := http.NewRequest("GET", "http://"+davAddr+"/t/x.txt", nil)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	alice := f.deviceTokenAs("rclone", assertionOpts{eppn: "alice@" + idpScope}, "openid")
+	bob := f.deviceTokenAs("rclone", assertionOpts{eppn: "bob@" + idpScope}, "openid")
+	for name, tok := range map[string]string{"alice": alice.AccessToken, "bob": bob.AccessToken} {
+		if s := get(tok); s != http.StatusOK {
+			t.Fatalf("%s over WebDAV before anything: %d\n%s", name, s, log.String())
+		}
+	}
+	refusedWithin := func(tok string, d time.Duration) bool {
+		end := time.Now().Add(d)
+		for time.Now().Before(end) {
+			if s := get(tok); s == http.StatusUnauthorized || s == http.StatusForbidden || s == http.StatusNotFound {
+				return true
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		return false
+	}
+
+	// Alice disabled here: her token, verified there on its own, refused.
+	if _, _, err := f.s.disablePerson("alice@"+idpScope, "interop", "test", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if !refusedWithin(alice.AccessToken, 45*time.Second) {
+		t.Error("fileshare still accepts alice's token after she was disabled here")
+	}
+	if s := get(bob.AccessToken); s != http.StatusOK {
+		t.Errorf("bob refused with alice: %d", s)
+	}
+
+	// Bob: this provider forgets him (a restart without state, his token
+	// long gone from memory), then his institution is disabled. Only the
+	// tenant event, by domain, can reach him.
+	var jtis []string
+	f.s.issued.each(func(jti string, it issuedToken) {
+		if it.username == "bob@"+idpScope {
+			jtis = append(jtis, jti)
+		}
+	})
+	for _, j := range jtis {
+		f.s.issued.take(j)
+	}
+	var rts []string
+	f.s.refresh.each(func(k string, g *refreshGrant) {
+		if g.who.username == "bob@"+idpScope {
+			rts = append(rts, k)
+		}
+	})
+	for _, k := range rts {
+		f.s.refresh.take(k)
+	}
+	if people := f.s.peopleOf(idpEntity); slices.Contains(people, "bob@"+idpScope) {
+		t.Fatalf("the provider still knows bob: %v", people)
+	}
+	if _, _, err := f.s.disableIdP(idpEntity, "compromised", "test", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if !refusedWithin(bob.AccessToken, 45*time.Second) {
+		t.Error("fileshare still accepts bob's token after his institution was disabled here")
+	}
 }

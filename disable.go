@@ -268,6 +268,8 @@ func (s *server) enablePerson(username, by string) (bool, error) {
 }
 
 func (s *server) disableIdP(entityID, reason, by string, until time.Time) (disabledEntry, revoked, error) {
+	// Who this provider knows of there, before revoking erases the traces.
+	people := s.peopleOf(entityID)
 	now := s.now()
 	if entityID == "" {
 		return disabledEntry{}, revoked{}, fmt.Errorf("%w: an entity ID is required", errBadDisable)
@@ -281,6 +283,19 @@ func (s *server) disableIdP(entityID, reason, by string, until time.Time) (disab
 	}
 	s.logf("disabled IdP %s by %s until %s: %s", entityID, by, untilText(until), reason)
 	r, err := s.revokeIdP(entityID)
+	for _, u := range people {
+		s.broadcast(accountSubject(u), now, reason, nil)
+	}
+	// And everybody in its scopes, whom this provider has no trace of.
+	var scopes []string
+	if md := s.fed.Metadata(); md != nil {
+		if i, ok := md.IdPs[entityID]; ok {
+			scopes = i.Scopes
+		}
+	}
+	if len(scopes) > 0 {
+		s.broadcast(map[string]any{"tenant": map[string]any{"format": "opaque", "id": entityID}}, now, reason, map[string]any{"scopes": scopes})
+	}
 	return e, r, err
 }
 

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -166,7 +167,19 @@ func newFixture(t *testing.T, extra string) *fixture {
 	// first and is handed its handler after.
 	var handler atomic.Value // http.Handler; a test may swap it for a restarted provider
 	f.setHandler = func(h http.Handler) { handler.Store(&h) }
-	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { (*handler.Load().(*http.Handler)).ServeHTTP(w, r) }))
+	serve := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { (*handler.Load().(*http.Handler)).ServeHTTP(w, r) })
+	if fixtureOverTLS {
+		// An https issuer, for what refuses any other (an SSF receiver):
+		// this process's clients trust it until the test ends.
+		f.srv = httptest.NewTLSServer(serve)
+		pool := x509.NewCertPool()
+		pool.AddCert(f.srv.Certificate())
+		old := http.DefaultTransport
+		http.DefaultTransport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}
+		t.Cleanup(func() { http.DefaultTransport = old })
+	} else {
+		f.srv = httptest.NewServer(serve)
+	}
 	t.Cleanup(f.srv.Close)
 	f.redirect = "http://127.0.0.1:9/callback"
 
@@ -370,4 +383,15 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 	signed := f.x.run("--sign", "--privkey-pem", f.idp.keyFile+","+f.idp.certFile,
 		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:protocol:Response", "--output", "/dev/stdout", f.x.file("resp.xml", resp))
 	return base64.StdEncoding.EncodeToString([]byte(signed))
+}
+
+// fixtureOverTLS makes newFixture serve the provider over https.
+var fixtureOverTLS bool
+
+// newFixtureTLS is newFixture with an https issuer.
+func newFixtureTLS(t *testing.T, extra string) *fixture {
+	t.Helper()
+	fixtureOverTLS = true
+	defer func() { fixtureOverTLS = false }()
+	return newFixture(t, extra)
 }

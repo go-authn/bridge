@@ -87,6 +87,8 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 		s.pollDevice(w, r, client)
 	case "refresh_token":
 		s.rotate(w, r, client)
+	case "client_credentials":
+		s.clientCredentials(w, r, client)
 	default:
 		tokenError(w, http.StatusBadRequest, "unsupported_grant_type", "")
 	}

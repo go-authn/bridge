@@ -9,10 +9,13 @@ require (
 	github.com/go-authn/oidc v0.1.0
 	github.com/go-authn/saml v0.1.0
 	github.com/go-authn/servercert v0.1.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/grpc-transports/control v0.1.0
 	github.com/hashicorp/hcl/v2 v2.25.0
+	github.com/hstern/go-ssf v0.1.1
+	github.com/hstern/go-subjectid v0.0.0-20260525222327-b47140763585
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/openpubkey/openpubkey v0.29.0
 	github.com/pkg/sftp v1.13.11
@@ -38,7 +41,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
