@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -70,6 +71,7 @@ func (s *server) ready() bool { return s.fed.Metadata() != nil }
 type revoked struct {
 	families, tokens, logins int
 	appPasswords             int64
+	certificates             int
 }
 
 // revokePerson ends everything this provider still holds for somebody,
@@ -88,6 +90,11 @@ func (s *server) revokePerson(username string) (revoked, error) {
 		return revoked{}, nil
 	}
 	r := s.revokeMatching(func(u, _ string) bool { return u == username })
+	if n, err := s.certs.revoke(func(p, _ string) bool { return p == username }, s.now()); err != nil {
+		return r, fmt.Errorf("revoking certificates: %w", err)
+	} else {
+		r.certificates = n
+	}
 	if ap := s.cfg.AppPasswords; ap != nil {
 		n, err := ap.removeCount(username)
 		if err != nil {
@@ -95,8 +102,8 @@ func (s *server) revokePerson(username string) (revoked, error) {
 		}
 		r.appPasswords = n
 	}
-	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords",
-		username, r.families, r.tokens, r.logins, r.appPasswords)
+	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
+		username, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
 	return r, nil
 }
 
@@ -104,6 +111,11 @@ func (s *server) revokePerson(username string) (revoked, error) {
 // institution vouched for, application passwords included.
 func (s *server) revokeIdP(entityID string) (revoked, error) {
 	r := s.revokeMatching(func(_, idp string) bool { return idp == entityID })
+	if n, err := s.certs.revoke(func(_, idp string) bool { return idp == entityID }, s.now()); err != nil {
+		return r, fmt.Errorf("revoking certificates: %w", err)
+	} else {
+		r.certificates = n
+	}
 	if ap := s.cfg.AppPasswords; ap != nil {
 		var scopes []string
 		if md := s.fed.Metadata(); md != nil && scopedUsername[s.cfg.Claims.Username] {
@@ -117,8 +129,8 @@ func (s *server) revokeIdP(entityID string) (revoked, error) {
 		}
 		r.appPasswords = n
 	}
-	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d app passwords",
-		entityID, r.families, r.tokens, r.logins, r.appPasswords)
+	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
+		entityID, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
 	return r, nil
 }
 

@@ -17,10 +17,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-authn/krl"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/oauth2"
 )
@@ -38,6 +40,8 @@ func sshFixture(t *testing.T) (*fixture, string) {
 		t.Fatal(err)
 	}
 	f := newFixture(t, `
+certificates_file = "`+filepath.ToSlash(filepath.Join(dir, "certs.json"))+`"
+disabled_file = "`+filepath.ToSlash(filepath.Join(dir, "disabled.json"))+`"
 ssh_ca {
   key_file = "`+ca+`"
   validity = "8h"
@@ -332,9 +336,15 @@ func TestSSHCAConfig(t *testing.T) {
 		"not a key":               `ssh_ca { key_file = "` + c.salt + `" }`,
 		"certificates with no CA": `client "s" {` + "\n" + `device = true` + "\n" + `ssh_certificates = true` + "\n}",
 	} {
-		if _, err := c.load(t, c.hcl(nil)+extra); err == nil {
+		// With a certificates_file, so that each is refused for its own reason.
+		store := "certificates_file = \"" + c.dir + "/certs.json\"\n"
+		if _, err := c.load(t, c.hcl(nil)+store+extra); err == nil {
 			t.Errorf("%s: ACCEPTED", name)
 		}
+	}
+	// And the CA alone, with nowhere to record what it issues.
+	if _, err := c.load(t, c.hcl(nil)+`ssh_ca { key_file = "`+good+`" }`); err == nil || !strings.Contains(err.Error(), "certificates_file") {
+		t.Errorf("an ssh_ca with no certificates_file: %v", err)
 	}
 	if _, err := runCmd(t, "keygen", "--ssh-ca", filepath.Join(c.dir, "ca2")); err != nil {
 		t.Errorf("keygen --ssh-ca: %v", err)
@@ -355,5 +365,87 @@ func TestSSHCertificatesWithdrawn(t *testing.T) {
 	pub, _, _ := ed25519.GenerateKey(rand.Reader)
 	if s, _ := certify(t, f, tok.AccessToken, authorizedKey(t, pub)); s != http.StatusForbidden {
 		t.Fatalf("a withdrawn client's token was certified: %d", s)
+	}
+}
+
+// Every SSH certificate is recorded before it is handed out, and revoked
+// with its person; one that cannot be recorded is not issued.
+func TestSSHCertificatesRecordedAndRevoked(t *testing.T) {
+	f, _ := sshFixture(t)
+	tok := f.deviceToken("sftp", "openid", "ssh")
+	pub, _, _ := ed25519.GenerateKey(rand.Reader)
+	status, body := certify(t, f, tok.AccessToken, authorizedKey(t, pub))
+	if status != http.StatusOK {
+		t.Fatalf("%d %s", status, body)
+	}
+	k, _, _, _, _ := ssh.ParseAuthorizedKey(body)
+	cert := k.(*ssh.Certificate)
+	st, err := loadCertStore(f.s.cfg.CertificatesFile)
+	if err != nil || len(st.Certs) != 1 || st.Certs[0].Serial != strconv.FormatUint(cert.Serial, 10) ||
+		st.Certs[0].Principal != "alice@"+idpScope || st.Certs[0].IdP != idpEntity || st.Certs[0].Kind != "ssh" {
+		t.Fatalf("recorded %v %+v", err, st.Certs)
+	}
+
+	certFile := filepath.Join(t.TempDir(), "id-cert.pub")
+	os.WriteFile(certFile, body, 0o644)
+	keygen, kgErr := exec.LookPath("ssh-keygen")
+	query := func() string {
+		res, err := http.Get(f.s.cfg.Issuer + "/ssh/krl")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		data, _ := io.ReadAll(res.Body)
+		if res.StatusCode != http.StatusOK || res.Header.Get("Cache-Control") != "max-age=60" {
+			t.Fatalf("/ssh/krl: %s %v", res.Status, res.Header)
+		}
+		k, err := krl.Parse(data)
+		if err != nil {
+			t.Fatalf("the KRL does not parse: %v", err)
+		}
+		verdict := "ok"
+		if k.IsRevoked(cert) {
+			verdict = "REVOKED"
+		}
+		// And OpenSSH's own reading of it, when it is here.
+		if kgErr == nil {
+			kf := filepath.Join(t.TempDir(), "krl")
+			os.WriteFile(kf, data, 0o644)
+			out, _ := exec.Command(keygen, "-Q", "-f", kf, certFile).CombinedOutput()
+			if got := strings.Contains(string(out), "REVOKED"); got != (verdict == "REVOKED") {
+				t.Errorf("ssh-keygen -Q says %q, go-authn/krl %s", out, verdict)
+			}
+		} else if os.Getenv("BRIDGE_REQUIRE_JUDGE") != "" {
+			t.Fatal("ssh-keygen is required here")
+		}
+		return verdict
+	}
+	if v := query(); v != "ok" {
+		t.Fatalf("revoked before anybody revoked it: %s", v)
+	}
+	_, r, err := f.s.disablePerson("alice@"+idpScope, "test", "test", time.Time{})
+	if r.certificates != 1 {
+		t.Errorf("revoked %d certificates", r.certificates)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ = loadCertStore(f.s.cfg.CertificatesFile)
+	revoked, version := st.revoked("ssh", time.Now())
+	if len(revoked) != 1 || revoked[0].Serial != strconv.FormatUint(cert.Serial, 10) || version != 1 {
+		t.Errorf("revoked %+v at version %d", revoked, version)
+	}
+	if v := query(); v != "REVOKED" {
+		t.Errorf("the KRL does not revoke the certificate of a disabled person: %s", v)
+	}
+
+	// Somewhere it cannot be written: no certificate.
+	f.s.enablePerson("alice@"+idpScope, "test")
+	tok = f.deviceToken("sftp", "openid", "ssh")
+	f.s.certs.mu.Lock()
+	f.s.certs.path = filepath.Join(f.s.cfg.CertificatesFile, "under-a-file.json")
+	f.s.certs.mu.Unlock()
+	if status, body := certify(t, f, tok.AccessToken, authorizedKey(t, pub)); status != http.StatusInternalServerError || strings.Contains(string(body), "cert-v01") {
+		t.Errorf("issued without being recorded: %d %s", status, body)
 	}
 }
