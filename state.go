@@ -290,6 +290,12 @@ func (s *server) persistStores() error {
 	if err := s.families.persist(s.state, "family", jsonEnc[[]string], jsonDec[[]string]); err != nil {
 		return err
 	}
+	if err := s.ssfStreams.persist(s.state, "ssf-stream", jsonEnc[storedStream], jsonDec[storedStream]); err != nil {
+		return err
+	}
+	if err := s.ssfEvents.persist(s.state, "ssf-event", jsonEnc[string], jsonDec[string]); err != nil {
+		return err
+	}
 	return s.issued.persist(s.state, "issued",
 		func(it issuedToken) ([]byte, error) { return json.Marshal(storedIssued{it.info, it.username, it.idp}) },
 		func(b []byte) (issuedToken, error) {

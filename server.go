@@ -28,10 +28,14 @@ type server struct {
 	certs *certStore
 	// state writes the long-lived stores through to a database (state.go).
 	state *persister
-	sp    *saml.SP
-	fed   *saml.Federation
-	log   io.Writer
-	now   func() time.Time
+	// ssfStreams and ssfEvents are the SSF transmitter's streams and its
+	// undelivered events, by stream/jti (ssf.go).
+	ssfStreams *ttl[storedStream]
+	ssfEvents  *ttl[string]
+	sp         *saml.SP
+	fed        *saml.Federation
+	log        io.Writer
+	now        func() time.Time
 
 	// logins in progress, keyed by the handle the browser carries in a
 	// cookie and the IdP carries in RelayState.
@@ -132,6 +136,8 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.refresh = newTTL[*refreshGrant](now)
 	s.rotated = newTTL[string](now)
 	s.families = newTTL[[]string](now)
+	s.ssfStreams = newTTL[storedStream](now)
+	s.ssfEvents = newTTL[string](now)
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
 		return nil, fmt.Errorf("disabled_file: %w", err)
 	}
@@ -166,6 +172,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("/device", s.device)
 	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
 	mux.HandleFunc("GET /ssh/krl", s.sshKRL)
+	s.ssfHandlers(mux)
 	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
 	mux.HandleFunc("GET /x509/crl", s.x509CRL)
 	mux.HandleFunc("/app-password", s.appPassword)

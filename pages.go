@@ -20,6 +20,10 @@ func urlUnescape(s string) (string, error) { return url.QueryUnescape(s) }
 // 1.0, section 3), saying exactly what is offered and nothing more.
 func (s *server) discovery(w http.ResponseWriter, r *http.Request) {
 	i := s.cfg.Issuer
+	grants := []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"}
+	if s.cfg.SSF != nil {
+		grants = append(grants, "client_credentials") // SSF receivers only
+	}
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                i,
@@ -29,7 +33,7 @@ func (s *server) discovery(w http.ResponseWriter, r *http.Request) {
 		"jwks_uri":                              i + "/jwks",
 		"response_types_supported":              []string{"code"},
 		"response_modes_supported":              []string{"query"},
-		"grant_types_supported":                 []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"},
+		"grant_types_supported":                 grants,
 		"device_authorization_endpoint":         i + "/device_authorization",
 		"subject_types_supported":               []string{"public", "pairwise"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},

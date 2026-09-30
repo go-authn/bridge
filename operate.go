@@ -104,6 +104,8 @@ func (s *server) revokePerson(username string) (revoked, error) {
 	}
 	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
 		username, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
+	// And to whoever verifies this provider's tokens on their own (ssf.go).
+	s.broadcast(accountSubject(username), s.now(), "", nil)
 	return r, nil
 }
 

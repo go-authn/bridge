@@ -427,6 +427,48 @@ restart logs everybody out.
   ones stay revoked, a retired refresh token used again still revokes its
   family; with no `state` block the same restart forgets, which is the control.
 
+## Shared Signals: telling the services that verify on their own
+
+An access token, an opkssh certificate, are checked where they are used,
+against keys, and nothing brings them back here: a person disabled here keeps
+them until they expire. So this provider is an [OpenID Shared
+Signals](https://openid.net/specs/openid-sharedsignals-framework-1_0-final.html)
+transmitter: on `DisablePerson`, `RevokePerson` and `DisableIdP` it queues a
+[CAEP](https://openid.net/specs/openid-caep-1_0-final.html) **session-revoked**
+event -- everything issued to this subject before `event_timestamp` is void --
+for every receiver that asked, go-fileshare among them.
+
+```hcl
+state { ... }            # required: a queue a restart empties loses revocations
+ssf {}                   # event_retention = "192h" by default
+client "fileshare-ssf" { # a receiver: client credentials, scope ssf
+  secret_file  = "/etc/bridge/fileshare-ssf.secret"
+  ssf_receiver = true
+  audience     = ["fileshare"]
+}
+```
+
+- **Poll delivery only** (RFC 8936): the receiver asks; nothing here dials
+  out. `/.well-known/ssf-configuration` names the endpoints, under `/ssf/`.
+- A receiver authenticates with an access token from the **client credentials**
+  grant (RFC 6749 4.4, `ssf_receiver` clients only, scope `ssf`), and sees its
+  own streams only.
+- Events are SETs (RFC 8417) signed with the ID token key, `typ
+  secevent+jwt`, no `exp`, no `sub`. The subject is `aliases` with the
+  **account**, `acct:<username>` -- not `iss_sub`: a `sub` here may be
+  pairwise, one per client. An institution disabled is one event per person
+  this provider has a trace of there, and one whose subject is the **tenant**,
+  with the institution's scopes: its people this provider has forgotten are
+  covered by their domain.
+- Streams and undelivered events are in the state database, until
+  acknowledged or `event_retention`.
+- HTTP, wire types and handlers are
+  [go-ssf](https://github.com/hstern/go-ssf)'s. Judged by its client and
+  its `Poller`, by go-jose against the published key set, and by go-fileshare
+  itself, the release, over WebDAV: a token it verifies on its own is refused
+  within seconds of the person -- or, for somebody forgotten here, their
+  institution -- being disabled.
+
 ## Running it: the admin API, health and metrics
 
 Both are off unless the configuration asks for them, and neither is ever on
