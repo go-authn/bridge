@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -25,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	opkclient "github.com/openpubkey/openpubkey/client"
+	opkjose "github.com/openpubkey/openpubkey/jose"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -328,14 +331,22 @@ func sftpDial(addr, user string, certLine []byte, priv ed25519.PrivateKey) (*sft
 }
 
 // Shared Signals between the two: go-fileshare (the release) is an SSF
-// receiver of this provider, verifies its access tokens on its own over
-// WebDAV, and stops accepting them once the person -- or their institution,
-// for somebody this provider has no trace of any more -- is disabled here.
+// receiver of this provider, and verifies on its own what this provider
+// issued -- access tokens over WebDAV, opkssh certificates over SFTP -- until
+// the person, or their institution, is disabled here.
 //
 // Linux only: the provider is https with a certificate made for the test,
 // which go-fileshare's token verifier trusts through SSL_CERT_FILE, and Go
 // honours that variable everywhere but macOS and Windows.
-func TestInteropSSF(t *testing.T) {
+
+type ssfInterop struct {
+	f         *fixture
+	dav, sftp string
+	log       *syncWriter
+}
+
+func startSSFInterop(t *testing.T) *ssfInterop {
+	t.Helper()
 	if runtime.GOOS != "linux" {
 		t.Skip("go-fileshare trusts the test's certificate through SSL_CERT_FILE, which Go reads on Linux only")
 	}
@@ -345,7 +356,7 @@ func TestInteropSSF(t *testing.T) {
 	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(dir, "state.db"))), 0o600)
 	secret := filepath.Join(dir, "ssf.secret")
 	os.WriteFile(secret, []byte("an-ssf-receiver-secret-long-enough"), 0o600)
-	f := newFixtureTLS(t, deviceClients+`
+	f := newFixtureTLS(t, deviceClients+opkClients+`
 disabled_file = "`+hclP(filepath.Join(dir, "disabled.json"))+`"
 state {
   driver   = "sqlite"
@@ -365,7 +376,7 @@ client "fileshare-ssf" {
 	share := filepath.Join(dir, "share")
 	os.MkdirAll(share, 0o755)
 	os.WriteFile(filepath.Join(share, "x.txt"), []byte("hello"), 0o644)
-	davAddr := "127.0.0.1:" + freePort(t)
+	in := &ssfInterop{f: f, dav: "127.0.0.1:" + freePort(t), sftp: "127.0.0.1:" + freePort(t), log: &syncWriter{}}
 	d := filepath.Join(dir, "fileshare.d")
 	os.MkdirAll(d, 0o700)
 	os.WriteFile(filepath.Join(d, "fileshare.hcl"), []byte(fmt.Sprintf(`
@@ -374,8 +385,9 @@ share "t" {
   allow     = ["oidc:user:alice@%[2]s", "oidc:user:bob@%[2]s"]
 }
 oidc {
-  issuer   = %q
-  audience = "fileshare"
+  issuer           = %q
+  audience         = "fileshare"
+  opkssh_client_id = "opk"
 }
 ssf {
   transmitter        = %[3]q
@@ -387,12 +399,12 @@ ssf {
   max_age            = "5m"
 }
 serve "webdav" { addr = %q }
-`, hclP(share), idpScope, f.s.cfg.Issuer, hclP(secret), hclP(filepath.Join(dir, "revocations.json")), hclP(caFile), davAddr)), 0o600)
+serve "sftp"   { addr = %q }
+`, hclP(share), idpScope, f.s.cfg.Issuer, hclP(secret), hclP(filepath.Join(dir, "revocations.json")), hclP(caFile), in.dav, in.sftp)), 0o600)
 
-	var log syncWriter
 	cmd := exec.Command(bin, "--config", d)
 	cmd.Env = append(os.Environ(), "SSL_CERT_FILE="+caFile)
-	cmd.Stdout, cmd.Stderr = &log, &log
+	cmd.Stdout, cmd.Stderr = in.log, in.log
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -400,74 +412,86 @@ serve "webdav" { addr = %q }
 		cmd.Process.Kill()
 		cmd.Wait()
 		if t.Failed() {
-			t.Logf("fileshare:\n%s", log.String())
+			t.Logf("fileshare:\n%s", in.log.String())
 		}
 	})
 	// Up, and its stream made here: events before it would reach nobody.
 	deadline := time.Now().Add(20 * time.Second)
 	for f.s.ssfStreams.count() == 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("fileshare made no stream:\n%s", log.String())
+			t.Fatalf("fileshare made no stream:\n%s", in.log.String())
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	get := func(tok string) int {
-		req, _ := http.NewRequest("GET", "http://"+davAddr+"/t/x.txt", nil)
-		req.Header.Set("Authorization", "Bearer "+tok)
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return 0
-		}
-		res.Body.Close()
-		return res.StatusCode
+	return in
+}
+
+func (in *ssfInterop) get(tok string) int {
+	req, _ := http.NewRequest("GET", "http://"+in.dav+"/t/x.txt", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0
 	}
+	res.Body.Close()
+	return res.StatusCode
+}
+
+// until reports whether cond holds within d.
+func until(d time.Duration, cond func() bool) bool {
+	end := time.Now().Add(d)
+	for time.Now().Before(end) {
+		if cond() {
+			return true
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return false
+}
+
+func refused(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusNotFound
+}
+
+// Access tokens over WebDAV: alice disabled; then bob, forgotten here, by
+// his institution.
+func TestInteropSSF(t *testing.T) {
+	in := startSSFInterop(t)
+	f := in.f
 	alice := f.deviceTokenAs("rclone", assertionOpts{eppn: "alice@" + idpScope}, "openid")
 	bob := f.deviceTokenAs("rclone", assertionOpts{eppn: "bob@" + idpScope}, "openid")
 	for name, tok := range map[string]string{"alice": alice.AccessToken, "bob": bob.AccessToken} {
-		if s := get(tok); s != http.StatusOK {
-			t.Fatalf("%s over WebDAV before anything: %d\n%s", name, s, log.String())
+		if s := in.get(tok); s != http.StatusOK {
+			t.Fatalf("%s over WebDAV before anything: %d", name, s)
 		}
 	}
-	refusedWithin := func(tok string, d time.Duration) bool {
-		end := time.Now().Add(d)
-		for time.Now().Before(end) {
-			if s := get(tok); s == http.StatusUnauthorized || s == http.StatusForbidden || s == http.StatusNotFound {
-				return true
-			}
-			time.Sleep(250 * time.Millisecond)
-		}
-		return false
-	}
-
-	// Alice disabled here: her token, verified there on its own, refused.
 	if _, _, err := f.s.disablePerson("alice@"+idpScope, "interop", "test", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	if !refusedWithin(alice.AccessToken, 45*time.Second) {
+	if !until(45*time.Second, func() bool { return refused(in.get(alice.AccessToken)) }) {
 		t.Error("fileshare still accepts alice's token after she was disabled here")
 	}
-	if s := get(bob.AccessToken); s != http.StatusOK {
+	if s := in.get(bob.AccessToken); s != http.StatusOK {
 		t.Errorf("bob refused with alice: %d", s)
 	}
 
-	// Bob: this provider forgets him (a restart without state, his token
-	// long gone from memory), then his institution is disabled. Only the
-	// tenant event, by domain, can reach him.
-	var jtis []string
+	// Bob forgotten here -- his tokens gone from this provider's memory --
+	// then his institution disabled: only the tenant event, by domain,
+	// reaches him.
+	var jtis, rts []string
 	f.s.issued.each(func(jti string, it issuedToken) {
 		if it.username == "bob@"+idpScope {
 			jtis = append(jtis, jti)
 		}
 	})
-	for _, j := range jtis {
-		f.s.issued.take(j)
-	}
-	var rts []string
 	f.s.refresh.each(func(k string, g *refreshGrant) {
 		if g.who.username == "bob@"+idpScope {
 			rts = append(rts, k)
 		}
 	})
+	for _, j := range jtis {
+		f.s.issued.take(j)
+	}
 	for _, k := range rts {
 		f.s.refresh.take(k)
 	}
@@ -477,7 +501,96 @@ serve "webdav" { addr = %q }
 	if _, _, err := f.s.disableIdP(idpEntity, "compromised", "test", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	if !refusedWithin(bob.AccessToken, 45*time.Second) {
+	if !until(45*time.Second, func() bool { return refused(in.get(bob.AccessToken)) }) {
 		t.Error("fileshare still accepts bob's token after his institution was disabled here")
 	}
+}
+
+// opkssh: a certificate the person's own key signs, around a PK Token from
+// this provider, that no revocation list can reach. Alice's session already
+// open, her open file, and a new login with that certificate all stop once
+// she is disabled here; a certificate from after she is enabled again logs
+// in -- the control.
+func TestInteropSSFOpkssh(t *testing.T) {
+	in := startSSFInterop(t)
+	f := in.f
+	user := "alice@" + idpScope
+	opkCert := func() (ssh.Signer, *ssh.Certificate) {
+		_, priv, _ := ed25519.GenerateKey(rand.Reader)
+		pkt := f.deviceAuth(opkOp(f, "opk", true, false, ""), opkclient.WithSigner(crypto.Signer(priv), opkjose.EdDSA))
+		compact, err := pkt.Compact()
+		if err != nil {
+			t.Fatal(err)
+		}
+		signer, _ := ssh.NewSignerFromKey(priv)
+		now := time.Now()
+		// What `opkssh login` writes: signed by the user's own key, the PK
+		// Token in the openpubkey-pkt extension.
+		cert := &ssh.Certificate{
+			Key: signer.PublicKey(), CertType: ssh.UserCert, KeyId: user,
+			ValidAfter: uint64(now.Add(-5 * time.Minute).Unix()), ValidBefore: uint64(now.Add(time.Hour).Unix()),
+			Permissions: ssh.Permissions{Extensions: map[string]string{"openpubkey-pkt": string(compact)}},
+		}
+		if err := cert.SignCert(rand.Reader, signer); err != nil {
+			t.Fatal(err)
+		}
+		cs, err := ssh.NewCertSigner(cert, signer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cs, cert
+	}
+	login := func(cs ssh.Signer) (*sftp.Client, error) {
+		conn, err := ssh.Dial("tcp", in.sftp, &ssh.ClientConfig{
+			User: user, Auth: []ssh.AuthMethod{ssh.PublicKeys(cs)},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 5 * time.Second,
+		})
+		if err != nil {
+			return nil, err
+		}
+		c, err := sftp.NewClient(conn)
+		if err != nil {
+			conn.Close()
+		}
+		return c, err
+	}
+
+	cs, _ := opkCert()
+	session, err := login(cs)
+	if err != nil {
+		t.Fatalf("alice's opkssh certificate over SFTP: %v", err)
+	}
+	defer session.Close()
+	file, err := session.Open("/t/x.txt")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	buf := make([]byte, 5)
+	if _, err := file.ReadAt(buf, 0); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	if _, _, err := f.s.disablePerson(user, "interop", "test", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if !until(45*time.Second, func() bool { _, err := session.ReadDir("/t"); return err != nil }) {
+		t.Error("the SFTP session alice opened still lists after she was disabled here")
+	}
+	if _, err := file.ReadAt(buf, 0); err == nil {
+		t.Error("alice's open file still reads after she was disabled here")
+	}
+	if c, err := login(cs); err == nil {
+		c.Close()
+		t.Error("alice's opkssh certificate still logs in after she was disabled here")
+	}
+
+	// Enabled again: a PK Token from now on is not before the revocation.
+	f.s.enablePerson(user, "test")
+	time.Sleep(1100 * time.Millisecond) // a second: event_timestamp is in seconds
+	fresh, _ := opkCert()
+	c, err := login(fresh)
+	if err != nil {
+		t.Fatalf("a certificate from after alice was enabled again: %v", err)
+	}
+	c.Close()
 }
