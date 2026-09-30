@@ -462,6 +462,11 @@ client "fileshare-ssf" { # a receiver: client credentials, scope ssf
   covered by their domain.
 - Streams and undelivered events are in the state database, until
   acknowledged or `event_retention`.
+- A stream that is **paused or disabled answers a poll with an error**, not an
+  empty 200 a receiver would read as "up to date"; paused, its events wait for
+  it (SSF 1.0 8.1.1), disabled, none are kept. An event a receiver reports in
+  error (`setErrs`) is **handed out again**, not dropped -- a key rotated inside
+  its refresh window, a full disk -- until 10 reports or `event_retention`.
 - HTTP, wire types and handlers are
   [go-ssf](https://github.com/hstern/go-ssf)'s. Judged by its client and
   its `Poller`, by go-jose against the published key set, and by go-fileshare
