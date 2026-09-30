@@ -266,7 +266,7 @@ func disabledPB(username, entityID string, e disabledEntry) *adminv1.Disabled {
 func revokedPB(r revoked) *adminv1.Revoked {
 	return &adminv1.Revoked{
 		RefreshFamilies: int32(r.families), AccessTokens: int32(r.tokens),
-		Logins: int32(r.logins), AppPasswords: int32(r.appPasswords),
+		Logins: int32(r.logins), AppPasswords: int32(r.appPasswords), Certificates: int32(r.certificates),
 	}
 }
 

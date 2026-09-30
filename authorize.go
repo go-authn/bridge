@@ -79,6 +79,10 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "this client may not ask for SSH certificates")
 		return
 	}
+	if slices.Contains(scopes, "nfs") && !client.X509Certificates {
+		fail("invalid_scope", "this client may not ask for NFS certificates")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		fail("invalid_scope", "this client may not set application passwords")
 		return

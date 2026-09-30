@@ -102,11 +102,18 @@ func (s *disabledList) saveLocked(now time.Time) error {
 			delete(s.IdPs, k)
 		}
 	}
-	data, err := json.MarshalIndent(s, "", "  ")
+	return writeJSONFile(s.path, s)
+}
+
+// writeJSONFile writes v to path whole, through a temporary file in the same
+// directory, synced and renamed, mode 0600: a crash leaves the old content
+// or the new, never half of either.
+func writeJSONFile(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(s.path), ".disabled-*")
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
@@ -126,7 +133,7 @@ func (s *disabledList) saveLocked(now time.Time) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), s.path)
+	return os.Rename(f.Name(), path)
 }
 
 // set records (or replaces) an entry, and saves. On a failed save the

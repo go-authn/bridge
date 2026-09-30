@@ -5,7 +5,6 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,9 +12,11 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-authn/krl"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -167,12 +168,16 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 	if end, ok := claims["session_end"].(float64); ok && end > 0 && time.Unix(int64(end), 0).Before(until) {
 		until = time.Unix(int64(end), 0)
 	}
-	var serial [8]byte
-	rand.Read(serial[:])
+	serial, err := s.certs.newSerial("ssh", 63)
+	if err != nil {
+		s.logf("ssh: %v", err)
+		http.Error(w, "the certificate could not be signed", http.StatusInternalServerError)
+		return
+	}
 	sub, _ := claims["sub"].(string)
 	cert := &ssh.Certificate{
 		Key:      key,
-		Serial:   binary.BigEndian.Uint64(serial[:]),
+		Serial:   serial.Uint64(),
 		CertType: ssh.UserCert,
 		// The key ID is what sshd logs: who, and which login.
 		KeyId:           fmt.Sprintf("%s sub=%s jti=%s", user, sub, claims["jti"]),
@@ -204,6 +209,14 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the certificate could not be signed", http.StatusInternalServerError)
 		return
 	}
+	// Recorded before it is handed out: one that is not can never be revoked.
+	jti, _ := claims["jti"].(string)
+	it, _ := s.issued.get(jti)
+	if err := s.certs.add(issuedCert{Kind: "ssh", Serial: serial.String(), KeyID: cert.KeyId, Principal: user, IdP: it.idp, NotAfter: until}, now); err != nil {
+		s.logf("ssh: recording the certificate: %v", err)
+		http.Error(w, "the certificate could not be recorded, so it is not issued", http.StatusInternalServerError)
+		return
+	}
 	s.counters.inc("bridge_ssh_certificates_total", "")
 	s.logf("ssh: certified a %s key for %s until %s", key.Type(), user, until.UTC().Format(time.RFC3339))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -231,4 +244,41 @@ func strongEnough(k ssh.PublicKey) error {
 		return errors.New("an RSA key under 2048 bits")
 	}
 	return fmt.Errorf("a %s key is not certified", k.Type())
+}
+
+// sshKRL is the SSH CA's key revocation list (PROTOCOL.krl): every unexpired
+// revoked certificate by serial, its krl_version the revocation counter
+// shared with the X.509 CRL. Written by go-authn/krl, whose output ssh-keygen
+// -Q reads and which never writes a bitmap ssh-keygen cannot read back.
+//
+// Not signed: OpenSSH no longer verifies KRL signatures (it reads a signed
+// one and skips the signature), so its integrity is the HTTPS it is fetched
+// over. Served with a short max-age: a server that caches it longer, or
+// cannot fetch it, is to fail closed -- go-fileshare does.
+func (s *server) sshKRL(w http.ResponseWriter, r *http.Request) {
+	ca := s.cfg.SSHCA
+	if ca == nil {
+		http.NotFound(w, r)
+		return
+	}
+	now := s.now()
+	revoked, version := s.certs.revoked("ssh", now)
+	b := krl.NewBuilder(version, "go-authn/bridge "+s.cfg.Issuer)
+	for _, c := range revoked {
+		n, err := strconv.ParseUint(c.Serial, 10, 64)
+		if err != nil {
+			continue
+		}
+		b.RevokeSerial(ca.signer.PublicKey(), n)
+	}
+	data, err := b.Marshal(now)
+	if err != nil {
+		s.logf("ssh: the KRL: %v", err)
+		http.Error(w, "the KRL could not be made", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("ETag", `"`+strconv.FormatUint(version, 10)+`"`)
+	w.Header().Set("Cache-Control", "max-age=60")
+	w.Write(data)
 }

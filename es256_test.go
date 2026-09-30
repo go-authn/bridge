@@ -89,6 +89,13 @@ func TestES256AccessTokens(t *testing.T) {
 	if err != nil || res.StatusCode != http.StatusOK {
 		t.Errorf("/userinfo: %v %v", err, res.Status)
 	}
+	// One signature bit changed: refused.
+	parts := strings.Split(tok.AccessToken, ".")
+	sig, _ := base64.RawURLEncoding.DecodeString(parts[2])
+	sig[10] ^= 1
+	if _, err := f.s.cfg.accessKey.verify("at+jwt", parts[0]+"."+parts[1]+"."+base64.RawURLEncoding.EncodeToString(sig)); err == nil {
+		t.Error("an ES256 token with a changed signature verified")
+	}
 	// A token signed with the RSA key but claiming to be an access token
 	// is not one: the access token key is the only one that makes them.
 	forged, _ := f.s.cfg.signingKey.sign("at+jwt", map[string]any{"iss": f.s.cfg.Issuer, "aud": "fileshare", "exp": 4102444800})
