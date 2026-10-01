@@ -132,6 +132,16 @@ func (t *ssfTx) ListConfig(ctx context.Context, _ string) ([]*ssf.StreamConfig, 
 
 func (t *ssfTx) CreateConfig(ctx context.Context, cfg *ssf.StreamConfig) (*ssf.StreamConfig, error) {
 	s, owner := t.s, t.owner(ctx)
+	// A few streams per receiver: each is a copy of every revocation.
+	owned := 0
+	s.ssfStreams.each(func(_ string, st storedStream) {
+		if st.Owner == owner {
+			owned++
+		}
+	})
+	if owned >= maxStreamsPerReceiver {
+		return nil, &ssf.ValidationError{Reason: fmt.Sprintf("a receiver has at most %d streams", maxStreamsPerReceiver), Rule: "streams_per_receiver"}
+	}
 	client, _ := s.cfg.client(owner)
 	if cfg.Delivery.Method != "" && cfg.Delivery.Method != deliveryPoll {
 		return nil, ssf.ErrUnsupportedDelivery
@@ -256,8 +266,21 @@ func (t *ssfTx) Verify(ctx context.Context, id string, req *ssf.VerificationRequ
 	if req.State != "" {
 		ev["state"] = req.State
 	}
+	// One verification waiting per stream: a newer one replaces it, so a
+	// receiver asking in a loop does not fill the queue.
+	verifyMu.Lock()
+	if old, ok := pendingVerify[id]; ok {
+		t.s.ssfEvents.take(old)
+	}
+	verifyMu.Unlock()
 	// SSF 1.0 8.1.4.1: a verification event's subject is the stream.
-	return t.s.enqueue(id, st.Config, map[string]any{"format": "opaque", "id": id}, eventVerification, ev)
+	key, err := t.s.enqueueKey(id, st.Config, map[string]any{"format": "opaque", "id": id}, eventVerification, ev)
+	if err == nil {
+		verifyMu.Lock()
+		pendingVerify[id] = key
+		verifyMu.Unlock()
+	}
+	return err
 }
 
 // PollEvents acknowledges what the receiver says it has, and hands it what
@@ -286,6 +309,11 @@ func (t *ssfTx) PollEvents(ctx context.Context, id string, req *ssf.PollRequest)
 	// dropped only after maxSetErrs reports, or at event_retention.
 	for jti, e := range req.SetErrs {
 		key := id + "/" + jti
+		// Only an event that is there is counted: a receiver naming jtis
+		// that never were would grow the count without end.
+		if _, there := t.s.ssfEvents.get(key); !there {
+			continue
+		}
 		n := t.s.countSetErr(key)
 		t.s.logf("ssf: stream %s: %s refused %s (%d of %d): %s %s", id, t.owner(ctx), jti, n, maxSetErrs, e.Err, e.Description)
 		if n >= maxSetErrs {
@@ -321,6 +349,12 @@ func (t *ssfTx) PollEvents(ctx context.Context, id string, req *ssf.PollRequest)
 
 // enqueue signs an event for one stream and keeps it until it is polled.
 func (s *server) enqueue(streamID string, cfg *ssf.StreamConfig, subject map[string]any, event string, body map[string]any) error {
+	_, err := s.enqueueKey(streamID, cfg, subject, event, body)
+	return err
+}
+
+// enqueueKey is enqueue, saying under which key the event is kept.
+func (s *server) enqueueKey(streamID string, cfg *ssf.StreamConfig, subject map[string]any, event string, body map[string]any) (string, error) {
 	now := s.now()
 	// The jti begins with the time, so that the queue sorts oldest first.
 	jti := fmt.Sprintf("%016x-%s", now.UnixNano(), token()[:16])
@@ -334,10 +368,11 @@ func (s *server) enqueue(streamID string, cfg *ssf.StreamConfig, subject map[str
 	}
 	set, err := s.cfg.signingKey.sign(ssf.SETMediaType, claims)
 	if err != nil {
-		return err
+		return "", err
 	}
-	s.ssfEvents.put(streamID+"/"+jti, set, now.Add(s.cfg.SSF.retention))
-	return nil
+	key := streamID + "/" + jti
+	s.ssfEvents.put(key, set, now.Add(s.cfg.SSF.retention))
+	return key, nil
 }
 
 // broadcast sends a session-revoked to every stream that asked for it.
@@ -534,3 +569,12 @@ func (s *server) forgetSetErrs(key string) {
 	defer setErrsMu.Unlock()
 	delete(setErrs, key)
 }
+
+// maxStreamsPerReceiver is how many streams one receiver may hold.
+const maxStreamsPerReceiver = 10
+
+// pendingVerify is the verification event waiting on each stream.
+var (
+	verifyMu      sync.Mutex
+	pendingVerify = map[string]string{}
+)
