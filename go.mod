@@ -5,8 +5,9 @@ go 1.26.4
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-authn/directory v0.8.0
-	github.com/go-authn/krl v0.1.1
+	github.com/go-authn/krl v0.2.0
 	github.com/go-authn/oidc v0.1.0
+	github.com/go-authn/revocation v0.1.0
 	github.com/go-authn/saml v0.1.1
 	github.com/go-authn/servercert v0.1.2
 	github.com/go-jose/go-jose/v4 v4.1.5
@@ -47,6 +48,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/hiddeco/sshsig v0.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
