@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -89,32 +90,38 @@ func (s *server) revokePerson(username string) (revoked, error) {
 	if username == "" {
 		return revoked{}, nil
 	}
+	// To whoever verifies this provider's tokens on their own (ssf.go)
+	// FIRST: a step below failing -- the certificates file, the application
+	// password table -- must not leave them uninformed, again at every retry.
+	s.broadcast(accountSubject(username), s.now(), "", nil)
 	r := s.revokeMatching(func(u, _ string) bool { return u == username })
+	// Every step is tried, whatever an earlier one did.
+	var errs []error
 	if n, err := s.certs.revoke(func(p, _ string) bool { return p == username }, s.now()); err != nil {
-		return r, fmt.Errorf("revoking certificates: %w", err)
+		errs = append(errs, fmt.Errorf("revoking certificates: %w", err))
 	} else {
 		r.certificates = n
 	}
 	if ap := s.cfg.AppPasswords; ap != nil {
-		n, err := ap.removeCount(username)
-		if err != nil {
-			return r, err
+		if n, err := ap.removeCount(username); err != nil {
+			errs = append(errs, fmt.Errorf("removing the application password: %w", err))
+		} else {
+			r.appPasswords = n
 		}
-		r.appPasswords = n
 	}
 	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
 		username, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
-	// And to whoever verifies this provider's tokens on their own (ssf.go).
-	s.broadcast(accountSubject(username), s.now(), "", nil)
-	return r, nil
+	return r, errors.Join(errs...)
 }
 
 // revokeIdP ends everything this provider still holds for the people one
 // institution vouched for, application passwords included.
 func (s *server) revokeIdP(entityID string) (revoked, error) {
 	r := s.revokeMatching(func(_, idp string) bool { return idp == entityID })
+	// Every step is tried, whatever an earlier one did.
+	var errs []error
 	if n, err := s.certs.revoke(func(_, idp string) bool { return idp == entityID }, s.now()); err != nil {
-		return r, fmt.Errorf("revoking certificates: %w", err)
+		errs = append(errs, fmt.Errorf("revoking certificates: %w", err))
 	} else {
 		r.certificates = n
 	}
@@ -125,15 +132,15 @@ func (s *server) revokeIdP(entityID string) (revoked, error) {
 				scopes = i.Scopes
 			}
 		}
-		n, err := ap.removeIdP(entityID, scopes)
-		if err != nil {
-			return r, err
+		if n, err := ap.removeIdP(entityID, scopes); err != nil {
+			errs = append(errs, fmt.Errorf("removing application passwords: %w", err))
+		} else {
+			r.appPasswords = n
 		}
-		r.appPasswords = n
 	}
 	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
 		entityID, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
-	return r, nil
+	return r, errors.Join(errs...)
 }
 
 // revokeMatching ends the grants, tokens and logins of whoever match says,

@@ -242,7 +242,11 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: s.handler(), ReadHeaderTimeout: 10 * time.Second, TLSConfig: tc}
+	// A body that arrives a byte a minute, a connection kept open for nothing:
+	// each holds a goroutine and a socket, so each is timed (measured: with
+	// ReadHeaderTimeout alone, a slow POST held its connection indefinitely).
+	// No request here is large: 1 MiB is four times the SAML size limit.
+	srv := s.httpServer(tc)
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

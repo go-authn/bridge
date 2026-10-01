@@ -56,6 +56,10 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 		tokenError(w, http.StatusBadRequest, "invalid_grant", "the refresh token is not valid")
 		return
 	}
+	// Retired at once, not after the new one is issued: a second request with
+	// the same token, between the two, found it neither alive nor retired
+	// and was refused without the family being revoked -- reuse unseen.
+	s.rotated.put(hashToken(rt), g.family, g.until)
 	if g.client.ID != client.ID {
 		// Taken above, so it is spent: a refresh token shown to the wrong
 		// client is one that has leaked.
@@ -80,7 +84,6 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	// A rotation stays in its family, with the family's end.
 	next := token()
 	s.refresh.put(hashToken(next), g, g.until)
-	s.rotated.put(hashToken(rt), g.family, g.until)
 	s.families.update(g.family, func(j *[]string) { *j = append(*j, jti) })
 	resp["refresh_token"] = next
 	s.counters.inc("bridge_tokens_issued_total", "refresh_token")
