@@ -71,6 +71,8 @@ type server struct {
 	fedState fedState
 	counters counters
 	started  time.Time
+	// revLists is the revocation lists as last issued (revlists.go).
+	revLists listCache
 }
 
 // A login is somebody on their way to their IdP and back.
@@ -187,6 +189,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("/device", s.device)
 	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
 	mux.HandleFunc("GET /ssh/krl", s.sshKRL)
+	mux.HandleFunc("GET /ssh/krl.sig", s.sshKRLSig)
 	s.ssfHandlers(mux)
 	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
 	mux.HandleFunc("GET /x509/crl", s.x509CRL)

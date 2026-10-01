@@ -10,10 +10,12 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/hex"
 	"encoding/pem"
 	"io"
 	"net/http"
@@ -239,7 +241,11 @@ func TestNFSCertificate(t *testing.T) {
 	if len(crl.RevokedCertificateEntries) != 1 || crl.RevokedCertificateEntries[0].SerialNumber.Cmp(leaf.SerialNumber) != 0 {
 		t.Fatalf("CRL after: %v", crl.RevokedCertificateEntries)
 	}
-	if crl.Number.Cmp(before) <= 0 || h.Get("ETag") != `"`+crl.Number.String()+`"` {
+	// The ETag is the content's (revlists.go): the version alone stayed
+	// put while thisUpdate and nextUpdate moved, and a reader polling with
+	// If-None-Match kept a copy that then expired.
+	sum := sha256.Sum256(crlDER)
+	if crl.Number.Cmp(before) <= 0 || h.Get("ETag") != `"`+hex.EncodeToString(sum[:16])+`"` {
 		t.Errorf("number %s after %s, ETag %s", crl.Number, before, h.Get("ETag"))
 	}
 	if out, err := verify(crlDER); err == nil || !strings.Contains(out, "revoked") {

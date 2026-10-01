@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -337,29 +336,27 @@ func (s *server) x509CRL(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	now := s.now()
-	revoked, version := s.certs.revoked("x509", now)
-	entries := make([]x509.RevocationListEntry, 0, len(revoked))
-	for _, c := range revoked {
-		n, ok := new(big.Int).SetString(c.Serial, 10)
-		if !ok {
-			continue
+	l, err := s.issueList("x509", func(revoked []issuedCert, version uint64, now time.Time) ([]byte, []byte, error) {
+		entries := make([]x509.RevocationListEntry, 0, len(revoked))
+		for _, c := range revoked {
+			n, ok := new(big.Int).SetString(c.Serial, 10)
+			if !ok {
+				continue
+			}
+			entries = append(entries, x509.RevocationListEntry{SerialNumber: n, RevocationTime: c.Revoked})
 		}
-		entries = append(entries, x509.RevocationListEntry{SerialNumber: n, RevocationTime: c.Revoked})
-	}
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-		Number:                    new(big.Int).SetUint64(version),
-		ThisUpdate:                now,
-		NextUpdate:                now.Add(time.Hour),
-		RevokedCertificateEntries: entries,
-	}, ca.cert, ca.key)
+		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+			Number:                    new(big.Int).SetUint64(version),
+			ThisUpdate:                now,
+			NextUpdate:                now.Add(listValidity),
+			RevokedCertificateEntries: entries,
+		}, ca.cert, ca.key)
+		return der, nil, err
+	})
 	if err != nil {
 		s.logf("x509: the CRL: %v", err)
 		http.Error(w, "the CRL could not be made", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/pkix-crl")
-	w.Header().Set("ETag", `"`+strconv.FormatUint(version, 10)+`"`)
-	w.Header().Set("Cache-Control", "max-age=60")
-	w.Write(der)
+	serveList(w, r, l, "application/pkix-crl")
 }

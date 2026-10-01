@@ -217,8 +217,8 @@ in PEM, and in the DER the kernel keyring takes, with the mount command.
   critical, past 64 characters), a CRL distribution point, and no longer than
   `validity`, the IdP's session or the CA's own certificate.
 - **`GET /x509/crl`**: DER, signed by the CA that signs the certificates,
-  `NextUpdate` an hour on, its number the revocation counter, `ETag` that
-  number. Disabling or revoking a person lists their certificates there until
+  `NextUpdate` an hour on and issued again every half hour, its number the
+  revocation counter, its `ETag` the content's. Disabling or revoking a person lists their certificates there until
   they expire; enabling them again takes nothing off. openssl verifies the
   certificates and says `revoked` once they are listed.
 
@@ -531,11 +531,33 @@ SSH and X.509 certificates already issued are revoked with their person or
 institution: they are listed in **`GET /ssh/krl`** (an OpenSSH KRL, what
 `sshd`'s `RevokedKeys` and `ssh-keygen -Q` read) and `GET /x509/crl` until
 they expire, and go-fileshare refuses them at login -- failing closed when it
-cannot fetch a list recent enough. The KRL is not signed: OpenSSH no longer
-verifies KRL signatures, so its integrity is the HTTPS it is fetched over.
-Written by [go-authn/krl](https://github.com/go-authn/krl) and checked here
-with `ssh-keygen -Q`. A plain `sshd` can use it too, fetched by cron into
-`RevokedKeys`.
+cannot fetch a list recent enough.
+
+Both lists are issued as [go-authn/revocation](https://github.com/go-authn/revocation)'s
+protocol says, so that they can travel through anything -- a mirror, plain
+HTTP, a file -- and still be checked:
+
+- **The KRL is signed:** `GET /ssh/krl.sig` is a detached SSHSIG signature by
+  the SSH CA key, namespace `krl@go-authn.github.io`, what OpenSSH recommends
+  since it stopped verifying the KRL's own signature section.
+  `ssh-keygen -Y verify` checks it. Fetch it with `If-Match: <the list's ETag>`;
+  a list issued again in between answers 412.
+- **Both say when they stop being current:** the CRL's `nextUpdate`, and the
+  KRL's `expires@go-authn.github.io` extension, which sshd ignores. Each is an
+  hour after issue, and a list is issued again every half hour, or at once
+  when something is revoked.
+- **The ETag is the content's.** It used to be the revocation counter while
+  the body changed at every request, so a reader polling with
+  `If-None-Match` kept a copy whose expiry passed: a reader that enforces the
+  expiry then failed closed for good against a healthy provider.
+  `TestAPollingReaderStaysCurrent` polls for two hours of clock.
+
+For a plain `sshd`, or nginx and other TLS servers, **`revokd`**
+(go-authn/revocation) fetches the lists, keeps only those that verify, and
+writes them where they are read. When a list lapses it fails closed for sshd,
+and with `listen` it serves the verified lists to other servers as a mirror.
+The KRL is written by [go-authn/krl](https://github.com/go-authn/krl) and
+checked here with `ssh-keygen -Q`.
 
 **There are no users or groups to add or delete here.** People exist
 because their institution vouches for them, and their groups are what it
