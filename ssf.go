@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	ssf "github.com/hstern/go-ssf"
@@ -263,15 +264,35 @@ func (t *ssfTx) Verify(ctx context.Context, id string, req *ssf.VerificationRequ
 // is waiting, oldest first. It answers at once, events or not (RFC 8936
 // 2.4 lets a transmitter).
 func (t *ssfTx) PollEvents(ctx context.Context, id string, req *ssf.PollRequest) (*ssf.PollResponse, error) {
-	if _, err := t.stream(ctx, id); err != nil {
+	st, err := t.stream(ctx, id)
+	if err != nil {
 		return nil, err
+	}
+	// ⛔ A stream that is not enabled answers an error, not an empty 200: a
+	// receiver that counts a 200 as "heard" would believe itself up to date
+	// while nothing reaches it -- failing open. Paused, its events are kept
+	// for when it is enabled again (SSF 1.0 8.1.1); disabled, none are made.
+	if st.Status != ssf.StreamStatusEnabled {
+		return nil, &ssf.ValidationError{Reason: "the stream is " + string(st.Status) + "; nothing is delivered until it is enabled", Rule: "stream_status", Field: "status"}
 	}
 	for _, jti := range req.Ack {
 		t.s.ssfEvents.take(id + "/" + jti)
+		t.s.forgetSetErrs(id + "/" + jti)
 	}
+	// ⛔ A set error is a report, not an acknowledgement (RFC 8936 2.4 lets
+	// a receiver report; nothing asks the transmitter to discard). Its causes
+	// are often passing -- a key rotated inside the receiver's key set
+	// refresh, a full disk -- so the event is kept and handed out again, and
+	// dropped only after maxSetErrs reports, or at event_retention.
 	for jti, e := range req.SetErrs {
-		t.s.logf("ssf: stream %s: %s refused %s: %s %s", id, t.owner(ctx), jti, e.Err, e.Description)
-		t.s.ssfEvents.take(id + "/" + jti)
+		key := id + "/" + jti
+		n := t.s.countSetErr(key)
+		t.s.logf("ssf: stream %s: %s refused %s (%d of %d): %s %s", id, t.owner(ctx), jti, n, maxSetErrs, e.Err, e.Description)
+		if n >= maxSetErrs {
+			t.s.logf("ssf: stream %s: dropping %s after %d refusals", id, jti, n)
+			t.s.ssfEvents.take(key)
+			t.s.forgetSetErrs(key)
+		}
 	}
 	max := 100
 	if req.MaxEvents != nil && *req.MaxEvents >= 0 {
@@ -340,7 +361,8 @@ func (s *server) broadcast(subject map[string]any, at time.Time, reason string, 
 	}
 	var targets []target
 	s.ssfStreams.each(func(id string, st storedStream) {
-		if st.Status == ssf.StreamStatusEnabled && slices.Contains(st.Config.EventsDelivered, eventSessionRevoked) {
+		// Paused streams too: their events wait until they are enabled.
+		if st.Status != ssf.StreamStatusDisabled && slices.Contains(st.Config.EventsDelivered, eventSessionRevoked) {
 			targets = append(targets, target{id, st.Config})
 		}
 	})
@@ -484,4 +506,28 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 		"access_token": access, "token_type": "Bearer",
 		"expires_in": int(s.cfg.tokenTTL.Seconds()), "scope": "ssf",
 	})
+}
+
+// maxSetErrs is how many times a receiver may report an event in error
+// before it is dropped.
+const maxSetErrs = 10
+
+// setErrs counts the reports per event. In memory: a restart hands the
+// event out again from zero, which errs on the side of delivering.
+var (
+	setErrsMu sync.Mutex
+	setErrs   = map[string]int{}
+)
+
+func (s *server) countSetErr(key string) int {
+	setErrsMu.Lock()
+	defer setErrsMu.Unlock()
+	setErrs[key]++
+	return setErrs[key]
+}
+
+func (s *server) forgetSetErrs(key string) {
+	setErrsMu.Lock()
+	defer setErrsMu.Unlock()
+	delete(setErrs, key)
 }

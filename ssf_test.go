@@ -315,17 +315,40 @@ func TestSSFStreamManagement(t *testing.T) {
 	if st, _ := c.GetStatus(t.Context(), stream.StreamID, nil); st.Status != ssf.StreamStatusPaused {
 		t.Errorf("status %+v", st)
 	}
-	// Acknowledge what is there, then revoke while paused: nothing queued.
-	var seen []string
-	for j := range got {
-		seen = append(seen, j)
-	}
+	// Paused: a poll is refused -- an empty 200 would read as "up to date"
+	// -- and what happens meanwhile waits for it (SSF 1.0 8.1.1).
 	ret := true
-	c.PollEvents(t.Context(), stream.StreamID, &ssf.PollRequest{Ack: seen, ReturnImmediately: &ret})
-	f.s.revokePerson("alice@" + idpScope)
-	if got := pollAll(t, c, v, stream.StreamID); len(got) != 0 {
-		t.Errorf("%d events queued on a paused stream", len(got))
+	if _, err := c.PollEvents(t.Context(), stream.StreamID, &ssf.PollRequest{ReturnImmediately: &ret}); err == nil {
+		t.Error("a paused stream answered a poll")
 	}
+	f.s.revokePerson("alice@" + idpScope)
+	setStatus := func(s ssf.StreamStatus) {
+		if _, err := c.UpdateStatus(t.Context(), stream.StreamID, &ssf.StatusUpdateRequest{Status: s}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setStatus(ssf.StreamStatusEnabled)
+	var seen []string
+	revokedWhilePaused := false
+	for j, s := range pollAll(t, c, v, stream.StreamID) {
+		seen = append(seen, j)
+		revokedWhilePaused = revokedWhilePaused || s.Events[eventSessionRevoked] != nil
+	}
+	if !revokedWhilePaused {
+		t.Error("a revocation made while the stream was paused was lost")
+	}
+	c.PollEvents(t.Context(), stream.StreamID, &ssf.PollRequest{Ack: seen, ReturnImmediately: &ret})
+	// Disabled: refused too, and nothing is kept.
+	setStatus(ssf.StreamStatusDisabled)
+	if _, err := c.PollEvents(t.Context(), stream.StreamID, &ssf.PollRequest{ReturnImmediately: &ret}); err == nil {
+		t.Error("a disabled stream answered a poll")
+	}
+	f.s.revokePerson("alice@" + idpScope)
+	setStatus(ssf.StreamStatusEnabled)
+	if got := pollAll(t, c, v, stream.StreamID); len(got) != 0 {
+		t.Errorf("%d events kept for a disabled stream", len(got))
+	}
+	setStatus(ssf.StreamStatusPaused)
 	subj, err := subjectid.Parse(json.RawMessage(`{"format":"account","uri":"acct:bob@x"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -415,5 +438,45 @@ func TestSSFConfigRefusals(t *testing.T) {
 	}
 	if _, err := c.load(t, c.hcl(nil)+state+"ssf {}\nclient \"r\" {\nsecret_file = \""+c.secret+"\"\nssf_receiver = true\n}\n"); err != nil {
 		t.Errorf("the control: %v", err)
+	}
+}
+
+// A set error is a report, not an acknowledgement: the event comes back,
+// and is dropped only after maxSetErrs reports.
+func TestSSFSetErrorsRedeliver(t *testing.T) {
+	f := ssfFixture(t)
+	c := f.ssfClient(t, "fileshare-ssf")
+	stream, err := c.CreateConfig(t.Context(), &ssf.StreamConfig{EventsRequested: []string{eventSessionRevoked}, Delivery: ssf.Delivery{Method: deliveryPoll}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.s.revokePerson("alice@" + idpScope)
+	v := f.setVerifier(t)
+	got := pollAll(t, c, v, stream.StreamID)
+	if len(got) != 1 {
+		t.Fatalf("%d events", len(got))
+	}
+	var jti string
+	for j := range got {
+		jti = j
+	}
+	ret := true
+	report := func() {
+		if _, err := c.PollEvents(t.Context(), stream.StreamID, &ssf.PollRequest{
+			SetErrs:           map[string]ssf.SetErr{jti: {Err: "invalid_key", Description: "a key rotated inside my refresh window"}},
+			ReturnImmediately: &ret,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 1; i < maxSetErrs; i++ {
+		report()
+		if again := pollAll(t, c, v, stream.StreamID); len(again) != 1 {
+			t.Fatalf("after %d reports the event is gone: a passing failure lost a revocation", i)
+		}
+	}
+	report()
+	if left := pollAll(t, c, v, stream.StreamID); len(left) != 0 {
+		t.Errorf("still handed out after %d reports", maxSetErrs)
 	}
 }
