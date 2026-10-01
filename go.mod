@@ -9,13 +9,13 @@ require (
 	github.com/go-authn/oidc v0.1.0
 	github.com/go-authn/saml v0.1.1
 	github.com/go-authn/servercert v0.1.2
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/grpc-transports/control v0.1.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/hstern/go-ssf v0.1.1
-	github.com/hstern/go-subjectid v0.0.0-20260525222327-b47140763585
+	github.com/hstern/go-subjectid v0.2.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/openpubkey/openpubkey v0.29.0
 	github.com/pkg/sftp v1.13.11
@@ -25,7 +25,7 @@ require (
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
-	modernc.org/sqlite v1.59.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -92,9 +92,9 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/tools v0.50.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
-	modernc.org/libc v1.75.7 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
