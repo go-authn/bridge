@@ -5,14 +5,14 @@ go 1.26.4
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-authn/directory v0.8.0
-	github.com/go-authn/krl v0.1.0
+	github.com/go-authn/krl v0.1.1
 	github.com/go-authn/oidc v0.1.0
-	github.com/go-authn/saml v0.1.0
-	github.com/go-authn/servercert v0.1.0
+	github.com/go-authn/saml v0.1.1
+	github.com/go-authn/servercert v0.1.2
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
-	github.com/grpc-transports/control v0.1.0
+	github.com/grpc-transports/control v0.1.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/hstern/go-ssf v0.1.1
 	github.com/hstern/go-subjectid v0.0.0-20260525222327-b47140763585

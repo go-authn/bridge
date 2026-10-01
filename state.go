@@ -83,6 +83,15 @@ type persister struct {
 
 	mu      sync.Mutex
 	pending map[[2]string]bool // deletes the database has not taken yet
+	// unwritten are writes the database has not taken yet. An SSF event
+	// among them is a revocation no receiver hears of after a restart, so
+	// they are retried like deletes, and the provider is not ready meanwhile.
+	unwritten map[[2]string]pendingWrite
+}
+
+type pendingWrite struct {
+	v       []byte
+	expires time.Time
 }
 
 func (p *persister) put(kind, k string, v []byte, expires time.Time) error {
@@ -105,6 +114,7 @@ func (p *persister) put(kind, k string, v []byte, expires time.Time) error {
 func (p *persister) del(kind, k string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	delete(p.unwritten, [2]string{kind, k}) // gone before it was written
 	if p.pending == nil {
 		p.pending = map[[2]string]bool{}
 	}
@@ -113,6 +123,13 @@ func (p *persister) del(kind, k string) {
 }
 
 func (p *persister) flushLocked() {
+	for key, w := range p.unwritten {
+		if err := p.put(key[0], key[1], w.v, w.expires); err != nil {
+			p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
+			return
+		}
+		delete(p.unwritten, key)
+	}
 	for key := range p.pending {
 		if _, err := p.b.db.Exec(`DELETE FROM bridge_state WHERE kind = `+p.b.arg(1)+` AND k = `+p.b.arg(2), key[0], key[1]); err != nil {
 			p.logf("state: removing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
@@ -127,7 +144,7 @@ func (p *persister) healthy() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.flushLocked()
-	return len(p.pending) == 0
+	return len(p.pending) == 0 && len(p.unwritten) == 0
 }
 
 // load is every live row of kind.
@@ -191,13 +208,19 @@ func (t *ttl[V]) write(k string, v V, expires time.Time) {
 	if err == nil {
 		err = t.store.p.put(t.store.kind, k, b, expires)
 	}
+	p := t.store.p
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if err != nil {
-		// Not kept past a restart; everything else goes on.
-		t.store.p.logf("state: writing %s: %v", t.store.kind, err)
+		p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", t.store.kind, k, err)
+		if p.unwritten == nil {
+			p.unwritten = map[[2]string]pendingWrite{}
+		}
+		p.unwritten[[2]string{t.store.kind, k}] = pendingWrite{b, expires}
+		return
 	}
-	t.store.p.mu.Lock()
-	t.store.p.flushLocked()
-	t.store.p.mu.Unlock()
+	delete(p.unwritten, [2]string{t.store.kind, k}) // a newer value is written
+	p.flushLocked()
 }
 
 func (t *ttl[V]) forget(k string) {

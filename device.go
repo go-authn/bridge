@@ -7,7 +7,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"math/big"
-	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -75,14 +74,38 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not ask for NFS certificates")
 		return
 	}
+	if slices.Contains(scopes, "ssf") {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "the ssf scope is for client credentials, not for a login")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not set application passwords")
 		return
 	}
-	dc, uc := token(), userCode()
+	dc := token()
 	exp := s.now().Add(deviceLifetime)
-	s.devices.put(dc, &deviceGrant{client: client, scopes: scopes, userCode: uc, nonce: r.PostForm.Get("nonce"), interval: s.poll}, exp)
-	s.userCodes.put(uc, dc, exp)
+	// A user code is 8 of 20 letters: 25 billion, and never two alive at once.
+	var uc string
+	for range 5 {
+		uc = userCode()
+		err := s.userCodes.putNew(uc, dc, exp)
+		if err == nil {
+			break
+		}
+		uc = ""
+		if errors.Is(err, errFull) {
+			break
+		}
+	}
+	if uc == "" {
+		tokenError(w, http.StatusServiceUnavailable, "temporarily_unavailable", "too many devices are waiting; try again in a minute")
+		return
+	}
+	if err := s.devices.put(dc, &deviceGrant{client: client, scopes: scopes, userCode: uc, nonce: r.PostForm.Get("nonce"), interval: s.poll}, exp); err != nil {
+		s.userCodes.take(uc)
+		tokenError(w, http.StatusServiceUnavailable, "temporarily_unavailable", "too many devices are waiting; try again in a minute")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_code":               dc,
 		"user_code":                 uc[:4] + "-" + uc[4:],
@@ -124,6 +147,22 @@ type attempts struct {
 	mu  sync.Mutex
 	m   map[string][]time.Time
 	now func() time.Time
+	// swept is when every address was last looked at: an address is
+	// otherwise pruned only when it comes back, and one that never does
+	// stays for good (measured: 20,000 kept a day later).
+	swept time.Time
+}
+
+// sweepLocked forgets the addresses with nothing recent, once a lifetime.
+func (a *attempts) sweepLocked() {
+	now := a.now()
+	if now.Sub(a.swept) < deviceLifetime {
+		return
+	}
+	a.swept = now
+	for addr := range a.m {
+		a.recentLocked(addr)
+	}
 }
 
 // blocked says whether addr has typed codeAttempts wrong codes lately: it
@@ -135,6 +174,7 @@ type attempts struct {
 func (a *attempts) blocked(addr string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.sweepLocked()
 	return len(a.recentLocked(addr)) >= codeAttempts
 }
 
@@ -161,14 +201,6 @@ func (a *attempts) recentLocked(addr string) []time.Time {
 	return recent
 }
 
-func clientAddr(r *http.Request) string {
-	h, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return h
-}
-
 // device is the page where the person types the code, then confirms which
 // application they are letting in, then logs in.
 //
@@ -187,7 +219,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusOK, "device", map[string]any{})
 		return
 	}
-	if s.tries.blocked(clientAddr(r)) {
+	if s.tries.blocked(s.clientAddr(r)) {
 		s.render(w, http.StatusTooManyRequests, "device", map[string]any{"Error": "Trop d'essais. Réessayez dans quelques minutes."})
 		return
 	}
@@ -197,7 +229,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 		g, ok = s.devices.get(dc)
 	}
 	if !ok {
-		s.tries.failed(clientAddr(r))
+		s.tries.failed(s.clientAddr(r))
 		s.render(w, http.StatusBadRequest, "device", map[string]any{"Error": "Ce code n'est pas valide, ou a expiré.", "Code": r.Form.Get("user_code")})
 		return
 	}

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ type server struct {
 	disabled *disabledList
 	// certs is every certificate issued, and the revoked (certstore.go).
 	certs *certStore
+	// limiter is what an address may start a minute (limits.go).
+	limiter *rateLimiter
 	// state writes the long-lived stores through to a database (state.go).
 	state *persister
 	// ssfStreams and ssfEvents are the SSF transmitter's streams and its
@@ -125,18 +128,20 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 		Now:        func() time.Time { return s.now() },
 	}
 	now := func() time.Time { return s.now() }
-	s.logins = newTTL[*login](now)
+	// What anonymous requests fill is capped (store.go).
+	s.logins = newTTL[*login](now).capped(maxPending)
+	s.limiter = newRateLimiter(*cfg.RequestsPerMinute, now)
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
 	s.issued = newTTL[issuedToken](now)
-	s.devices = newTTL[*deviceGrant](now)
+	s.devices = newTTL[*deviceGrant](now).capped(maxPending)
 	s.poll = deviceInterval * time.Second
-	s.userCodes = newTTL[string](now)
+	s.userCodes = newTTL[string](now).capped(maxPending)
 	s.tries = &attempts{m: map[string][]time.Time{}, now: now}
 	s.refresh = newTTL[*refreshGrant](now)
 	s.rotated = newTTL[string](now)
 	s.families = newTTL[[]string](now)
-	s.ssfStreams = newTTL[storedStream](now)
+	s.ssfStreams = newTTL[storedStream](now).capped(1000)
 	s.ssfEvents = newTTL[string](now)
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
 		return nil, fmt.Errorf("disabled_file: %w", err)
@@ -150,10 +155,20 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	return s, nil
 }
 
+// logf writes one line. ⛔ One: what an IdP or a client sent can be in it
+// -- a StatusMessage, an error naming an attribute -- and a newline there
+// forged whole log lines ("login: alice@... for web") for anybody who could
+// post to the ACS. Control characters are escaped.
 func (s *server) logf(format string, a ...any) {
+	line := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || r == 0x2028 || r == 0x2029 {
+			return '\uFFFD'
+		}
+		return r
+	}, fmt.Sprintf(format, a...))
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
-	fmt.Fprintf(s.log, format+"\n", a...)
+	fmt.Fprintln(s.log, line)
 }
 
 // handler is every endpoint.
@@ -161,14 +176,14 @@ func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", s.discovery)
 	mux.HandleFunc("GET /jwks", s.jwks)
-	mux.HandleFunc("/authorize", s.authorize)
+	mux.HandleFunc("/authorize", s.limited(s.authorize))
 	mux.HandleFunc("POST /token", s.token)
 	mux.HandleFunc("/userinfo", s.userinfo)
 	mux.HandleFunc("GET /saml/metadata", s.samlMetadata)
 	mux.HandleFunc("GET /saml/choose", s.choose)
 	mux.HandleFunc("GET /saml/disco", s.disco)
-	mux.HandleFunc("POST /saml/acs", s.acs)
-	mux.HandleFunc("POST /device_authorization", s.deviceAuthorization)
+	mux.HandleFunc("POST /saml/acs", s.limited(s.acs))
+	mux.HandleFunc("POST /device_authorization", s.limited(s.deviceAuthorization))
 	mux.HandleFunc("/device", s.device)
 	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
 	mux.HandleFunc("GET /ssh/krl", s.sshKRL)
@@ -200,3 +215,19 @@ func loadSPKey(keyFile, certFile string) (*rsa.PrivateKey, *x509.Certificate, er
 	}
 	return k, c, nil
 }
+
+// httpServer is the public listener's server: every request bounded in size
+// and in time (main.go says why).
+func (s *server) httpServer(tc *tls.Config) *http.Server {
+	return &http.Server{
+		Handler:           http.MaxBytesHandler(s.handler(), maxBody),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		TLSConfig:         tc,
+	}
+}
+
+// maxBody is the largest request body: four times the SAML size limit.
+const maxBody = 1 << 20

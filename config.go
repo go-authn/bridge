@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -43,7 +44,7 @@ type config struct {
 	KeyFile  string `hcl:"key_file,optional"`
 
 	// ACME serves TLS with a certificate from an ACME CA instead: Let's
-	// Encrypt, or GÉANT TCS (HARICA) with External Account Binding.
+	// Encrypt, or GÃANT TCS (HARICA) with External Account Binding.
 	ACME *acmeBlock `hcl:"acme,block"`
 
 	// SigningKeyFile is the RSA key that signs tokens (PEM). `bridge keygen`
@@ -69,7 +70,7 @@ type config struct {
 	AccessTokenKeyFile string `hcl:"access_token_key_file,optional"`
 
 	// SubjectSaltFile holds the secret that pairwise subjects are derived
-	// with. ⛔ Required, and a file: SATOSA generates one at random when it
+	// with. â Required, and a file: SATOSA generates one at random when it
 	// is not configured, and every "sub" then changes at every restart --
 	// every relying party sees everybody as a new person.
 	SubjectSaltFile string `hcl:"subject_salt_file"`
@@ -78,6 +79,14 @@ type config struct {
 	// in a database, so that a restart logs nobody out (state.go). Absent,
 	// they live in memory.
 	State *stateBlock `hcl:"state,block"`
+
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is
+	// believed, as addresses or prefixes (limits.go).
+	TrustedProxies []string `hcl:"trusted_proxies,optional"`
+
+	// RequestsPerMinute is how many logins, device grants and ACS posts an
+	// address may start a minute: 120 by default, 0 for no limit.
+	RequestsPerMinute *int `hcl:"requests_per_minute,optional"`
 
 	// SSF is a Shared Signals transmitter: session-revoked events for
 	// receivers that verify this provider's tokens on their own (ssf.go).
@@ -123,6 +132,8 @@ type config struct {
 
 	files []string
 
+	trustedProxies []netip.Prefix
+
 	signingKey  *signingKey // ID tokens, and access tokens unless accessKey
 	accessKey   *signingKey // access tokens: signingKey, or access_token_key_file
 	retiredKeys []*signingKey
@@ -149,7 +160,7 @@ type samlBlock struct {
 
 	// MetadataCertFile is the federation's metadata signing certificate, and
 	// MetadataFingerprint its SHA-256 fingerprint as the federation
-	// publishes it. ⛔ Both are required: the certificate is checked against
+	// publishes it. â Both are required: the certificate is checked against
 	// the fingerprint at every start, so a file replaced on disk is noticed
 	// rather than trusted.
 	MetadataCertFile    string `hcl:"metadata_cert_file"`
@@ -457,6 +468,14 @@ func (c *config) check() error {
 	if _, ok := usernameAttributes[c.Claims.Username]; !ok {
 		return fmt.Errorf("claims: username %q: one of eppn, subject_id, uid, mail", c.Claims.Username)
 	}
+	// ⛔ uid and mail are not held to the IdP's scopes (only eppn and
+	// subject-id are, by go-authn/saml): with two IdPs, one names the
+	// other's people -- measured, another university's IdP got a token
+	// for alice@univ-example.fr, and with it her SSH certificate and her
+	// application password. So only with exactly one IdP.
+	if !scopedUsername[c.Claims.Username] && len(c.SAML.IdPs) != 1 {
+		return fmt.Errorf("claims: username = %q is not held to an IdP's scopes, so any IdP of the federation could name anybody: it needs saml { idps } to list exactly one IdP; with more, use eppn or subject_id", c.Claims.Username)
+	}
 	if c.Claims.Groups == nil {
 		c.Claims.Groups = []string{"entitlement"}
 	}
@@ -501,6 +520,9 @@ func (c *config) check() error {
 		if m.Listen == c.Listen {
 			return errors.New("metrics: listen is the public listener; metrics have one of their own")
 		}
+	}
+	if err := c.checkLimits(); err != nil {
+		return err
 	}
 	if c.State != nil {
 		if err := c.State.check(); err != nil {
