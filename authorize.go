@@ -83,6 +83,10 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "this client may not ask for NFS certificates")
 		return
 	}
+	if slices.Contains(scopes, "ssf") {
+		fail("invalid_scope", "the ssf scope is for client credentials, not for a login")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		fail("invalid_scope", "this client may not set application passwords")
 		return
@@ -177,7 +181,10 @@ func (s *server) redirectError(w http.ResponseWriter, r *http.Request, redirect,
 // or straight to it when there is only one.
 func (s *server) startLogin(w http.ResponseWriter, r *http.Request, l *login) {
 	id := token()
-	s.logins.put(id, l, s.now().Add(loginLifetime))
+	if err := s.logins.put(id, l, s.now().Add(loginLifetime)); err != nil {
+		s.page(w, http.StatusServiceUnavailable, "Too many logins are in progress; try again in a minute.")
+		return
+	}
 	http.SetCookie(w, s.cookie(loginCookie, id, loginLifetime))
 	if len(s.cfg.SAML.IdPs) == 1 {
 		s.toIdP(w, r, id, l, s.cfg.SAML.IdPs[0])

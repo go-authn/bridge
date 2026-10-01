@@ -193,6 +193,13 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	info := who.claimsFor(scopes)
 	info["sub"] = sub
 	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp}, now.Add(s.cfg.tokenTTL))
+	// A disable between the check above and this put would not find the
+	// token it is revoking: the disable is recorded before it revokes, so
+	// looking again after the put closes the window.
+	if why := s.refused(who); why != "" {
+		s.issued.take(jti)
+		return nil, "", fmt.Errorf("%w: %s (%s via %s)", errDisabled, why, orUnnamed(who.username), who.idp)
+	}
 
 	// The ID token is for the CLIENT: aud is its ID, and it carries the
 	// nonce back (OIDC Core 2, 3.1.3.6).

@@ -570,6 +570,25 @@ people use the service, and when, is not this provider's to publish.
 `-tags nogrpc` leaves gRPC out (4.1 MB of the binary) and refuses a
 configuration with an `admin` block, rather than starting without it.
 
+## Behind a reverse proxy, and under load
+
+```hcl
+trusted_proxies     = ["10.0.0.0/8"]   # whose X-Forwarded-For is believed
+requests_per_minute = 120             # per address; 0 turns the limit off
+```
+
+Starting a login, a device grant and posting to the ACS cost memory or an RSA
+operation before anybody is authenticated, so each address gets so many a
+minute (429 past it), and the logins and device grants in progress are capped
+(503 past 20,000). Behind a proxy, name it in `trusted_proxies`, or every
+request is the proxy's: one address for the whole internet, and the wrong
+device codes of one person lock out everybody. Every request is bounded: 1 MiB,
+30 s to read, 60 s to answer, 2 min idle.
+
+`claims { username = "uid" }` or `"mail"` needs `saml { idps }` to list exactly
+one IdP: neither is held to an IdP's scopes, so with two, one names the
+other's people.
+
 ## What it is not, yet
 
 - **One process.** With a `state` block, refresh tokens and the access tokens

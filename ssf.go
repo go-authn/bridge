@@ -435,7 +435,10 @@ func (s *server) ssfAuthenticate(next http.Handler) http.Handler {
 			clientID, _ := claims["client_id"].(string)
 			scope, _ := claims["scope"].(string)
 			c, ok := s.cfg.client(clientID)
-			if !ok || !c.SSFReceiver || !slices.Contains(strings.Fields(scope), "ssf") {
+			sub, _ := claims["sub"].(string)
+			// A client credentials token: its subject is the client. A token a
+			// person logged in for is not a receiver's, whatever it carries.
+			if !ok || !c.SSFReceiver || sub != clientID || !slices.Contains(strings.Fields(scope), "ssf") {
 				err = errors.New("not an SSF receiver")
 			} else {
 				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, clientID))
