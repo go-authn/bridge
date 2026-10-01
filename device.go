@@ -335,7 +335,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			return
 		}
 		s.counters.inc("bridge_tokens_issued_total", "device_code")
-		if rt := s.newRefresh(client, who, scopes, jti); rt != "" {
+		if rt, _ := s.newRefresh(client, who, scopes, jti); rt != "" {
 			resp["refresh_token"] = rt
 		}
 		writeJSON(w, http.StatusOK, resp)

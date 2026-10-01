@@ -26,9 +26,10 @@ type refreshGrant struct {
 }
 
 // newRefresh starts a family, if the client has refresh tokens at all.
-func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, jti string) string {
+// It returns the refresh token and its family, or "" and "".
+func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, jti string) (string, string) {
 	if client.refreshTTL == 0 {
-		return ""
+		return "", ""
 	}
 	until := s.now().Add(client.refreshTTL)
 	// An IdP that said when its session ends is believed: the family ends
@@ -40,7 +41,7 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, j
 	rt := token()
 	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, family: family, until: until}, until)
 	s.families.put(family, []string{jti}, until.Add(s.cfg.tokenTTL))
-	return rt
+	return rt, family
 }
 
 // rotate is the token request with grant_type refresh_token.
