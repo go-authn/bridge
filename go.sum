@@ -32,10 +32,12 @@ github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkp
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/go-authn/directory v0.8.0 h1:aeonZteikL6CCfZ/jsowoq4chhcNP1TjYx4Q7xB3wHI=
 github.com/go-authn/directory v0.8.0/go.mod h1:bki9j8LDhb2B2wmmaFIce3mSEqeBeP8XdOWdwa4FOz8=
-github.com/go-authn/krl v0.1.1 h1:krQJBJmLznRxFICTLzS6VtyEgwKxTvpbqJdV5l7qYQ0=
-github.com/go-authn/krl v0.1.1/go.mod h1:PW5Vt8KOJRNEboQuoSoYgXC6MS5jH/YgGXX19RhmT5c=
+github.com/go-authn/krl v0.2.0 h1:VtXXZQ66WSu3W2dWrbShMkGkp+l68rHmtmGZoJWh04o=
+github.com/go-authn/krl v0.2.0/go.mod h1:PW5Vt8KOJRNEboQuoSoYgXC6MS5jH/YgGXX19RhmT5c=
 github.com/go-authn/oidc v0.1.0 h1:aUBEIZ0aESaT3Ps0+GpPJuF8PYXai4iFrzkMKAK9ZnE=
 github.com/go-authn/oidc v0.1.0/go.mod h1:FbF6Ltu6sj0Sb8RP/wbtrpIy9w95wGJC6AJQloQt130=
+github.com/go-authn/revocation v0.1.0 h1:MyzVnnLsLZLUSSIb327YnA3waSug7TJsrRziBd5xNoQ=
+github.com/go-authn/revocation v0.1.0/go.mod h1:5T3su5/aiE7aXr72nWQlpmbvZr7x8TGiLovKG4g59n4=
 github.com/go-authn/saml v0.1.1 h1:Qzn5dQh/TJwPMvuhw0Tcanhsz/iky0+WGfmzXdNCma8=
 github.com/go-authn/saml v0.1.1/go.mod h1:LhGGecLT8NFuJqfKm5Yx/SZP64yySAEkb2hQGs0ezBc=
 github.com/go-authn/servercert v0.1.2 h1:yE9mckPo9Ognvjc8lwCDYRSVwTgKtYW4/AYZGL36x5w=
@@ -75,6 +77,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hashicorp/hcl/v2 v2.25.0 h1:HmmQVYRny4MaBo4b20TjmL46wyuUxpnMWkPZ4+NTbWk=
 github.com/hashicorp/hcl/v2 v2.25.0/go.mod h1:vR+FKETxoZAmRlHgFfKmuqivj+C4Izm/c66XkmZ3r7M=
+github.com/hiddeco/sshsig v0.2.0 h1:gMWllgKCITXdydVkDL+Zro0PU96QI55LwUwebSwNTSw=
+github.com/hiddeco/sshsig v0.2.0/go.mod h1:nJc98aGgiH6Yql2doqH4CTBVHexQA40Q+hMMLHP4EqE=
 github.com/hstern/go-ssf v0.1.1 h1:JwMOjbNs8AYbe9qslgkKHpS/RTMGGzxonFhAUKGy/5M=
 github.com/hstern/go-ssf v0.1.1/go.mod h1:6x8ZfADmRQUov8n9ls5qzQ0Sa54Q4/6JDpwH11MHZs4=
 github.com/hstern/go-subjectid v0.2.0 h1:kakUgtYVbUjIIVLaJcwWnQ9QKFwIw+AQxCZKOGLiOWU=

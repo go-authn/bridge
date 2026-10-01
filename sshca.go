@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-authn/krl"
+	"github.com/go-authn/revocation"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -261,24 +262,61 @@ func (s *server) sshKRL(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	now := s.now()
-	revoked, version := s.certs.revoked("ssh", now)
-	b := krl.NewBuilder(version, "go-authn/bridge "+s.cfg.Issuer)
-	for _, c := range revoked {
-		n, err := strconv.ParseUint(c.Serial, 10, 64)
-		if err != nil {
-			continue
-		}
-		b.RevokeSerial(ca.signer.PublicKey(), n)
-	}
-	data, err := b.Marshal(now)
+	l, err := s.issueKRL(ca)
 	if err != nil {
 		s.logf("ssh: the KRL: %v", err)
 		http.Error(w, "the KRL could not be made", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("ETag", `"`+strconv.FormatUint(version, 10)+`"`)
+	serveList(w, r, l, "application/octet-stream")
+}
+
+// sshKRLSig is the KRL's detached SSHSIG signature, by the CA key, in the
+// namespace go-authn/revocation names. If-Match carries the ETag of the
+// list the reader holds: a list issued again in between answers 412
+// rather than a signature that does not match it.
+func (s *server) sshKRLSig(w http.ResponseWriter, r *http.Request) {
+	ca := s.cfg.SSHCA
+	if ca == nil {
+		http.NotFound(w, r)
+		return
+	}
+	l, err := s.issueKRL(ca)
+	if err != nil {
+		s.logf("ssh: the KRL: %v", err)
+		http.Error(w, "the KRL could not be made", http.StatusInternalServerError)
+		return
+	}
+	if m := r.Header.Get("If-Match"); m != "" && m != l.tag {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Cache-Control", "max-age=60")
-	w.Write(data)
+	w.Write(l.sig)
+}
+
+// issueKRL is the KRL currently issued: the CA's revoked serials, an
+// expiry listValidity on, signed.
+func (s *server) issueKRL(ca *sshCABlock) (*issuedList, error) {
+	return s.issueList("ssh", func(revoked []issuedCert, version uint64, now time.Time) ([]byte, []byte, error) {
+		b := krl.NewBuilder(version, "go-authn/bridge "+s.cfg.Issuer)
+		for _, c := range revoked {
+			n, err := strconv.ParseUint(c.Serial, 10, 64)
+			if err != nil {
+				continue
+			}
+			b.RevokeSerial(ca.signer.PublicKey(), n)
+		}
+		b.SetExpires(now.Add(listValidity))
+		raw, err := b.Marshal(now)
+		if err != nil {
+			return nil, nil, err
+		}
+		sig, err := revocation.SignKRL(raw, ca.signer)
+		if err != nil {
+			return nil, nil, err
+		}
+		return raw, sig, nil
+	})
 }
