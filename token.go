@@ -103,6 +103,13 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		// of the two users of this code was not the client.
 		if jtis, spent := s.spent.take(code); spent {
 			for _, j := range jtis {
+				// And the refresh family the first use began: otherwise
+				// whoever used it first keeps a token that outlives the
+				// access token revoked here.
+				if family, ok := strings.CutPrefix(j, spentFamily); ok {
+					s.revokeFamily(family)
+					continue
+				}
 				s.issued.take(j)
 			}
 			s.logf("token: a code was used twice by %s; its tokens are revoked", client.ID)
@@ -140,11 +147,13 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		tokenError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}
-	s.spent.put(code, []string{jti}, s.now().Add(s.cfg.tokenTTL))
 	s.counters.inc("bridge_tokens_issued_total", "authorization_code")
-	if rt := s.newRefresh(client, g.who, g.scopes, jti); rt != "" {
+	spent := []string{jti}
+	if rt, family := s.newRefresh(client, g.who, g.scopes, jti); rt != "" {
 		resp["refresh_token"] = rt
+		spent = append(spent, spentFamily+family)
 	}
+	s.spent.put(code, spent, s.now().Add(s.cfg.tokenTTL))
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -283,3 +292,6 @@ func audience(aud []string) any {
 	}
 	return aud
 }
+
+// spentFamily marks, among what a spent code bought, its refresh family.
+const spentFamily = "family:"
