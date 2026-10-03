@@ -7,8 +7,8 @@ require (
 	github.com/go-authn/directory v0.8.0
 	github.com/go-authn/krl v0.2.0
 	github.com/go-authn/oidc v0.1.0
-	github.com/go-authn/revocation v0.1.0
-	github.com/go-authn/saml v0.1.1
+	github.com/go-authn/revocation v0.1.1
+	github.com/go-authn/saml v0.2.0
 	github.com/go-authn/servercert v0.1.2
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-net-health/endpoint v0.1.0
