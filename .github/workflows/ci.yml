@@ -39,7 +39,7 @@ jobs:
       # accept, and refuse once the person is disabled (interop_test.go).
       - name: fileshare
         if: matrix.os == 'ubuntu-latest'
-        run: go install github.com/go-fileshare/fileshare@v0.14.0
+        run: go install github.com/go-fileshare/fileshare@v0.15.0
       # The ACME CA is Pebble, Let's Encrypt's test CA, with External Account
       # Binding required as HARICA requires it. Pure Go, so every OS has it.
       - name: pebble
@@ -115,7 +115,7 @@ jobs:
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
-        run: go install github.com/go-fileshare/fileshare@v0.14.0
+        run: go install github.com/go-fileshare/fileshare@v0.15.0
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: go test -race -count=1 ./...
@@ -136,7 +136,7 @@ jobs:
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
-        run: go install github.com/go-fileshare/fileshare@v0.14.0
+        run: go install github.com/go-fileshare/fileshare@v0.15.0
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: |
