@@ -68,3 +68,54 @@ func TestSSFAnswersAsTheSpecSays(t *testing.T) {
 		t.Errorf("verification of an unknown stream: %d %q", res.StatusCode, b)
 	}
 }
+
+// SSF 1.0 puts stream_id in the JSON body of a verification request
+// (8.1.4.2) and of a subject added or removed (8.1.3.2, 8.1.3.3). go-ssf
+// reads it from the query only, and answered a request written as the spec
+// writes it 400 "stream_id query parameter is required" -- the OpenID
+// Foundation's suite failed four modules on it.
+func TestSSFTakesTheStreamFromTheBody(t *testing.T) {
+	f := ssfFixture(t)
+	cfg, err := client.FetchTransmitterConfig(t.Context(), f.s.cfg.Issuer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := f.ssfClient(t, "fileshare-ssf").CreateConfig(t.Context(), &ssfStreamConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := f.receiverToken(t, "fileshare-ssf")
+	post := func(endpoint string, body map[string]any) (int, string) {
+		t.Helper()
+		b, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", endpoint, strings.NewReader(string(b)))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		rb, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(rb)
+	}
+	subject := map[string]string{"format": "email", "email": "alice@univ-example.fr"}
+	for _, c := range []struct {
+		name     string
+		endpoint string
+		body     map[string]any
+		want     int
+	}{
+		{"verification", cfg.VerificationEndpoint, map[string]any{"stream_id": stream.StreamID, "state": "s1"}, http.StatusNoContent},
+		{"add subject", cfg.AddSubjectEndpoint, map[string]any{"stream_id": stream.StreamID, "subject": subject}, http.StatusOK},
+		{"remove subject", cfg.RemoveSubjectEndpoint, map[string]any{"stream_id": stream.StreamID, "subject": subject}, http.StatusNoContent},
+	} {
+		if code, body := post(c.endpoint, c.body); code != c.want {
+			t.Errorf("%s with stream_id in the body: %d %s, want %d", c.name, code, body, c.want)
+		}
+	}
+	// Another receiver's stream named in the body is still not theirs.
+	if code, _ := post(cfg.VerificationEndpoint, map[string]any{"stream_id": "not-a-stream"}); code < 400 {
+		t.Errorf("an unknown stream in the body: %d", code)
+	}
+}
