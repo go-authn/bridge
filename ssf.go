@@ -496,7 +496,7 @@ func (s *server) ssfHandlers(mux *http.ServeMux) {
 	tx := &ssfTx{s: s}
 	// Authentication is done before go-ssf's handlers, which then allow
 	// what reached them; the stream is checked against its owner in tx.
-	api := s.ssfAuthenticate(http.StripPrefix(ssfPrefix, transmitter.MuxHandler(tx, transmitter.AlwaysAllow)))
+	api := s.ssfAuthenticate(http.StripPrefix(ssfPrefix, noContentWhereSSFSaysSo(transmitter.MuxHandler(tx, transmitter.AlwaysAllow))))
 	mux.Handle(ssfPrefix+"/", api)
 	i := s.cfg.Issuer + ssfPrefix
 	schemes, _ := json.Marshal([]map[string]string{{"spec_urn": "urn:ietf:rfc:6749"}})
@@ -509,8 +509,11 @@ func (s *server) ssfHandlers(mux *http.ServeMux) {
 		AddSubjectEndpoint:       i + transmitter.DefaultAddSubjectPath,
 		RemoveSubjectEndpoint:    i + transmitter.DefaultRemoveSubjectPath,
 		VerificationEndpoint:     i + transmitter.DefaultVerificationPath,
-		SpecVersion:              ssf.SpecVersion,
-		AuthorizationSchemes:     schemes,
+		// "1_0", the specs' own notation (SSF 1.0 7.1; CAEP Interop 2.3.1: "MUST
+		// be 1_0 or greater"). go-ssf's SpecVersion is "1.0", which the OpenID
+		// Foundation's suite rightly refuses.
+		SpecVersion:          "1_0",
+		AuthorizationSchemes: schemes,
 	}))
 }
 
@@ -578,3 +581,48 @@ var (
 	verifyMu      sync.Mutex
 	pendingVerify = map[string]string{}
 )
+
+// noContentWhereSSFSaysSo answers 204 No Content where SSF 1.0 says the
+// transmitter answers with an empty 204 -- a verification request (8.1.4.2)
+// and a subject removed (8.1.3.3) -- and go-ssf v0.1.1 answers 200 with an
+// empty JSON object. The OpenID Foundation's CAEP Interop transmitter plan
+// failed four modules on it. go-ssf's own client takes any 2xx.
+func noContentWhereSSFSaysSo(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && (r.URL.Path == transmitter.DefaultVerificationPath || r.URL.Path == transmitter.DefaultRemoveSubjectPath) {
+			w = &noContent{ResponseWriter: w}
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// noContent turns a 200 into a 204 and drops its body; any other status
+// passes untouched, body and all.
+type noContent struct {
+	http.ResponseWriter
+	ok, decided bool
+}
+
+func (n *noContent) WriteHeader(code int) {
+	if n.decided {
+		return
+	}
+	n.decided = true
+	if code == http.StatusOK {
+		n.ok = true
+		n.ResponseWriter.Header().Del("Content-Type")
+		n.ResponseWriter.Header().Del("Content-Length")
+		code = http.StatusNoContent
+	}
+	n.ResponseWriter.WriteHeader(code)
+}
+
+func (n *noContent) Write(b []byte) (int, error) {
+	if !n.decided {
+		n.WriteHeader(http.StatusOK)
+	}
+	if n.ok {
+		return len(b), nil
+	}
+	return n.ResponseWriter.Write(b)
+}
