@@ -217,8 +217,10 @@ in PEM, and in the DER the kernel keyring takes, with the mount command.
   critical, past 64 characters), a CRL distribution point, and no longer than
   `validity`, the IdP's session or the CA's own certificate.
 - **`GET /x509/crl`**: DER, signed by the CA that signs the certificates,
-  `NextUpdate` an hour on and issued again every half hour, its number the
-  revocation counter, its `ETag` the content's. Disabling or revoking a person lists their certificates there until
+  `NextUpdate` an hour on and issued again every half hour, its number rising
+  at every issue (RFC 5280 5.2.3: two CRLs whose thisUpdate differ have
+  different numbers), its `ETag` the content's. An issue is never dated
+  before the one it replaces, even if the clock steps back. Disabling or revoking a person lists their certificates there until
   they expire; enabling them again takes nothing off. openssl verifies the
   certificates and says `revoked` once they are listed.
 
