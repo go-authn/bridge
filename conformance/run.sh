@@ -154,6 +154,8 @@ $(login_entry)
 JSON
 
 docker compose up -d
+# The operator's tool, ready before a module waits for it.
+docker compose --profile tools pull --quiet admin
 trap 'docker compose logs --no-color bridge idp > $W/containers.log 2>&1 || true; docker compose down -v >/dev/null 2>&1 || true' EXIT
 # The plan only means something against a bridge that answers.
 for i in $(seq 1 60); do
@@ -169,6 +171,6 @@ echo
 echo "== openid-ssf-transmitter-caep-test-plan (poll)"
 $W/driver -config $W/ssf.json -expected expected-ssf.txt \
   -plan openid-ssf-transmitter-caep-test-plan \
-  -trigger "docker compose run --rm -T admin -plaintext -unix -d '{\"username\":\"alice@univ-example.fr\"}' /data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
+  -trigger "docker compose run --rm -T admin -plaintext -d '{\"username\":\"alice@univ-example.fr\"}' unix:///data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
   -variant '{"ssf_delivery_mode":"poll","client_registration":"static_client","server_metadata":"discovery","client_auth_type":"client_secret_basic","ssf_server_metadata":"discovery","ssf_auth_mode":"dynamic"}' || status=1
 exit $status
