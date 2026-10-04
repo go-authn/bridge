@@ -16,8 +16,16 @@ for k in idp fed sp; do
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=$k" \
     -keyout $W/$k.key -out $W/$k.crt 2>/dev/null
 done
-openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=bridge" \
-  -addext "subjectAltName=DNS:bridge" -keyout $W/tls.key -out $W/tls.crt 2>/dev/null
+# TLS: a CA for this run signs the bridge's and the IdP's certificates.
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=conformance run CA" \
+  -keyout $W/ca.key -out $W/ca.crt 2>/dev/null
+for h in bridge idp; do
+  out=$W/$h-tls; [ $h = bridge ] && out=$W/tls
+  openssl req -newkey rsa:2048 -nodes -subj "/CN=$h" -keyout $out.key -out $out.csr 2>/dev/null
+  printf "subjectAltName=DNS:%s\n" $h > $out.ext
+  openssl x509 -req -in $out.csr -CA $W/ca.crt -CAkey $W/ca.key -CAcreateserial -days 2 \
+    -extfile $out.ext -out $out.crt 2>/dev/null
+done
 # keygen runs where the containers do: this script is for linux/amd64 (CI).
 $W/bridge keygen --key $W/oidc.key --salt $W/salt
 fp=$(openssl x509 -in $W/fed.crt -outform der | openssl dgst -sha256 -r | cut -d' ' -f1 | tr a-f A-F)
@@ -35,10 +43,10 @@ subject_salt_file = "/work/salt"
 saml {
   key_file             = "/work/sp.key"
   cert_file            = "/work/sp.crt"
-  metadata_url         = "http://idp:8080/federation.xml"
+  metadata_url         = "https://idp:8443/federation.xml"
   metadata_cert_file   = "/work/fed.crt"
   metadata_fingerprint = "$fp"
-  idps                 = ["http://idp:8080/metadata"]
+  idps                 = ["https://idp:8443/metadata"]
   names                = { en = "Bridge" }
   technical_contact    = "noc@example.org"
 }
@@ -69,7 +77,7 @@ cat > $W/plan.json <<JSON
     {
       "match": "https://bridge:8443/authorize*",
       "tasks": [
-        { "task": "Post the IdP's answer", "optional": true, "match": "http://idp:8080/sso*",
+        { "task": "Post the IdP's answer", "optional": true, "match": "https://idp:8443/sso*",
           "commands": [ [ "click", "id", "SAMLSubmitButton", "optional" ] ] },
         { "task": "Verify Complete", "match": "*/test/*/callback*",
           "commands": [ [ "wait", "id", "submission_complete", 10 ] ] }
@@ -81,4 +89,11 @@ JSON
 
 docker compose up -d
 trap 'docker compose logs --no-color bridge idp > $W/containers.log 2>&1 || true; docker compose down -v >/dev/null 2>&1 || true' EXIT
+# The plan only means something against a bridge that answers.
+for i in $(seq 1 60); do
+  curl -skf https://localhost:9443/.well-known/openid-configuration >/dev/null && break
+  [ $i = 60 ] && { echo "the bridge never answered discovery"; exit 1; }
+  sleep 2
+done
+echo "the bridge answers discovery"
 $W/driver -config $W/plan.json -expected expected.txt
