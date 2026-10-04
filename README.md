@@ -139,6 +139,11 @@ together with RENATER's discovery service (which cannot be restricted).
   person is disabled here the next NFS call, the SFTP session already open and
   a new SFTP login are all refused within seconds -- through the CRL and the
   KRL go-fileshare fetches from this provider.
+- The **relying party is also [openid-client](https://github.com/panva/openid-client)**,
+  an OpenID Certified one, over TLS: discovery's issuer, the RFC 9207 `iss`
+  parameter, the ID token, userinfo against its `sub`, the access token as an
+  RFC 9068 resource server checks it (`validateJwtAccessToken`), refresh
+  rotation and reuse, and the device grant (`openidclient_test.go`).
 - The **ACME CA is [Pebble](https://github.com/letsencrypt/pebble)**, Let's
   Encrypt's test CA, with External Account Binding required: it refuses a
   wrong MAC key, validates tls-alpn-01 against the listener itself, and the
