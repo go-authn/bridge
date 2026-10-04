@@ -378,7 +378,7 @@ func (s *server) enqueueKey(streamID string, cfg *ssf.StreamConfig, subject map[
 }
 
 // broadcast sends a session-revoked to every stream that asked for it.
-func (s *server) broadcast(subject map[string]any, at time.Time, reason string, extra map[string]any) {
+func (s *server) broadcast(subjectsFor func(owner string) []map[string]any, at time.Time, reason string, extra map[string]any) {
 	if s.cfg.SSF == nil {
 		return
 	}
@@ -386,31 +386,66 @@ func (s *server) broadcast(subject map[string]any, at time.Time, reason string, 
 		"event_timestamp":   at.Unix(),
 		"initiating_entity": "admin",
 	}
-	if reason != "" {
-		body["reason_admin"] = map[string]string{"en": reason}
+	// CAEP Interoperability Profile 3.1: reason_admin "MUST be populated
+	// with a non-empty object" -- an operator who gave no reason still
+	// revoked something.
+	if reason == "" {
+		reason = "revoked by an operator of the provider"
 	}
+	body["reason_admin"] = map[string]string{"en": reason}
 	for k, v := range extra {
 		body[k] = v
 	}
 	type target struct {
-		id  string
-		cfg *ssf.StreamConfig
+		id    string
+		owner string
+		cfg   *ssf.StreamConfig
 	}
 	var targets []target
 	s.ssfStreams.each(func(id string, st storedStream) {
 		// Paused streams too: their events wait until they are enabled.
 		if st.Status != ssf.StreamStatusDisabled && slices.Contains(st.Config.EventsDelivered, eventSessionRevoked) {
-			targets = append(targets, target{id, st.Config})
+			targets = append(targets, target{id, st.Owner, st.Config})
 		}
 	})
 	for _, tg := range targets {
-		if err := s.enqueue(tg.id, tg.cfg, subject, eventSessionRevoked, body); err != nil {
-			s.logf("ssf: stream %s: %v", tg.id, err)
+		for _, subject := range subjectsFor(tg.owner) {
+			if err := s.enqueue(tg.id, tg.cfg, subject, eventSessionRevoked, body); err != nil {
+				s.logf("ssf: stream %s: %v", tg.id, err)
+			}
 		}
 	}
 	if len(targets) > 0 {
-		s.logf("ssf: session-revoked for %v on %d streams", subject, len(targets))
+		s.logf("ssf: session-revoked on %d streams", len(targets))
 	}
+}
+
+// personSubjects names a person for each receiver as it asked
+// (ssf_subject_format): their account for "aliases"; for "iss_sub", the
+// issuer and the public sub of each stable identity known under them --
+// and, when none is known, their account anyway: a revocation that does not
+// arrive fails open, and one in an unexpected format still says who.
+func (s *server) personSubjects(username string, subjects []string) func(owner string) []map[string]any {
+	return func(owner string) []map[string]any {
+		c, ok := s.cfg.client(owner)
+		if !ok || c.SSFSubjectFormat != "iss_sub" || len(subjects) == 0 {
+			if username == "" {
+				return nil
+			}
+			return []map[string]any{accountSubject(username)}
+		}
+		public := &clientBlock{Subject: "public"}
+		out := make([]map[string]any, 0, len(subjects))
+		for _, sj := range subjects {
+			out = append(out, map[string]any{"format": "iss_sub", "iss": s.cfg.Issuer, "sub": (&person{subject: sj}).sub(s.cfg.salt, public)})
+		}
+		return out
+	}
+}
+
+// only is one subject for every receiver.
+func only(subject map[string]any) func(string) []map[string]any {
+	return func(string) []map[string]any { return []map[string]any{subject} }
 }
 
 // accountSubject is a person as "aliases" with their account.

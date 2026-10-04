@@ -314,7 +314,7 @@ func (s *server) disableIdP(entityID, reason, by string, until time.Time) (disab
 	s.logf("disabled IdP %s by %s until %s: %s", entityID, by, untilText(until), reason)
 	r, err := s.revokeIdP(entityID)
 	for _, u := range people {
-		s.broadcast(accountSubject(u), now, reason, nil)
+		s.broadcast(s.personSubjects(u, s.subjectsOf(u)), now, reason, nil)
 	}
 	// And everybody in its scopes, whom this provider has no trace of.
 	var scopes []string
@@ -324,7 +324,7 @@ func (s *server) disableIdP(entityID, reason, by string, until time.Time) (disab
 		}
 	}
 	if len(scopes) > 0 {
-		s.broadcast(map[string]any{"tenant": map[string]any{"format": "opaque", "id": entityID}}, now, reason, map[string]any{"scopes": scopes})
+		s.broadcast(only(map[string]any{"tenant": map[string]any{"format": "opaque", "id": entityID}}), now, reason, map[string]any{"scopes": scopes})
 	}
 	return e, r, err
 }

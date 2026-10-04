@@ -294,6 +294,13 @@ type clientBlock struct {
 	// scope with client credentials, and poll the SSF transmitter.
 	SSFReceiver bool `hcl:"ssf_receiver,optional"`
 
+	// SSFSubjectFormat is how this receiver's events name the person:
+	// "aliases" (the default), their account, acct:username, which is what
+	// go-fileshare matches; or "iss_sub", this provider's issuer and the
+	// public sub, one of the two formats the CAEP Interoperability Profile
+	// (2.5) has transmitters send.
+	SSFSubjectFormat string `hcl:"ssf_subject_format,optional"`
+
 	// AppPasswords lets tokens of this client, with the "app_password"
 	// scope, set the person's application password.
 	AppPasswords bool `hcl:"app_passwords,optional"`
@@ -626,6 +633,13 @@ func (c *config) check() error {
 			}
 		default:
 			return fmt.Errorf("client %q: pkce = %q: \"required\" or \"or_nonce\"", cl.ID, cl.PKCE)
+		}
+		switch cl.SSFSubjectFormat {
+		case "":
+			cl.SSFSubjectFormat = "aliases"
+		case "aliases", "iss_sub":
+		default:
+			return fmt.Errorf("client %q: ssf_subject_format = %q: \"aliases\" or \"iss_sub\"", cl.ID, cl.SSFSubjectFormat)
 		}
 		if cl.SSFReceiver && (c.SSF == nil || cl.SecretFile == "") {
 			return fmt.Errorf("client %q: ssf_receiver needs an ssf block and a secret_file", cl.ID)
