@@ -39,7 +39,7 @@ jobs:
       # accept, and refuse once the person is disabled (interop_test.go).
       - name: fileshare
         if: matrix.os == 'ubuntu-latest'
-        run: go install github.com/go-fileshare/fileshare@v0.15.0
+        run: go install github.com/go-fileshare/fileshare@v0.16.3
       # openid-client, an OpenID Certified relying party, as this provider's
       # client (openidclient_test.go); pinned by testdata/openid-client's lock.
       - uses: actions/setup-node@v7
@@ -123,7 +123,7 @@ jobs:
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
-        run: go install github.com/go-fileshare/fileshare@v0.15.0
+        run: go install github.com/go-fileshare/fileshare@v0.16.3
       - uses: actions/setup-node@v7
         with: { node-version: lts/* }
       - name: openid-client
@@ -148,7 +148,7 @@ jobs:
       - name: xmlsec1
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
-        run: go install github.com/go-fileshare/fileshare@v0.15.0
+        run: go install github.com/go-fileshare/fileshare@v0.16.3
       - uses: actions/setup-node@v7
         with: { node-version: lts/* }
       - name: openid-client

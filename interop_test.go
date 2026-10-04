@@ -51,7 +51,7 @@ func fileshareBin(t *testing.T) string {
 		}
 	}
 	if os.Getenv("BRIDGE_REQUIRE_JUDGE") != "" {
-		t.Fatal("fileshare is required here (go install github.com/go-fileshare/fileshare@v0.15.0)")
+		t.Fatal("fileshare is required here (go install github.com/go-fileshare/fileshare@v0.16.3)")
 	}
 	t.Skip("fileshare is not installed")
 	return ""
