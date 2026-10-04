@@ -133,6 +133,16 @@ func (s *certStore) add(c issuedCert, now time.Time) error {
 // revoke marks the unexpired certificates of whoever match says, and saves.
 // It says how many it marked.
 func (s *certStore) revoke(match func(principal, idp string) bool, now time.Time) (int, error) {
+	return s.revokeWhere(func(c issuedCert) bool { return match(c.Principal, c.IdP) }, now)
+}
+
+// revokeOne marks one certificate, by its kind and serial.
+func (s *certStore) revokeOne(kind, serial string, now time.Time) error {
+	_, err := s.revokeWhere(func(c issuedCert) bool { return c.Kind == kind && c.Serial == serial }, now)
+	return err
+}
+
+func (s *certStore) revokeWhere(match func(issuedCert) bool, now time.Time) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.path == "" {
@@ -141,7 +151,7 @@ func (s *certStore) revoke(match func(principal, idp string) bool, now time.Time
 	s.pruneLocked(now)
 	var marked []int
 	for i, c := range s.Certs {
-		if c.Revoked.IsZero() && match(c.Principal, c.IdP) {
+		if c.Revoked.IsZero() && match(c) {
 			marked = append(marked, i)
 		}
 	}
