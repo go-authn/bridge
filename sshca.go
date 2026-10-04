@@ -132,6 +132,30 @@ func notAddressedHere(w http.ResponseWriter) {
 	http.Error(w, "the token is addressed to another audience", http.StatusUnauthorized)
 }
 
+// withdrawn takes back a certificate just recorded when its person was
+// disabled, or its token revoked, while it was being made, and says so.
+//
+// ⛔ The token is checked when the request starts and the body is read after,
+// at whatever pace the client sends it: a request held open across a
+// DisablePerson used to come back with a fresh certificate that no KRL or CRL
+// listed -- recorded after the revocation had already run, and recorded with
+// no IdP, since the token it read the IdP from was gone, so a later DisableIdP
+// missed it too. The disabling is recorded before anything is revoked, so
+// either its revocation saw this certificate or this sees the disabling, as
+// application passwords already do. Found by a security review.
+func (s *server) withdrawn(w http.ResponseWriter, jti, user, kind, serial string, now time.Time) bool {
+	it, live := s.issued.get(jti)
+	if live && s.refused(&person{username: user, idp: it.idp}) == "" {
+		return false
+	}
+	if err := s.certs.revokeOne(kind, serial, now); err != nil {
+		s.logf("%s: withdrawing certificate %s: %v", kind, serial, err)
+	}
+	w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+	http.Error(w, "the token is not valid", http.StatusUnauthorized)
+	return true
+}
+
 func (s *server) bearerClaims(r *http.Request) (map[string]any, error) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
@@ -261,6 +285,9 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 	if err := s.certs.add(issuedCert{Kind: "ssh", Serial: serial.String(), KeyID: cert.KeyId, Principal: user, IdP: it.idp, NotAfter: until}, now); err != nil {
 		s.logf("ssh: recording the certificate: %v", err)
 		http.Error(w, "the certificate could not be recorded, so it is not issued", http.StatusInternalServerError)
+		return
+	}
+	if s.withdrawn(w, jti, user, "ssh", serial.String(), now) {
 		return
 	}
 	s.counters.inc("bridge_ssh_certificates_total", "")

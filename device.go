@@ -24,7 +24,7 @@ const (
 	// userCodeAlphabet is RFC 8628 6.1's: no vowels (no words), no digits,
 	// one case -- typed on a phone without changing keyboards.
 	userCodeAlphabet = "BCDFGHJKLMNPQRSTVWXZ"
-	// codeAttempts is how many wrong codes one address may type per
+	// codeAttempts is how many wrong codes one host may type per
 	// deviceLifetime. 20^8 codes and ten tries in ten minutes is a chance
 	// of about 4e-10 of guessing one (RFC 8628 5.1).
 	codeAttempts = 10
@@ -171,18 +171,27 @@ func (a *attempts) sweepLocked() {
 // ⛔ Only WRONG codes count. Counting every code locked out a whole
 // building behind one NAT address after ten people had connected a device
 // in ten minutes, and guarding against nobody: a right code is not a guess.
+//
+// ⛔ Counted per HOST, not per address: the buckets are limitKeys', a /64
+// for IPv6 and the address for IPv4, and coarseFactor times as many for the
+// /48 or /24 around it. Counted per address, one host's /64 typed 2000 wrong
+// codes in a lifetime and none was refused, while this said ten (security
+// review; RFC 8628 5.1).
 func (a *attempts) blocked(addr string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sweepLocked()
-	return len(a.recentLocked(addr)) >= codeAttempts
+	fine, coarse := limitKeys(addr)
+	return len(a.recentLocked(fine)) >= codeAttempts || len(a.recentLocked(coarse)) >= codeAttempts*coarseFactor
 }
 
-// failed counts a wrong code from addr.
+// failed counts a wrong code from addr, against its host and its network.
 func (a *attempts) failed(addr string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.m[addr] = append(a.recentLocked(addr), a.now())
+	fine, coarse := limitKeys(addr)
+	a.m[fine] = append(a.recentLocked(fine), a.now())
+	a.m[coarse] = append(a.recentLocked(coarse), a.now())
 }
 
 func (a *attempts) recentLocked(addr string) []time.Time {

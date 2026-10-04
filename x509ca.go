@@ -311,6 +311,9 @@ func (s *server) x509Certificate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the certificate could not be recorded, so it is not issued", http.StatusInternalServerError)
 		return
 	}
+	if s.withdrawn(w, jti, user, "x509", serial.String(), now) {
+		return
+	}
 	s.counters.inc("bridge_x509_certificates_total", "")
 	s.logf("x509: issued an NFS certificate for %s until %s", user, until.UTC().Format(time.RFC3339))
 	w.Header().Set("Content-Type", "application/x-pem-file")

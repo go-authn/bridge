@@ -195,7 +195,7 @@ golang.org/x/oauth2's device client, not one written here.
 
 | | |
 |---|---|
-| **user codes** | eight letters from RFC 8628's alphabet (no vowels, no digits), ten tries per address per ten minutes |
+| **user codes** | eight letters from RFC 8628's alphabet (no vowels, no digits); ten wrong codes per host per ten minutes, where an IPv6 host is its /64, and a hundred for the /48 or IPv4 /24 around it (before v0.16.6, per address, so one /64 had no limit) |
 | **the confirmation page** | names the application and says to refuse a code somebody else sent: RFC 8628 5.4's remote phishing, where the ATTACKER's device gets the token |
 | **polling** | `slow_down` adds five seconds for good; a device code buys one set of tokens |
 | **refresh tokens** | rotate (RFC 9700 4.14.2) inside a family whose end is fixed at the login; a retired one used again revokes the family and the access tokens it bought |
@@ -263,7 +263,11 @@ in PEM, and in the DER the kernel keyring takes, with the mount command.
   different numbers), its `ETag` the content's. An issue is never dated
   before the one it replaces, even if the clock steps back. Disabling or revoking a person lists their certificates there until
   they expire; enabling them again takes nothing off. openssl verifies the
-  certificates and says `revoked` once they are listed.
+  certificates and says `revoked` once they are listed. A certificate request
+  held open across a disabling is answered 401, and what it had already recorded
+  is revoked. The token is checked when the request starts and the body read
+  after, so before v0.16.6 such a request came back with a certificate that no
+  list named.
 
 ⛔ **A certificate names the machine, not the user of it.** RFC 9289: the
 server 'cannot utilize the remote TLS peer identity to authenticate RPC
