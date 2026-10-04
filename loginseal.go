@@ -127,6 +127,11 @@ func (s *server) openLogin(v string) (string, *login, time.Time, error) {
 	if !ok {
 		return "", nil, time.Time{}, errLoginExpired
 	}
+	// What the configuration allowed when the login started must still be
+	// allowed when it ends -- a quarter of an hour later, or after a restart.
+	if sl.RedirectURI != "" && !redirectAllowed(client, sl.RedirectURI) {
+		return "", nil, time.Time{}, errLoginExpired
+	}
 	return sl.ID, &login{
 		kind: sl.Kind, deviceCode: sl.DeviceCode, client: client, redirectURI: sl.RedirectURI,
 		state: sl.State, nonce: sl.Nonce, challenge: sl.Challenge, scopes: sl.Scopes,

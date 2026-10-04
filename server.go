@@ -45,6 +45,11 @@ type server struct {
 	// Written only after a signed response is accepted, so not by anybody
 	// anonymous.
 	usedLogins *ttl[bool]
+	// assertions are the IDs of the SAML assertions accepted, until they
+	// expire: go-authn/saml's replay cache, kept in the state database when
+	// there is one, so that a restart or another instance does not accept the
+	// same assertion again (saml-profiles 4.1.4.5).
+	assertions *ttl[bool]
 	logins     loginWindow
 	// codes not yet exchanged.
 	codes *ttl[*grant]
@@ -142,6 +147,8 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	now := func() time.Time { return s.now() }
 	// What anonymous requests fill is capped (store.go).
 	s.usedLogins = newTTL[bool](now).capped(maxPending).evicting()
+	s.assertions = newTTL[bool](now)
+	s.sp.Replay = ttlReplay{s.assertions}
 	s.limiter = newRateLimiter(*cfg.RequestsPerMinute, now)
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)

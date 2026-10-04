@@ -40,6 +40,12 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// And the IdP is still one people may log in through: saml { idps } may
+	// have changed since the login started, or the IdP been disabled.
+	if !s.allowedIdP(l.pending.IdP) {
+		s.page(w, http.StatusBadRequest, "That institution can no longer be used to log in here.")
+		return
+	}
 	a, err := s.sp.Accept(r.PostForm.Get("SAMLResponse"), l.pending)
 	if err != nil {
 		var se *saml.StatusError

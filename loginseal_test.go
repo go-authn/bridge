@@ -181,3 +181,49 @@ func TestTwoAnswersAtOnceGetOneCode(t *testing.T) {
 		}
 	}
 }
+
+// A login survives a restart, and so must the fact that it was answered:
+// with a state database, the kept cookie and the IdP's response replayed
+// after a restart are refused. The review got a second code that way --
+// usedLogins and saml's replay cache lived in memory (saml-profiles
+// 4.1.4.5: a bearer assertion is used once).
+func TestAnAnsweredLoginStaysAnsweredAcrossARestart(t *testing.T) {
+	f, _ := stateFixture(t)
+	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect)
+	b := newBrowser(t)
+	reqID, relay := f.startTo(t, b, r.authURL())
+	kept := b.cookieOf(f.s.cfg.Issuer)
+	resp := f.respond(reqID, alice)
+	if back := location(t, b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{"SAMLResponse": {resp}, "RelayState": {relay}})); back.Query().Get("code") == "" {
+		t.Fatalf("the first answer: %s", back)
+	}
+	f.restart(t)
+	b.setCookie(f.s.cfg.Issuer, kept)
+	if res := b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{"SAMLResponse": {resp}, "RelayState": {relay}}); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("the same answer replayed after a restart: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+}
+
+// A sealed login is held to the configuration in force when it ends: a
+// redirect URI removed from its client, or an IdP removed from the allowed
+// list, while it was at the IdP, is not honoured.
+func TestASealedLoginIsHeldToTheConfigurationNow(t *testing.T) {
+	f := newFixture(t, "")
+	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect)
+	b := newBrowser(t)
+	reqID, relay := f.startTo(t, b, r.authURL())
+	c, _ := f.s.cfg.client("web")
+	saved := c.RedirectURIs
+	c.RedirectURIs = []string{"https://elsewhere.example/cb"}
+	if res := b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{"SAMLResponse": {f.respond(reqID, alice)}, "RelayState": {relay}}); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("a redirect URI removed meanwhile: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+	c.RedirectURIs = saved
+
+	b = newBrowser(t)
+	reqID, relay = f.startTo(t, b, r.authURL())
+	f.s.cfg.SAML.IdPs = []string{"https://another-idp.example/idp"}
+	if res := b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{"SAMLResponse": {f.respond(reqID, alice)}, "RelayState": {relay}}); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("an IdP removed meanwhile: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+}

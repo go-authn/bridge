@@ -473,7 +473,11 @@ it keeps, a restart between the application and the IdP's answer costs the
 person nothing, and an authorization request too large to carry (state,
 nonce, redirect URI together past what a cookie holds) is refused at the
 start. Once an IdP has answered for a login, its handle is remembered until
-the login would have expired, so it is answered once.
+the login would have expired, so it is answered once; with a `state` block,
+that and the IDs of the assertions accepted are written there too, so that a
+restart, or another instance, does not accept the same answer twice. A login
+ends against the configuration in force then: a redirect URI or an IdP removed
+meanwhile is not honoured.
 
 - A refresh token is kept as its **SHA-256**, never as itself: whoever reads
   the database cannot use what is in it (Ory Hydra's fosite keeps a signature
@@ -575,7 +579,10 @@ A person is disabled as who they are: usernames compare without case (eppn,
 uid, mail and subject-id all compare so), the entry records the stable
 identity of everybody known under that name, so another spelling from their
 IdP does not let them back in, and a person whose IdP releases no username
-is disabled by the `sub` a relying party knows them by.
+is disabled by the `sub` a relying party knows them by -- public or pairwise,
+matched at every login, whether or not anything of theirs is still live here.
+Their application password and their SSF events reach every spelling of their
+name the provider handed out.
 
 Disabling is kept in a file, and refused without one -- somebody disabled
 until the next restart would be let back in by the next deployment:
