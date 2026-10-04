@@ -3,10 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"sort"
@@ -582,13 +584,26 @@ var (
 	pendingVerify = map[string]string{}
 )
 
-// noContentWhereSSFSaysSo answers 204 No Content where SSF 1.0 says the
+// noContentWhereSSFSaysSo makes go-ssf v0.1.1 answer as SSF 1.0 says.
+//
+// The stream: SSF 1.0 puts stream_id in the JSON BODY of a verification
+// request (8.1.4.2) and of a subject added or removed (8.1.3.2, 8.1.3.3);
+// go-ssf reads it from the query only, and answered a request as the spec
+// writes it 400 "stream_id query parameter is required" -- every receiver
+// that follows the spec, the OpenID Foundation's among them. The body's
+// stream_id is copied into the query when the query has none.
+//
+// The answer: 204 No Content where SSF 1.0 says the
 // transmitter answers with an empty 204 -- a verification request (8.1.4.2)
 // and a subject removed (8.1.3.3) -- and go-ssf v0.1.1 answers 200 with an
 // empty JSON object. The OpenID Foundation's CAEP Interop transmitter plan
 // failed four modules on it. go-ssf's own client takes any 2xx.
 func noContentWhereSSFSaysSo(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && (r.URL.Path == transmitter.DefaultVerificationPath ||
+			r.URL.Path == transmitter.DefaultAddSubjectPath || r.URL.Path == transmitter.DefaultRemoveSubjectPath) {
+			streamFromBody(r)
+		}
 		if r.Method == http.MethodPost && (r.URL.Path == transmitter.DefaultVerificationPath || r.URL.Path == transmitter.DefaultRemoveSubjectPath) {
 			w = &noContent{ResponseWriter: w}
 		}
@@ -625,4 +640,27 @@ func (n *noContent) Write(b []byte) (int, error) {
 		return len(b), nil
 	}
 	return n.ResponseWriter.Write(b)
+}
+
+// streamFromBody copies the body's stream_id into the query, where go-ssf
+// looks for it, unless the query already names one. The body is read once,
+// within the server's limit, and handed on whole.
+func streamFromBody(r *http.Request) {
+	if r.URL.Query().Has("stream_id") || r.Body == nil {
+		return
+	}
+	b, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(b))
+	if err != nil {
+		return
+	}
+	var req struct {
+		StreamID string `json:"stream_id"`
+	}
+	if json.Unmarshal(b, &req) != nil || req.StreamID == "" {
+		return
+	}
+	q := r.URL.Query()
+	q.Set("stream_id", req.StreamID)
+	r.URL.RawQuery = q.Encode()
 }
