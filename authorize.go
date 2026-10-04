@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,11 +122,22 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	opts.IsPassive = slices.Contains(prompts, "none")
 	opts.ForceAuthn = slices.Contains(prompts, "login")
-	// max_age: the IdP cannot be asked how old its session is, only to
-	// make a new one. So any max_age asks for a fresh authentication, and
-	// auth_time says when it happened.
-	if q.Get("max_age") != "" {
-		opts.ForceAuthn = true
+	// max_age (OIDC Core 3.1.2.1): re-authenticate only "if the elapsed time
+	// is greater than this value". The IdP cannot be asked how old its
+	// session is, but its answer says -- AuthnInstant -- so the login goes
+	// without ForceAuthn, and the ACS sends the person back with it when
+	// the authentication is older (reauthenticate). 0 is prompt=login.
+	maxAge := -1
+	if v := q.Get("max_age"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			fail("invalid_request", "max_age is a number of seconds")
+			return
+		}
+		maxAge = n
+		if n == 0 {
+			opts.ForceAuthn = true
+		}
 	}
 	opts.AuthnContext = strings.Fields(q.Get("acr_values"))
 
@@ -138,6 +150,7 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		challenge:   q.Get("code_challenge"),
 		scopes:      scopes,
 		options:     opts,
+		maxAge:      maxAge,
 	}
 	s.startLogin(w, r, l)
 }

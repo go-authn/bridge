@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-authn/saml"
 )
@@ -61,6 +62,10 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 	if err := s.usedLogins.putNew(id, true, l.expires); err != nil {
 		s.logf("acs: a second response for a login already answered")
 		s.page(w, http.StatusBadRequest, "This login has already been answered; start again from the application.")
+		return
+	}
+	if l.maxAge > 0 && !l.options.ForceAuthn && s.now().Sub(a.AuthnInstant) > time.Duration(l.maxAge)*time.Second {
+		s.reauthenticate(w, r, l, a.IdP.EntityID, s.now().Sub(a.AuthnInstant))
 		return
 	}
 	who, err := newPerson(a, s.cfg.Claims)
@@ -119,4 +124,18 @@ func orUnnamed(s string) string {
 		return "(no username)"
 	}
 	return s
+}
+
+// reauthenticate sends the person back to the IdP that just answered, with
+// ForceAuthn, because its authentication is older than the client's
+// max_age: OIDC Core 3.1.2.1 has the provider "actively re-authenticate"
+// then, and only then. A new login, under a new handle: the one answered is
+// spent.
+func (s *server) reauthenticate(w http.ResponseWriter, r *http.Request, l *login, entityID string, age time.Duration) {
+	s.logf("acs: %s authenticated the person %s ago, past max_age=%ds: asking again, with ForceAuthn", entityID, age.Round(time.Second), l.maxAge)
+	l.options.ForceAuthn = true
+	l.started = false
+	l.expires = s.now().Add(loginLifetime)
+	s.logins.add(s.now(), 1, 0)
+	s.toIdP(w, r, token(), l, entityID)
 }
