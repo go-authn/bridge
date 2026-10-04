@@ -150,6 +150,9 @@ together with RENATER's discovery service (which cannot be restricted).
   `conformance/expected.txt` -- the two deliberate refusals: a request with
   neither PKCE nor a nonce, and `acr_values` an IdP did not honour. The
   workflow fails on any other, and on a listed one that starts passing.
+  The same run executes its `openid-ssf-transmitter-caep-test-plan` (poll
+  delivery) against the Shared Signals transmitter, the CAEP event triggered
+  through the admin API as an operator would; every module passes.
 - The **relying party is also [openid-client](https://github.com/panva/openid-client)**,
   an OpenID Certified one, over TLS: discovery's issuer, the RFC 9207 `iss`
   parameter, the ID token, userinfo against its `sub`, the access token as an
