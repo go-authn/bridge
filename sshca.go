@@ -5,6 +5,7 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -282,8 +283,9 @@ func strongEnough(k ssh.PublicKey) error {
 		if !ok {
 			return errors.New("an RSA key that cannot be read")
 		}
-		type sized interface{ Size() int }
-		if s, ok := ck.CryptoPublicKey().(sized); ok && s.Size()*8 >= 2048 {
+		// The modulus's bits, as x509ca.go and keys.go count them: Size() is
+		// the length in BYTES, rounded up, so a 2041-bit key read as 2048.
+		if pk, ok := ck.CryptoPublicKey().(*rsa.PublicKey); ok && pk.N.BitLen() >= 2048 {
 			return nil
 		}
 		return errors.New("an RSA key under 2048 bits")
