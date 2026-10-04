@@ -336,7 +336,7 @@ func (s *server) x509CRL(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	l, err := s.issueList("x509", func(revoked []issuedCert, version uint64, now time.Time) ([]byte, []byte, error) {
+	l, err := s.issueList("x509", func(revoked []issuedCert, _, number uint64, now time.Time) ([]byte, []byte, error) {
 		entries := make([]x509.RevocationListEntry, 0, len(revoked))
 		for _, c := range revoked {
 			n, ok := new(big.Int).SetString(c.Serial, 10)
@@ -346,7 +346,7 @@ func (s *server) x509CRL(w http.ResponseWriter, r *http.Request) {
 			entries = append(entries, x509.RevocationListEntry{SerialNumber: n, RevocationTime: c.Revoked})
 		}
 		der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
-			Number:                    new(big.Int).SetUint64(version),
+			Number:                    new(big.Int).SetUint64(number),
 			ThisUpdate:                now,
 			NextUpdate:                now.Add(listValidity),
 			RevokedCertificateEntries: entries,

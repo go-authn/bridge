@@ -31,6 +31,7 @@ type issuedList struct {
 	raw, sig []byte // sig: a KRL's armored SSHSIG; nil for a CRL
 	tag      string
 	version  uint64
+	number   uint64 // the CRL Number it was issued with
 	issued   time.Time
 }
 
@@ -42,21 +43,44 @@ type listCache struct {
 // issueList returns the list of this kind currently issued, making a new one
 // when something was revoked since, or when the one held is half way to
 // its expiry.
-func (s *server) issueList(kind string, make func(revoked []issuedCert, version uint64, now time.Time) (raw, sig []byte, err error)) (*issuedList, error) {
+//
+// Two rules a reader holds an issuer to (found by an adversarial review of
+// v0.10.0):
+//
+//   - An issue is never dated before the one it replaces. A reader refuses
+//     the same version issued earlier as a rollback, so a clock stepped back
+//     re-issued lists the fleet would refuse until they lapsed. The issue
+//     time is the later of now and the last issue's.
+//   - Two CRLs with different thisUpdate have different numbers (RFC 5280
+//     5.2.3: "if the this update field ... in the two CRLs are not
+//     identical, the CRL numbers MUST be different"). The number was the
+//     revocation counter, which a re-issue keeps. It is now the later of
+//     the last number + 1 and the issue time in milliseconds: rising at
+//     every issue, above every counter value published before, and above
+//     what a restart left behind, with nothing stored.
+func (s *server) issueList(kind string, make func(revoked []issuedCert, version, number uint64, now time.Time) (raw, sig []byte, err error)) (*issuedList, error) {
 	now := s.now()
 	revoked, version := s.certs.revoked(kind, now)
 	s.revLists.mu.Lock()
 	defer s.revLists.mu.Unlock()
-	if l := s.revLists.lists[kind]; l != nil && l.version == version &&
-		!now.Before(l.issued) && now.Before(l.issued.Add(listValidity/2)) {
-		return l, nil
+	last := s.revLists.lists[kind]
+	if last != nil && now.Before(last.issued) {
+		now = last.issued
 	}
-	raw, sig, err := make(revoked, version, now)
+	if last != nil && last.version == version && now.Before(last.issued.Add(listValidity/2)) {
+		return last, nil
+	}
+	number := uint64(now.UnixMilli())
+	if last != nil && number <= last.number {
+		number = last.number + 1
+	}
+	raw, sig, err := make(revoked, version, number, now)
 	if err != nil {
 		return nil, err
 	}
 	h := sha256.Sum256(raw)
-	l := &issuedList{raw: raw, sig: sig, tag: `"` + hex.EncodeToString(h[:16]) + `"`, version: version, issued: now}
+	l := &issuedList{raw: raw, sig: sig, tag: `"` + hex.EncodeToString(h[:16]) + `"`, version: version,
+		number: number, issued: now}
 	if s.revLists.lists == nil {
 		s.revLists.lists = map[string]*issuedList{}
 	}
