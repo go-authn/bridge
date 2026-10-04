@@ -408,6 +408,7 @@ HARICA sends the header is not known here; with this, it does not matter.
 ⛔ The SAML key and certificate (`saml { key_file cert_file }`) are not this
 certificate and never change with it: they are in the federation's metadata,
 and every IdP encrypts to them.
+
 ## ssh-oidc (KIT: oidc-agent, mccli, motley-cue, pam-ssh-oidc)
 
 [ssh-oidc](https://ssh-oidc-doc.data.kit.edu/) logs people into SSH with an
