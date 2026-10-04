@@ -335,6 +335,9 @@ type assertionOpts struct {
 	// answering in place of the university's.
 	issuer string
 	signer *party
+	// authnAt, when set, is the AuthnInstant: when the IdP says the person
+	// authenticated (now by default).
+	authnAt time.Time
 }
 
 // respond has the IdP (xmlsec1) answer a request: the assertion encrypted
@@ -349,6 +352,10 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 	acs := f.s.cfg.Issuer + "/saml/acs"
 	now := time.Now().UTC()
 	ts, later := now.Add(-time.Second).Format(time.RFC3339), now.Add(5*time.Minute).Format(time.RFC3339)
+	authnAt := ts
+	if !o.authnAt.IsZero() {
+		authnAt = o.authnAt.UTC().Format(time.RFC3339)
+	}
 	if o.acr == "" {
 		o.acr = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
 	}
@@ -369,7 +376,7 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 			`<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">t1</saml:NameID>` +
 			`<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData Recipient="` + acs + `" InResponseTo="` + requestID + `" NotOnOrAfter="` + later + `"/></saml:SubjectConfirmation></saml:Subject>` +
 			`<saml:Conditions NotBefore="` + ts + `" NotOnOrAfter="` + later + `"><saml:AudienceRestriction><saml:Audience>` + f.s.cfg.SAML.EntityID + `</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
-			`<saml:AuthnStatement AuthnInstant="` + ts + `" SessionIndex="_s1"><saml:AuthnContext><saml:AuthnContextClassRef>` + o.acr + `</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>` +
+			`<saml:AuthnStatement AuthnInstant="` + authnAt + `" SessionIndex="_s1"><saml:AuthnContext><saml:AuthnContextClassRef>` + o.acr + `</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>` +
 			`<saml:AttributeStatement>` +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.6", o.eppn) +
 			attr("urn:oasis:names:tc:SAML:attribute:subject-id", o.subjectID) +

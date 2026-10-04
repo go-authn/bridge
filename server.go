@@ -96,6 +96,8 @@ type login struct {
 
 	pending saml.Pending
 	started bool
+	// maxAge is the request's max_age in seconds, -1 when none (authorize.go).
+	maxAge int
 	// expires is when the login, sealed in its cookie, stops opening.
 	expires time.Time
 }

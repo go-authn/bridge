@@ -55,6 +55,7 @@ type sealedLogin struct {
 	Options     saml.Options `json:"p"`
 	Pending     saml.Pending `json:"q"`
 	Started     bool         `json:"t,omitempty"`
+	MaxAge      *int         `json:"m,omitempty"`
 }
 
 // loginAEAD is the cipher logins are sealed with.
@@ -76,7 +77,7 @@ func (s *server) sealLogin(id string, l *login, expires time.Time) (string, erro
 		ID: id, Expires: expires.Unix(), Kind: l.kind, DeviceCode: l.deviceCode,
 		Client: l.client.ID, RedirectURI: l.redirectURI, State: l.state, Nonce: l.nonce,
 		Challenge: l.challenge, Scopes: l.scopes, Options: l.options, Pending: l.pending,
-		Started: l.started,
+		Started: l.started, MaxAge: maxAgePtr(l.maxAge),
 	})
 	if err != nil {
 		return "", err
@@ -130,6 +131,7 @@ func (s *server) openLogin(v string) (string, *login, time.Time, error) {
 		kind: sl.Kind, deviceCode: sl.DeviceCode, client: client, redirectURI: sl.RedirectURI,
 		state: sl.State, nonce: sl.Nonce, challenge: sl.Challenge, scopes: sl.Scopes,
 		options: sl.Options, pending: sl.Pending, started: sl.Started,
+		maxAge: maxAgeOf(sl.MaxAge),
 	}, expires, nil
 }
 
@@ -175,4 +177,20 @@ func (lw *loginWindow) inProgress(now time.Time) int64 {
 		}
 	}
 	return max(n, 0)
+}
+
+// maxAgePtr and maxAgeOf carry max_age through the cookie: absent is -1,
+// which a zero value could not say (0 is a meaning of its own).
+func maxAgePtr(n int) *int {
+	if n < 0 {
+		return nil
+	}
+	return &n
+}
+
+func maxAgeOf(p *int) int {
+	if p == nil {
+		return -1
+	}
+	return *p
 }
