@@ -181,13 +181,13 @@ func (s *server) redirectError(w http.ResponseWriter, r *http.Request, redirect,
 // or straight to it when there is only one.
 func (s *server) startLogin(w http.ResponseWriter, r *http.Request, l *login) {
 	id := token()
-	if err := s.logins.put(id, l, s.now().Add(loginLifetime)); err != nil {
-		s.page(w, http.StatusServiceUnavailable, "Too many logins are in progress; try again in a minute.")
-		return
-	}
-	http.SetCookie(w, s.cookie(loginCookie, id, loginLifetime))
+	l.expires = s.now().Add(loginLifetime)
+	s.logins.add(s.now(), 1, 0)
 	if len(s.cfg.SAML.IdPs) == 1 {
 		s.toIdP(w, r, id, l, s.cfg.SAML.IdPs[0])
+		return
+	}
+	if !s.setLoginCookie(w, id, l) {
 		return
 	}
 	if s.cfg.SAML.Discovery != "" {
@@ -226,11 +226,32 @@ func (s *server) current(r *http.Request) (string, *login, error) {
 	if err != nil {
 		return "", nil, errors.New("this browser has no login in progress (was the cookie blocked?)")
 	}
-	l, ok := s.logins.get(c.Value)
-	if !ok {
-		return "", nil, errors.New("the login expired; start again from the application")
+	id, l, expires, err := s.openLogin(c.Value)
+	if err != nil {
+		return "", nil, err
 	}
-	return c.Value, l, nil
+	if _, used := s.usedLogins.get(id); used {
+		return "", nil, errLoginUsed
+	}
+	l.expires = expires
+	return id, l, nil
+}
+
+// setLoginCookie seals l into the login cookie; false is a page already
+// written.
+func (s *server) setLoginCookie(w http.ResponseWriter, id string, l *login) bool {
+	v, err := s.sealLogin(id, l, l.expires)
+	if errors.Is(err, errLoginTooLarge) {
+		s.page(w, http.StatusBadRequest, "This authorization request is too large to carry through the login: ask the application to send a shorter state or nonce.")
+		return false
+	}
+	if err != nil {
+		s.logf("sealing a login: %v", err)
+		s.page(w, http.StatusInternalServerError, "The login could not be started.")
+		return false
+	}
+	http.SetCookie(w, s.cookie(loginCookie, v, l.expires.Sub(s.now())))
+	return true
 }
 
 // allowedIdP says whether people can log in through idp: the configuration
@@ -253,12 +274,7 @@ func (s *server) toIdP(w http.ResponseWriter, r *http.Request, id string, l *log
 	}
 	// One login, one request: a second one would leave two responses
 	// that could each answer it.
-	already := false
-	s.logins.update(id, func(p **login) {
-		already = (*p).started
-		(*p).started = true
-	})
-	if already {
+	if l.started {
 		s.page(w, http.StatusBadRequest, "This login has already gone to an institution; start again from the application.")
 		return
 	}
@@ -268,7 +284,10 @@ func (s *server) toIdP(w http.ResponseWriter, r *http.Request, id string, l *log
 		s.page(w, http.StatusInternalServerError, "The request to your institution could not be made.")
 		return
 	}
-	s.logins.update(id, func(p **login) { (*p).pending = pending })
+	l.started, l.pending = true, pending
+	if !s.setLoginCookie(w, id, l) {
+		return
+	}
 	http.Redirect(w, r, u, http.StatusFound)
 }
 

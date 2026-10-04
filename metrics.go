@@ -107,7 +107,7 @@ func (s *server) collect(w *endpoint.Writer) {
 	}
 	w.Counter("bridge_metadata_refreshes_total", "Metadata fetches, by outcome.",
 		endpoint.S(float64(failed), endpoint.L("result", "failed")), endpoint.S(float64(ok), endpoint.L("result", "ok")))
-	w.Gauge("bridge_logins_in_progress", "Logins gone to an IdP and not yet back.", endpoint.S(float64(s.logins.count())))
+	w.Gauge("bridge_logins_in_progress", "Logins gone to an IdP and not yet back, estimated: started minus answered over the last 15 minutes.", endpoint.S(float64(s.logins.inProgress(s.now()))))
 	w.Gauge("bridge_devices_waiting", "Device grants waiting for their person.", endpoint.S(float64(s.devices.count())))
 	w.Gauge("bridge_refresh_families", "Refresh token families alive.", endpoint.S(float64(s.families.count())))
 	w.Gauge("bridge_access_tokens", "Access tokens this provider still honours at /userinfo.", endpoint.S(float64(s.issued.count())))

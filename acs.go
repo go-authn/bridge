@@ -28,9 +28,11 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.page(w, http.StatusBadRequest, "This response belongs to another login.")
 		return
 	}
-	// The login is used up whatever happens next: a response is accepted
-	// once, and a refused one is not retried against the same request.
-	s.logins.take(id)
+	s.logins.add(s.now(), 0, 1)
+	// The cookie goes whatever happens next. The login is spent once an IdP
+	// has answered for it (below): only then, so that nobody anonymous can
+	// fill usedLogins -- a sealed login is free to obtain, a signed response
+	// is not.
 	http.SetCookie(w, s.cookie(loginCookie, "", -1))
 	if !l.started {
 		s.page(w, http.StatusBadRequest, "This login never went to an institution.")
@@ -54,6 +56,11 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.logf("acs: a response from %s was refused: %v", l.pending.IdP, err)
 		s.counters.inc("bridge_logins_total", "refused")
 		s.page(w, http.StatusBadRequest, "Your institution's answer could not be accepted.")
+		return
+	}
+	if err := s.usedLogins.putNew(id, true, l.expires); err != nil {
+		s.logf("acs: a second response for a login already answered")
+		s.page(w, http.StatusBadRequest, "This login has already been answered; start again from the application.")
 		return
 	}
 	who, err := newPerson(a, s.cfg.Claims)

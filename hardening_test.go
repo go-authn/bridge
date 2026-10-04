@@ -25,27 +25,26 @@ import (
 // What an adversarial review of v0.8.1 measured, each held here so that it
 // does not come back. The review's proofs were throwaway; these are not.
 
-// A flood of anonymous /authorize meets the store's ceiling, not the
-// memory's -- and past it pushes out the oldest login rather than locking
-// everybody out; past an address's allowance it is told 429.
-func TestLoginsAreCapped(t *testing.T) {
+// A flood of anonymous /authorize costs this provider nothing it keeps:
+// each login is sealed in its cookie, and the browser holds it. Measured
+// before: 20,000 from one /64 filled the store and locked everybody out.
+// Past an address's allowance it is told 429.
+func TestLoginsAreNotHeldHere(t *testing.T) {
 	f := newFixture(t, "")
-	f.s.limiter = nil // the ceiling alone first
-	f.s.logins.max = 3
+	f.s.limiter = nil
 	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect)
-	for i := range 3 {
+	for i := range 2000 {
 		if res := newBrowser(t).get(r.authURL()); res.StatusCode >= 400 {
 			t.Fatalf("login %d refused: %d", i+1, res.StatusCode)
 		}
 	}
-	if res := newBrowser(t).get(r.authURL()); res.StatusCode >= 400 {
-		t.Errorf("a fourth login past a ceiling of 3 was refused: %d", res.StatusCode)
+	if n := f.s.usedLogins.count(); n != 0 {
+		t.Errorf("%d logins recorded before any IdP answered", n)
 	}
-	if n := f.s.logins.count(); n != 3 {
-		t.Errorf("%d logins held", n)
+	if n := f.s.logins.inProgress(time.Now()); n != 2000 {
+		t.Errorf("estimated %d logins in progress, want 2000", n)
 	}
 
-	f.s.logins.max = 0
 	f.s.limiter = newRateLimiter(2, time.Now)
 	for i := range 2 {
 		if res := newBrowser(t).get(r.authURL()); res.StatusCode == http.StatusTooManyRequests {

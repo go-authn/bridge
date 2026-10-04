@@ -122,7 +122,7 @@ func (a *adminServer) Status(ctx context.Context, _ *adminv1.StatusRequest) (*ad
 		Started:    timestamppb.New(s.started),
 		Federation: fed,
 		Counts: &adminv1.Counts{
-			LoginsInProgress: int64(s.logins.count()),
+			LoginsInProgress: s.logins.inProgress(s.now()),
 			Codes:            int64(s.codes.count()),
 			DevicesWaiting:   int64(s.devices.count()),
 			RefreshFamilies:  int64(s.families.count()),
