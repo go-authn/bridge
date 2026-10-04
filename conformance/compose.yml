@@ -48,6 +48,9 @@ services:
   # on its unix socket. Run by the driver when a module asks; not started.
   admin:
     image: fullstorydev/grpcurl:v1.9.3
+    # the socket is the bridge's, mode 0600 (root in its container): the
+    # operator runs as its owner, as on a host
+    user: "0:0"
     volumes: ["bridgedata:/data"]
     profiles: ["tools"]
 
