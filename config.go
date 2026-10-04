@@ -298,6 +298,13 @@ type clientBlock struct {
 	// scope, set the person's application password.
 	AppPasswords bool `hcl:"app_passwords,optional"`
 
+	// PKCE is "required" (the default): every authorization request carries
+	// an S256 code_challenge. "or_nonce" lets a CONFIDENTIAL client send an
+	// OpenID nonce instead, as RFC 9700 2.1.1 allows -- for relying parties,
+	// certified ones among them, that protect the code with the nonce and
+	// send no PKCE. A public client has no such choice (RFC 9700: MUST).
+	PKCE string `hcl:"pkce,optional"`
+
 	secret     string
 	refreshTTL time.Duration
 }
@@ -608,6 +615,17 @@ func (c *config) check() error {
 		}
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
+		}
+		switch cl.PKCE {
+		case "":
+			cl.PKCE = "required"
+		case "required":
+		case "or_nonce":
+			if cl.SecretFile == "" {
+				return fmt.Errorf("client %q: pkce = \"or_nonce\" is for confidential clients; a public client must use PKCE (RFC 9700 2.1.1)", cl.ID)
+			}
+		default:
+			return fmt.Errorf("client %q: pkce = %q: \"required\" or \"or_nonce\"", cl.ID, cl.PKCE)
 		}
 		if cl.SSFReceiver && (c.SSF == nil || cl.SecretFile == "") {
 			return fmt.Errorf("client %q: ssf_receiver needs an ssf block and a secret_file", cl.ID)
