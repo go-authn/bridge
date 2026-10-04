@@ -429,10 +429,11 @@ func (s *server) personSubjects(username string, subjects []string) func(owner s
 	return func(owner string) []map[string]any {
 		c, ok := s.cfg.client(owner)
 		if !ok || c.SSFSubjectFormat != "iss_sub" || len(subjects) == 0 {
-			if username == "" {
-				return nil
+			var out []map[string]any
+			for _, u := range s.spellingsOf(username) {
+				out = append(out, accountSubject(u))
 			}
-			return []map[string]any{accountSubject(username)}
+			return out
 		}
 		public := &clientBlock{Subject: "public"}
 		out := make([]map[string]any, 0, len(subjects))
@@ -698,4 +699,35 @@ func streamFromBody(r *http.Request) {
 	q := r.URL.Query()
 	q.Set("stream_id", req.StreamID)
 	r.URL.RawQuery = q.Encode()
+}
+
+// spellingsOf is every way the person called username, without case, is
+// written in what this provider handed out -- refresh families, honoured
+// tokens, certificates -- and the name itself. An account subject is
+// compared exactly by a receiver (go-fileshare's is), and the token it
+// holds says "Alice@..." if the IdP wrote that, whatever case an operator
+// typed: one event per spelling, so that each is revoked.
+func (s *server) spellingsOf(username string) []string {
+	if username == "" {
+		return nil
+	}
+	seen := map[string]bool{username: true}
+	add := func(u string) {
+		if u != "" && strings.EqualFold(u, username) {
+			seen[u] = true
+		}
+	}
+	s.refresh.each(func(_ string, g *refreshGrant) { add(g.who.username) })
+	s.issued.each(func(_ string, it issuedToken) { add(it.username) })
+	s.certs.mu.Lock()
+	for _, c := range s.certs.Certs {
+		add(c.Principal)
+	}
+	s.certs.mu.Unlock()
+	out := make([]string, 0, len(seen))
+	for u := range seen {
+		out = append(out, u)
+	}
+	sort.Strings(out)
+	return out
 }
