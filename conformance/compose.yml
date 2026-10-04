@@ -35,6 +35,8 @@ services:
     image: alpine:3.22
     volumes: ["./work:/work:ro"]
     command: ["/work/bridge", "-c", "/work/bridge.hcl"]
+    # the SSF queue and the state it needs: written, so not in ./work
+    tmpfs: ["/data"]
     # the run's CA, for the IdP's metadata over https (Go reads it on Linux)
     environment:
       SSL_CERT_FILE: /work/ca.crt
