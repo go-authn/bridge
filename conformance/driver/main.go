@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"time"
@@ -35,6 +36,8 @@ func main() {
 	variant := flag.String("variant", `{"server_metadata":"discovery","client_registration":"static_client"}`, "the plan's variant, JSON")
 	config := flag.String("config", "", "the plan configuration (JSON file)")
 	expected := flag.String("expected", "", "modules expected not to pass, one per line: name RESULT # why")
+	trigger := flag.String("trigger", "", "a shell command run once, when a module's log asks for -trigger-on (the transmitter's side of an event)")
+	triggerOn := flag.String("trigger-on", "trigger these events", "the text, in a module's log, that asks for -trigger")
 	flag.Parse()
 
 	conf, err := os.ReadFile(*config)
@@ -72,7 +75,7 @@ func main() {
 			log.Printf("%s: %v", m.TestModule, err)
 			continue
 		}
-		res := runModule(*suite, run.ID)
+		res := runModule(*suite, run.ID, *trigger, *triggerOn)
 		results[m.TestModule] = res
 		order = append(order, m.TestModule)
 		fmt.Printf("%-60s %s\n", m.TestModule, res)
@@ -110,9 +113,9 @@ func main() {
 
 // runModule starts a module once the suite has configured it, and waits
 // for it to finish; the suite drives the browser itself (HtmlUnit).
-func runModule(suite, id string) string {
+func runModule(suite, id, trigger, triggerOn string) string {
 	deadline := time.Now().Add(5 * time.Minute)
-	started := false
+	started, triggered := false, trigger == ""
 	for time.Now().Before(deadline) {
 		var info struct {
 			Status string `json:"status"`
@@ -121,6 +124,11 @@ func runModule(suite, id string) string {
 		if err := call("GET", suite+"api/info/"+id, nil, 200, &info); err != nil {
 			time.Sleep(2 * time.Second)
 			continue
+		}
+		if !triggered && logSays(suite, id, triggerOn) {
+			triggered = true
+			out, err := exec.Command("sh", "-c", trigger).CombinedOutput()
+			log.Printf("triggered (%v): %s", err, strings.TrimSpace(string(out)))
 		}
 		switch info.Status {
 		case "CONFIGURED":
@@ -217,4 +225,20 @@ func must(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// logSays reports whether a module's log carries text, which is how a
+// module asks for something only the tested side can do -- an event the
+// transmitter must send, "triggered by hand" in the suite's words.
+func logSays(suite, id, text string) bool {
+	var entries []map[string]any
+	if err := call("GET", suite+"api/log/"+id, nil, 200, &entries); err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if m, _ := e["msg"].(string); strings.Contains(m, text) {
+			return true
+		}
+	}
+	return false
 }

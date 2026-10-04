@@ -1,0 +1,3 @@
+# Modules of openid-ssf-transmitter-caep-test-plan (poll delivery) that are
+# expected not to pass, one per line: module RESULT  # why
+# Same contract as expected.txt.
