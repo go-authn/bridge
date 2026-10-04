@@ -331,6 +331,10 @@ type assertionOpts struct {
 	entitlement []string
 	status      string // raw StatusCode, Success when empty
 	acr         string
+	// issuer and signer, when set, are another IdP of the federation
+	// answering in place of the university's.
+	issuer string
+	signer *party
 }
 
 // respond has the IdP (xmlsec1) answer a request: the assertion encrypted
@@ -338,6 +342,10 @@ type assertionOpts struct {
 // Shibboleth IdP v5's defaults.
 func (f *fixture) respond(requestID string, o assertionOpts) string {
 	f.t.Helper()
+	issuer, signer := idpEntity, f.idp
+	if o.issuer != "" {
+		issuer, signer = o.issuer, o.signer
+	}
 	acs := f.s.cfg.Issuer + "/saml/acs"
 	now := time.Now().UTC()
 	ts, later := now.Add(-time.Second).Format(time.RFC3339), now.Add(5*time.Minute).Format(time.RFC3339)
@@ -357,7 +365,7 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 	body := ""
 	if o.status == "" {
 		assertion := `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a` + token()[:20] + `" Version="2.0" IssueInstant="` + ts + `">` +
-			`<saml:Issuer>` + idpEntity + `</saml:Issuer>` +
+			`<saml:Issuer>` + issuer + `</saml:Issuer>` +
 			`<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">t1</saml:NameID>` +
 			`<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData Recipient="` + acs + `" InResponseTo="` + requestID + `" NotOnOrAfter="` + later + `"/></saml:SubjectConfirmation></saml:Subject>` +
 			`<saml:Conditions NotBefore="` + ts + `" NotOnOrAfter="` + later + `"><saml:AudienceRestriction><saml:Audience>` + f.s.cfg.SAML.EntityID + `</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
@@ -376,11 +384,11 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 		o.status = `<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>`
 	}
 	resp := `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_r` + token()[:20] + `" Version="2.0" IssueInstant="` + ts + `" Destination="` + acs + `" InResponseTo="` + requestID + `">` +
-		`<saml:Issuer>` + idpEntity + `</saml:Issuer>` + fmt.Sprintf(sigTemplate, "_rID") + `<samlp:Status>` + o.status + `</samlp:Status>` + body + `</samlp:Response>`
+		`<saml:Issuer>` + issuer + `</saml:Issuer>` + fmt.Sprintf(sigTemplate, "_rID") + `<samlp:Status>` + o.status + `</samlp:Status>` + body + `</samlp:Response>`
 	id := resp[strings.Index(resp, ` ID="`)+5:]
 	id = id[:strings.Index(id, `"`)]
 	resp = strings.Replace(resp, "#_rID", "#"+id, 1)
-	signed := f.x.run("--sign", "--privkey-pem", f.idp.keyFile+","+f.idp.certFile,
+	signed := f.x.run("--sign", "--privkey-pem", signer.keyFile+","+signer.certFile,
 		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:protocol:Response", "--output", "/dev/stdout", f.x.file("resp.xml", resp))
 	return base64.StdEncoding.EncodeToString([]byte(signed))
 }

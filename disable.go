@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +43,11 @@ type disabledEntry struct {
 	Since  time.Time `json:"since"`
 	// Until is when it lapses; zero is never.
 	Until time.Time `json:"until,omitzero"`
+	// Subjects are the stable identities (IdP!identifier) of the people a
+	// person entry covers, found when it was made: an IdP may send another
+	// eppn for the same person -- another case, a rename -- and the sub a
+	// relying party knows them by stays the same.
+	Subjects []string `json:"subjects,omitempty"`
 }
 
 func (e disabledEntry) inForce(now time.Time) bool {
@@ -82,6 +88,21 @@ func loadDisabled(path string) (*disabledList, error) {
 	if s.IdPs == nil {
 		s.IdPs = map[string]disabledEntry{}
 	}
+	// Usernames compare without case (normUsername); a file written before
+	// that kept them as typed.
+	people := map[string]disabledEntry{}
+	for k, e := range s.People {
+		k = strings.ToLower(k)
+		if o, ok := people[k]; ok {
+			// One person twice: never-ending wins, else the later end.
+			e.Subjects = append(e.Subjects, o.Subjects...)
+			if o.Until.IsZero() || (!e.Until.IsZero() && o.Until.After(e.Until)) {
+				e.Until = o.Until
+			}
+		}
+		people[k] = e
+	}
+	s.People = people
 	return s, nil
 }
 
@@ -179,14 +200,22 @@ func (s *disabledList) lift(idp bool, key string, now time.Time) (bool, error) {
 }
 
 // person and idp say whether an entry is in force.
-func (s *disabledList) person(username string, now time.Time) bool {
-	if username == "" {
-		return false
-	}
+func (s *disabledList) person(username, subject string, now time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, ok := s.People[username]
-	return ok && e.inForce(now)
+	if username != "" {
+		if e, ok := s.People[strings.ToLower(username)]; ok && e.inForce(now) {
+			return true
+		}
+	}
+	if subject != "" {
+		for _, e := range s.People {
+			if e.inForce(now) && slices.Contains(e.Subjects, subject) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *disabledList) idp(entityID string, now time.Time) bool {
@@ -232,7 +261,7 @@ func (s *server) refused(who *person) string {
 	switch {
 	case s.disabled.idp(who.idp, now):
 		return "institution disabled"
-	case s.disabled.person(who.username, now):
+	case s.disabled.person(who.username, who.subject, now):
 		return "person disabled"
 	}
 	return ""
@@ -241,6 +270,7 @@ func (s *server) refused(who *person) string {
 // disablePerson records the entry, then revokes. In that order: a
 // grant racing the revocation meets the entry in issue().
 func (s *server) disablePerson(username, reason, by string, until time.Time) (disabledEntry, revoked, error) {
+	name := username // as typed: a sub is case-sensitive
 	username = s.normUsername(username)
 	now := s.now()
 	if username == "" {
@@ -249,12 +279,12 @@ func (s *server) disablePerson(username, reason, by string, until time.Time) (di
 	if !until.IsZero() && !until.After(now) {
 		return disabledEntry{}, revoked{}, fmt.Errorf("%w: it would already have ended", errBadDisable)
 	}
-	e := disabledEntry{Reason: reason, By: by, Since: now, Until: until}
+	e := disabledEntry{Reason: reason, By: by, Since: now, Until: until, Subjects: s.subjectsOf(name)}
 	if err := s.disabled.set(false, username, e, now); err != nil {
 		return disabledEntry{}, revoked{}, err
 	}
-	s.logf("disabled %s by %s until %s: %s", username, by, untilText(until), reason)
-	r, err := s.revokePerson(username)
+	s.logf("disabled %s (%d known identities) by %s until %s: %s", username, len(e.Subjects), by, untilText(until), reason)
+	r, err := s.revokePerson(username, e.Subjects...)
 	return e, r, err
 }
 
@@ -307,15 +337,53 @@ func (s *server) enableIdP(entityID, by string) (bool, error) {
 	return was, err
 }
 
-// normUsername writes a username the way newPerson does, so that what an
-// operator types matches what the person logs in as: subject-id is
-// case-insensitive (SAML V2.0 Subject Identifier Attributes 3.3.1) and kept
-// in lower case; eppn is not, and is kept as the IdP wrote it.
-func (s *server) normUsername(u string) string {
-	if s.cfg.Claims.Username == "subject_id" {
-		return strings.ToLower(u)
+// normUsername is a username as disabling compares it: without case. Every
+// attribute a username comes from compares so -- subject-id (SAML V2.0
+// Subject Identifier Attributes 3.3.1), and eduPersonPrincipalName, uid and
+// mail, whose schemas declare caseIgnoreMatch -- so "Alice@univ.fr" is the
+// person disabled as "alice@univ.fr", whatever case her IdP sends today.
+func (s *server) normUsername(u string) string { return strings.ToLower(u) }
+
+// subjectsOf are the stable identities of the people known here by name:
+// their username, without case, or the sub a relying party knows them by
+// (public or pairwise, for any client) -- which is how a person whose IdP
+// releases no username can be named at all.
+func (s *server) subjectsOf(name string) []string {
+	if name == "" {
+		return nil
 	}
-	return u
+	seen := map[string]bool{}
+	s.refresh.each(func(_ string, g *refreshGrant) {
+		if g.who.subject == "" || seen[g.who.subject] {
+			return
+		}
+		if g.who.username != "" && strings.EqualFold(g.who.username, name) {
+			seen[g.who.subject] = true
+			return
+		}
+		for i := range s.cfg.Clients {
+			if g.who.sub(s.cfg.salt, &s.cfg.Clients[i]) == name {
+				seen[g.who.subject] = true
+				return
+			}
+		}
+	})
+	// And from the access tokens still live: a client without refresh tokens
+	// leaves nothing else, and the token's sub is the one its client knows.
+	s.issued.each(func(_ string, it issuedToken) {
+		if it.subject == "" {
+			return
+		}
+		if (it.username != "" && strings.EqualFold(it.username, name)) || it.info["sub"] == name {
+			seen[it.subject] = true
+		}
+	})
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func untilText(t time.Time) string {

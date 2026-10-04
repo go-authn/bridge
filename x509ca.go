@@ -212,11 +212,19 @@ func (s *server) x509Certificate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "this token may not have an NFS certificate issued", http.StatusForbidden)
 		return
 	}
+	if !s.addressedHere(claims) {
+		notAddressedHere(w)
+		return
+	}
 	user, _ := claims["preferred_username"].(string)
 	if len(user) < 3 || !strings.Contains(user, "@") {
 		// FreeBSD refuses a name under 3 bytes, and a name with no domain
 		// maps nowhere.
 		http.Error(w, "the institution released no user@domain name to put in a certificate", http.StatusForbidden)
+		return
+	}
+	if err := certifiableName(user); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))

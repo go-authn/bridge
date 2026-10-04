@@ -189,7 +189,7 @@ func TestAdminDisablePerson(t *testing.T) {
 		t.Errorf("/metrics does not count her:\n%s", rec.Body)
 	}
 	again, err := loadDisabled(file)
-	if err != nil || !again.person(aliceName, time.Now()) {
+	if err != nil || !again.person(aliceName, "", time.Now()) {
 		t.Errorf("the file does not hold the disabling: %v", err)
 	}
 	if fi, err := os.Stat(file); err != nil || fi.Mode().Perm()&0o077 != 0 && os.PathSeparator == '/' {
@@ -221,7 +221,7 @@ func TestAdminDisableLapses(t *testing.T) {
 	// An hour on, read from the store: the provider's clock is not moved
 	// under its running goroutines.
 	later := until.Add(time.Second)
-	if f.s.disabled.person(who.username, later) {
+	if f.s.disabled.person(who.username, "", later) {
 		t.Error("still refused after it lapsed")
 	}
 	if people, _ := f.s.disabled.list(later); len(people) != 0 {
@@ -333,7 +333,7 @@ func TestDisabledSaveFails(t *testing.T) {
 	if err := s.set(false, "alice", disabledEntry{Since: now}, now); err == nil {
 		t.Fatal("saved into a directory that does not exist")
 	}
-	if s.person("alice", now) {
+	if s.person("alice", "", now) {
 		t.Error("in force although it could not be saved")
 	}
 }
@@ -410,7 +410,7 @@ func TestAdminDisableFileUnwritable(t *testing.T) {
 	if _, err := c.EnableIdP(t.Context(), &adminv1.EnableIdPRequest{EntityId: idpEntity}); err != nil {
 		t.Errorf("enabling an IdP never disabled needs no write: %v", err)
 	}
-	if !f.s.disabled.person("alice@"+idpScope, time.Now()) || f.s.disabled.person("bob@"+idpScope, time.Now()) {
+	if !f.s.disabled.person("alice@"+idpScope, "", time.Now()) || f.s.disabled.person("bob@"+idpScope, "", time.Now()) {
 		t.Error("what is in force is not what is on disk")
 	}
 	if _, err := loadDisabled(dir); err == nil {
@@ -418,12 +418,13 @@ func TestAdminDisableFileUnwritable(t *testing.T) {
 	}
 }
 
-// subject-id is case-insensitive and kept in lower case, so what an
-// operator types matches; eppn is kept as written.
+// Disabling compares usernames without case: subject-id, eppn, uid and mail
+// all compare so (caseIgnoreMatch), and an IdP that sends "Alice" today and
+// "alice" tomorrow names one person.
 func TestNormUsername(t *testing.T) {
 	for _, c := range []struct{ attr, in, want string }{
 		{"subject_id", "Alice@Univ-Example.FR", "alice@univ-example.fr"},
-		{"eppn", "Alice@univ-example.fr", "Alice@univ-example.fr"},
+		{"eppn", "Alice@univ-example.fr", "alice@univ-example.fr"},
 	} {
 		s := &server{cfg: &config{Claims: &claimsBlock{Username: c.attr}}}
 		if got := s.normUsername(c.in); got != c.want {
