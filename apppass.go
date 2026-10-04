@@ -151,7 +151,10 @@ func (b *appPasswordsBlock) remove(login string) error {
 // removeCount deletes a person's application password and says how many
 // there were.
 func (b *appPasswordsBlock) removeCount(login string) (int64, error) {
-	res, err := b.db.Exec(`DELETE FROM `+b.Table+` WHERE login = `+b.arg(1), login)
+	// Without case, as usernames are disabled (normUsername) and as set()
+	// replaces a row: a row kept as the IdP spelled it, "Alice@...", survived
+	// disabling "alice@..." -- and with it, SMB and S3.
+	res, err := b.db.Exec(`DELETE FROM `+b.Table+` WHERE LOWER(login) = LOWER(`+b.arg(1)+`)`, login)
 	if err != nil {
 		return 0, err
 	}

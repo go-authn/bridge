@@ -48,6 +48,11 @@ type disabledEntry struct {
 	// eppn for the same person -- another case, a rename -- and the sub a
 	// relying party knows them by stays the same.
 	Subjects []string `json:"subjects,omitempty"`
+	// Sub is the name as typed when it is not an address: perhaps the sub a
+	// relying party knows the person by, which is case-sensitive and matches
+	// them whether or not anything of theirs is live here (refused computes
+	// their public and pairwise subs).
+	Sub string `json:"sub,omitempty"`
 }
 
 func (e disabledEntry) inForce(now time.Time) bool {
@@ -263,6 +268,8 @@ func (s *server) refused(who *person) string {
 		return "institution disabled"
 	case s.disabled.person(who.username, who.subject, now):
 		return "person disabled"
+	case s.disabledBySub(who, now):
+		return "person disabled"
 	}
 	return ""
 }
@@ -280,6 +287,9 @@ func (s *server) disablePerson(username, reason, by string, until time.Time) (di
 		return disabledEntry{}, revoked{}, fmt.Errorf("%w: it would already have ended", errBadDisable)
 	}
 	e := disabledEntry{Reason: reason, By: by, Since: now, Until: until, Subjects: s.subjectsOf(name)}
+	if !strings.Contains(name, "@") {
+		e.Sub = name
+	}
 	if err := s.disabled.set(false, username, e, now); err != nil {
 		return disabledEntry{}, revoked{}, err
 	}
@@ -391,4 +401,38 @@ func untilText(t time.Time) string {
 		return "enabled again"
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// disabledBySub says whether who is disabled under a sub a relying party
+// knows them by: their public sub, or their pairwise sub for any client.
+// Computed, not looked up, so that it matches a person nothing of whom is
+// live here -- the case disabling by sub exists for, a person whose IdP
+// releases no username.
+func (s *server) disabledBySub(who *person, now time.Time) bool {
+	subs := s.disabled.subs(now)
+	if len(subs) == 0 || who.subject == "" {
+		return false
+	}
+	if slices.Contains(subs, who.sub(s.cfg.salt, &clientBlock{Subject: "public"})) {
+		return true
+	}
+	for i := range s.cfg.Clients {
+		if c := &s.cfg.Clients[i]; c.Subject == "pairwise" && slices.Contains(subs, who.sub(s.cfg.salt, c)) {
+			return true
+		}
+	}
+	return false
+}
+
+// subs are the subs of the person entries in force.
+func (s *disabledList) subs(now time.Time) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, e := range s.People {
+		if e.Sub != "" && e.inForce(now) {
+			out = append(out, e.Sub)
+		}
+	}
+	return out
 }

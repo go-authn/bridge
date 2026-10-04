@@ -314,6 +314,14 @@ func (s *server) persistStores() error {
 	if err := s.families.persist(s.state, "family", jsonEnc[[]string], jsonDec[[]string]); err != nil {
 		return err
 	}
+	// A login answered, and an assertion accepted, stay so across a restart:
+	// the sealed login survives one, and must not be answered twice.
+	if err := s.usedLogins.persist(s.state, "used-login", jsonEnc[bool], jsonDec[bool]); err != nil {
+		return err
+	}
+	if err := s.assertions.persist(s.state, "assertion", jsonEnc[bool], jsonDec[bool]); err != nil {
+		return err
+	}
 	if err := s.ssfStreams.persist(s.state, "ssf-stream", jsonEnc[storedStream], jsonDec[storedStream]); err != nil {
 		return err
 	}
@@ -337,4 +345,12 @@ func jsonDec[V any](b []byte) (V, error) {
 	var v V
 	err := json.Unmarshal(b, &v)
 	return v, err
+}
+
+// ttlReplay is go-authn/saml's Replay over a ttl, so that it is written
+// through to the state database like the rest.
+type ttlReplay struct{ t *ttl[bool] }
+
+func (r ttlReplay) Use(id string, expires time.Time) bool {
+	return r.t.putNew(id, true, expires) == nil
 }

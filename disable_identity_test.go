@@ -132,3 +132,21 @@ func TestAddressedHere(t *testing.T) {
 		}
 	}
 }
+
+// Disabled by their sub, a person nothing of whom is live here is refused
+// all the same: the review found disabling by sub recorded nothing usable
+// once their tokens had lapsed, and reported success.
+func TestASubDisablesSomeoneWithNothingLive(t *testing.T) {
+	f, _ := sshFixture(t)
+	subject := idpEntity + "!" + strings.ToLower("Q1W2E3@"+idpScope)
+	sub := (&person{subject: subject}).sub(f.s.cfg.salt, &clientBlock{Subject: "public"})
+	if _, _, err := f.s.disablePerson(sub, "compromised", "test", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if why := f.s.refused(&person{idp: idpEntity, subject: subject}); why == "" {
+		t.Error("a person disabled by their public sub, with nothing live, was not refused")
+	}
+	if why := f.s.refused(&person{idp: idpEntity, subject: idpEntity + "!someone-else"}); why != "" {
+		t.Errorf("somebody else was refused: %s", why)
+	}
+}
