@@ -95,11 +95,20 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	// DEFAULT when no method is given, so an absent method is refused
 	// rather than read as S256: a provider that accepted it would be
 	// comparing the verifier with itself.
-	if q.Get("code_challenge_method") != "S256" {
+	// A confidential client configured pkce = "or_nonce" may send an OpenID
+	// nonce instead (RFC 9700 2.1.1); then it must, and the token endpoint
+	// refuses a code_verifier for this code (the downgrade check there).
+	noPKCE := !q.Has("code_challenge") && !q.Has("code_challenge_method")
+	switch {
+	case noPKCE && client.PKCE == "or_nonce":
+		if !slices.Contains(scopes, "openid") || q.Get("nonce") == "" {
+			fail("invalid_request", "without PKCE, this client must send an OpenID nonce")
+			return
+		}
+	case q.Get("code_challenge_method") != "S256":
 		fail("invalid_request", "PKCE with code_challenge_method=S256 is required")
 		return
-	}
-	if !codeChallenge.MatchString(q.Get("code_challenge")) {
+	case !codeChallenge.MatchString(q.Get("code_challenge")):
 		fail("invalid_request", "code_challenge is not a base64url SHA-256")
 		return
 	}
