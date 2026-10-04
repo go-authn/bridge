@@ -112,8 +112,9 @@ admin {
 }
 ssf {}
 client "ssf-receiver" {
-  secret_file  = "/work/client3.secret"
-  ssf_receiver = true
+  secret_file        = "/work/client3.secret"
+  ssf_receiver       = true
+  ssf_subject_format = "iss_sub"   # the CAEP Interop Profile's (2.5)
 }
 HCL
 
