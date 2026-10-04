@@ -1,0 +1,2 @@
+# Modules of oidcc-config-certification-test-plan expected not to pass, one
+# per line: module RESULT  # why. Same contract as expected.txt.

@@ -174,4 +174,10 @@ $W/driver -config $W/ssf.json -expected expected-ssf.txt \
   -plan openid-ssf-transmitter-caep-test-plan \
   -trigger "docker compose run --rm -T admin -plaintext -d '{\"username\":\"alice@univ-example.fr\"}' unix:///data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
   -variant '{"ssf_delivery_mode":"poll","client_registration":"static_client","server_metadata":"discovery","client_auth_type":"client_secret_basic","ssf_server_metadata":"discovery","ssf_auth_mode":"dynamic"}' || status=1
+echo
+echo "== oidcc-config-certification-test-plan"
+# The Config OP profile: the discovery document, one module, its variants
+# fixed by the plan itself.
+$W/driver -config $W/plan.json -expected expected-config.txt \
+  -plan oidcc-config-certification-test-plan -variant '{}' || status=1
 exit $status
