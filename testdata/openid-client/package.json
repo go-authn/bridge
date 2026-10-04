@@ -1,0 +1,10 @@
+{
+  "name": "bridge-openid-client-judge",
+  "private": true,
+  "description": "panva/openid-client, an OpenID Certified relying party, judging go-authn/bridge",
+  "type": "module",
+  "dependencies": {
+    "oauth4webapi": "3.8.8",
+    "openid-client": "6.8.8"
+  }
+}
