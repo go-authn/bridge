@@ -95,9 +95,10 @@ func (s *server) revokePerson(username string, subjects ...string) (revoked, err
 	// To whoever verifies this provider's tokens on their own (ssf.go)
 	// FIRST: a step below failing -- the certificates file, the application
 	// password table -- must not leave them uninformed, again at every retry.
-	if username != "" {
-		s.broadcast(accountSubject(username), s.now(), "", nil)
+	if username != "" && len(subjects) == 0 {
+		subjects = s.subjectsOf(username)
 	}
+	s.broadcast(s.personSubjects(username, subjects), s.now(), "", nil)
 	r := s.revokeMatching(func(u, _, subject string) bool {
 		return (username != "" && strings.EqualFold(u, username)) || (subject != "" && slices.Contains(subjects, subject))
 	})

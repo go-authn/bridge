@@ -501,8 +501,14 @@ client "fileshare-ssf" { # a receiver: client credentials, scope ssf
   own streams only.
 - Events are SETs (RFC 8417) signed with the ID token key, `typ
   secevent+jwt`, no `exp`, no `sub`. The subject is `aliases` with the
-  **account**, `acct:<username>` -- not `iss_sub`: a `sub` here may be
-  pairwise, one per client. An institution disabled is one event per person
+  **account**, `acct:<username>`, by default -- a `sub` may be pairwise, one
+  per client. A receiver configured `ssf_subject_format = "iss_sub"` gets
+  instead the issuer and the **public** `sub` of each identity known under
+  that person, one event each, which is what the CAEP Interoperability
+  Profile (2.5) has transmitters send; a person nobody knows a `sub` for still
+  reaches it, by account, since a revocation that does not arrive fails open.
+  `session-revoked` always carries `reason_admin` (CAEP Interop 3.1). An
+  institution disabled is one event per person
   this provider has a trace of there, and one whose subject is the **tenant**,
   with the institution's scopes: its people this provider has forgotten are
   covered by their domain.
