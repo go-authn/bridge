@@ -98,7 +98,7 @@ func TestES256AccessTokens(t *testing.T) {
 	}
 	// A token signed with the RSA key but claiming to be an access token
 	// is not one: the access token key is the only one that makes them.
-	forged, _ := f.s.cfg.signingKey.sign("at+jwt", map[string]any{"iss": f.s.cfg.Issuer, "aud": "fileshare", "exp": 4102444800})
+	forged, _ := f.s.cfg.signingKey.sign("at+jwt", map[string]any{"iss": f.s.cfg.Issuer, "aud": "fileshare", "exp": int64(4102444800)})
 	if _, err := f.s.cfg.accessKey.verify("at+jwt", forged); err == nil {
 		t.Error("an RS256 token passed for an access token")
 	}

@@ -181,14 +181,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goarch: [amd64, arm64, riscv64, loong64, ppc64le, s390x]
+        goarch: [amd64, arm64, riscv64, loong64, ppc64le, s390x, 386, arm]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with: { go-version: stable, check-latest: true, cache: true }
       - run: GOARCH=${{ matrix.goarch }} go build ./...
       - name: Install qemu-user-static
-        if: matrix.goarch != 'amd64' && matrix.goarch != 'arm64'
+        if: matrix.goarch != 'amd64' && matrix.goarch != 'arm64' && matrix.goarch != '386'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static
       - name: Test
         run: |
@@ -198,4 +198,8 @@ jobs:
             loong64)  GOARCH=loong64 go test -count=1 -exec=qemu-loongarch64-static ./... ;;
             ppc64le)  GOARCH=ppc64le go test -count=1 -exec=qemu-ppc64le-static ./... ;;
             s390x)    GOARCH=s390x   go test -count=1 -exec=qemu-s390x-static ./... ;;
+            # 32-bit: 386 runs natively on the amd64 runner (qemu-i386 loses float
+            # state across preemption); arm under qemu.
+            386)      GOARCH=386     go test -count=1 ./... ;;
+            arm)      GOARCH=arm     go test -count=1 -exec=qemu-arm-static ./... ;;
           esac
