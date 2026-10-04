@@ -30,3 +30,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# openid-client judge (npm ci in CI)
+testdata/openid-client/node_modules/

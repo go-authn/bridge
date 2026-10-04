@@ -40,6 +40,14 @@ jobs:
       - name: fileshare
         if: matrix.os == 'ubuntu-latest'
         run: go install github.com/go-fileshare/fileshare@v0.15.0
+      # openid-client, an OpenID Certified relying party, as this provider's
+      # client (openidclient_test.go); pinned by testdata/openid-client's lock.
+      - uses: actions/setup-node@v7
+        if: matrix.os == 'ubuntu-latest'
+        with: { node-version: lts/* }
+      - name: openid-client
+        if: matrix.os == 'ubuntu-latest'
+        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
       # The ACME CA is Pebble, Let's Encrypt's test CA, with External Account
       # Binding required as HARICA requires it. Pure Go, so every OS has it.
       - name: pebble
@@ -116,6 +124,10 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
         run: go install github.com/go-fileshare/fileshare@v0.15.0
+      - uses: actions/setup-node@v7
+        with: { node-version: lts/* }
+      - name: openid-client
+        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: go test -race -count=1 ./...
@@ -137,6 +149,10 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq xmlsec1
       - name: fileshare
         run: go install github.com/go-fileshare/fileshare@v0.15.0
+      - uses: actions/setup-node@v7
+        with: { node-version: lts/* }
+      - name: openid-client
+        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: |
