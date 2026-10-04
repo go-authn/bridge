@@ -338,6 +338,11 @@ type assertionOpts struct {
 	// authnAt, when set, is the AuthnInstant: when the IdP says the person
 	// authenticated (now by default).
 	authnAt time.Time
+	// eptid, when set, is released as eduPersonTargetedID: the
+	// AttributeValue's content, a string or a saml:NameID element.
+	eptid string
+	// nameID, when set, replaces the transient NameID of the Subject.
+	nameID string
 }
 
 // respond has the IdP (xmlsec1) answer a request: the assertion encrypted
@@ -369,11 +374,15 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 		}
 		return s + `</saml:Attribute>`
 	}
+	nameID := `<saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">t1</saml:NameID>`
+	if o.nameID != "" {
+		nameID = o.nameID
+	}
 	body := ""
 	if o.status == "" {
 		assertion := `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a` + token()[:20] + `" Version="2.0" IssueInstant="` + ts + `">` +
 			`<saml:Issuer>` + issuer + `</saml:Issuer>` +
-			`<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">t1</saml:NameID>` +
+			`<saml:Subject>` + nameID +
 			`<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData Recipient="` + acs + `" InResponseTo="` + requestID + `" NotOnOrAfter="` + later + `"/></saml:SubjectConfirmation></saml:Subject>` +
 			`<saml:Conditions NotBefore="` + ts + `" NotOnOrAfter="` + later + `"><saml:AudienceRestriction><saml:Audience>` + f.s.cfg.SAML.EntityID + `</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
 			`<saml:AuthnStatement AuthnInstant="` + authnAt + `" SessionIndex="_s1"><saml:AuthnContext><saml:AuthnContextClassRef>` + o.acr + `</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>` +
@@ -381,6 +390,7 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.6", o.eppn) +
 			attr("urn:oasis:names:tc:SAML:attribute:subject-id", o.subjectID) +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.7", o.entitlement...) +
+			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.10", o.eptid) +
 			attr("urn:oid:2.16.840.1.113730.3.1.241", "Alice Martin") +
 			attr("urn:oid:0.9.2342.19200300.100.1.3", "alice@"+idpScope) +
 			`</saml:AttributeStatement></saml:Assertion>`
