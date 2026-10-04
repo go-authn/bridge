@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"regexp"
 	"slices"
@@ -267,12 +268,18 @@ func halfHash(tok string) string {
 // userinfo answers with the claims an access token's scopes release (OIDC
 // Core 5.3).
 func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
-	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok {
+	raw, err := bearerOf(r)
+	if err != nil {
+		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if raw == "" {
 		w.Header().Set("WWW-Authenticate", `Bearer`)
 		http.Error(w, "a bearer token is required", http.StatusUnauthorized)
 		return
 	}
+	var ok bool
 	claims, err := s.cfg.accessKey.verify("at+jwt", strings.TrimSpace(raw))
 	var info map[string]any
 	if err == nil {
@@ -324,4 +331,34 @@ func (s *server) accessAudience(client *clientBlock, scopes []string) any {
 		}
 	}
 	return audience(client.Audience)
+}
+
+// bearerOf is the access token a /userinfo request carries: in the
+// Authorization header (RFC 6750 2.1), or in a form-encoded POST body
+// (2.2, which OpenID Connect Core 5.3.1 lets a client use). Never in the
+// query (2.3: SHOULD NOT -- it ends up in logs and in Referer headers), and
+// never two ways at once (2: "MUST NOT use more than one method"), which
+// is refused rather than one of them chosen. "" is no token at all.
+func bearerOf(r *http.Request) (string, error) {
+	header, hasHeader := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	var body []string
+	if r.Method == http.MethodPost {
+		if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt == "application/x-www-form-urlencoded" {
+			if err := r.ParseForm(); err != nil {
+				return "", errors.New("the request body could not be read")
+			}
+			body = r.PostForm["access_token"]
+		}
+	}
+	switch {
+	case len(body) > 1:
+		return "", errors.New("access_token given more than once")
+	case hasHeader && len(body) == 1:
+		return "", errors.New("the access token was sent two ways: use one (RFC 6750 2)")
+	case len(body) == 1:
+		return strings.TrimSpace(body[0]), nil
+	case hasHeader:
+		return strings.TrimSpace(header), nil
+	}
+	return "", nil
 }
