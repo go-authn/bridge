@@ -64,7 +64,10 @@ func TestACertificateRequestHeldAcrossADisablingGetsNothing(t *testing.T) {
 			func(t *testing.T) []byte { pub, _, _ := ed25519.GenerateKey(rand.Reader); return authorizedKey(t, pub) }},
 		{"x509", "nfs", "nfs", "/x509/cert",
 			func(t *testing.T) *fixture { f, _ := x509Fixture(t); return f },
-			func(t *testing.T) []byte { k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader); return csrFor(t, k) }},
+			func(t *testing.T) []byte {
+				k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				return csrFor(t, k)
+			}},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			f := tc.fixture(t)
