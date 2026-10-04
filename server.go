@@ -40,9 +40,12 @@ type server struct {
 	log        io.Writer
 	now        func() time.Time
 
-	// logins in progress, keyed by the handle the browser carries in a
-	// cookie and the IdP carries in RelayState.
-	logins *ttl[*login]
+	// usedLogins are the handles of logins an IdP has answered for: a login
+	// lives in its cookie (loginseal.go), and this is what makes it single-use.
+	// Written only after a signed response is accepted, so not by anybody
+	// anonymous.
+	usedLogins *ttl[bool]
+	logins     loginWindow
 	// codes not yet exchanged.
 	codes *ttl[*grant]
 	// spent codes, remembered as long as the tokens they bought live, so
@@ -93,6 +96,8 @@ type login struct {
 
 	pending saml.Pending
 	started bool
+	// expires is when the login, sealed in its cookie, stops opening.
+	expires time.Time
 }
 
 // An issuedToken is an access token this provider still honours: what
@@ -134,7 +139,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	}
 	now := func() time.Time { return s.now() }
 	// What anonymous requests fill is capped (store.go).
-	s.logins = newTTL[*login](now).capped(maxPending).evicting()
+	s.usedLogins = newTTL[bool](now).capped(maxPending).evicting()
 	s.limiter = newRateLimiter(*cfg.RequestsPerMinute, now)
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
