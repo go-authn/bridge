@@ -440,6 +440,16 @@ honoured at `/userinfo` and for certificates, written through to one table,
 `bridge_state`, and read at start. Without it they live in memory, and a
 restart logs everybody out.
 
+A login in progress is not among them: it travels in its own cookie, sealed
+(AES-256-GCM, under a key derived from the subject salt) so that the browser
+can neither read nor change it -- the way SATOSA, the SAML-OIDC proxy of the
+R&E federations, carries its state. Starting one costs this provider nothing
+it keeps, a restart between the application and the IdP's answer costs the
+person nothing, and an authorization request too large to carry (state,
+nonce, redirect URI together past what a cookie holds) is refused at the
+start. Once an IdP has answered for a login, its handle is remembered until
+the login would have expired, so it is answered once.
+
 - A refresh token is kept as its **SHA-256**, never as itself: whoever reads
   the database cannot use what is in it (Ory Hydra's fosite keeps a signature
   for the same reason). Access tokens are kept by their `jti`, not a secret.
@@ -525,7 +535,7 @@ with `grpc.health.v1` beside it:
 | `Status` | version, the federation's metadata (IdPs, valid until, last refresh, last error), what is held in memory |
 | `RefreshMetadata` | fetch the federation's metadata now |
 | `ListIdPs`, `ListClients` | what the institution list shows, and the configured relying parties |
-| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their logins in progress and their application password |
+| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their device grants in progress and their application password |
 | `DisablePerson`, `EnablePerson` | refuse somebody here -- at login and at every token, whatever their institution says -- and revoke what they hold; optionally until a given time |
 | `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
 | `ListDisabled` | who is disabled, why, by whom, until when |
@@ -632,10 +642,10 @@ Starting a login, a device grant and posting to the ACS cost memory or an RSA
 operation before anybody is authenticated, so each address gets so many a
 minute (429 past it). An address is an IPv4 address or an IPv6 /64 -- one host
 holds a whole /64 -- and each IPv4 /24 and IPv6 /48 shares ten times that, so
-a flood needs many networks rather than many addresses. The logins and device
-grants in progress are capped at 20,000; past that, the oldest is pushed out
-rather than everybody being refused, so a login is lost only if 20,000 others
-start before it completes. Behind a proxy, name it in `trusted_proxies`, or every
+a flood needs many networks rather than many addresses. A login in progress is
+kept by its browser, not here (see State). The device grants waiting for
+their person are capped at 20,000; past that, the oldest is pushed out rather
+than everybody being refused. Behind a proxy, name it in `trusted_proxies`, or every
 request is the proxy's: one address for the whole internet, and the wrong
 device codes of one person lock out everybody. Every request is bounded: 1 MiB,
 30 s to read, 60 s to answer, 2 min idle.
