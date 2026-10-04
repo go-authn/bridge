@@ -33,8 +33,11 @@ fp=$(openssl x509 -in $W/fed.crt -outform der | openssl dgst -sha256 -r | cut -d
 # written once for the bridge and never read back.
 c1=$(openssl rand -hex 24)
 c2=$(openssl rand -hex 24)
+c3=$(openssl rand -hex 24)
 printf '%s' "$c1" > $W/client1.secret
 printf '%s' "$c2" > $W/client2.secret
+printf '%s' "$c3" > $W/client3.secret
+printf 'file:/data/state.db' > $W/state.dsn
 cb="https://localhost.emobix.co.uk:8443/test/a/bridge/callback"
 
 # The browser, as the suite drives it: through the IdP's login page when it
@@ -96,7 +99,40 @@ client "conformance2" {
   pkce             = "or_nonce"
   refresh_lifetime = "1h"
 }
+
+# The Shared Signals transmitter, and the suite's receiver as its client.
+disabled_file = "/data/disabled.json"
+state {
+  driver   = "sqlite"
+  dsn_file = "/work/state.dsn"
+}
+admin {
+  listen     = "unix:///data/admin.sock"
+  reflection = true
+}
+ssf {}
+client "ssf-receiver" {
+  secret_file        = "/work/client3.secret"
+  ssf_receiver       = true
+  ssf_subject_format = "iss_sub"   # the CAEP Interop Profile's (2.5)
+}
 HCL
+
+cat > $W/ssf.json <<JSON
+{
+  "alias": "bridge-ssf",
+  "description": "go-authn/bridge, Shared Signals transmitter",
+  "server": { "discoveryUrl": "https://bridge:8443/.well-known/openid-configuration" },
+  "client": { "client_id": "ssf-receiver", "client_secret": "$c3", "scope": "ssf" },
+  "ssf": {
+    "subjects": {
+      "valid":   { "format": "email", "email": "alice@univ-example.fr" },
+      "invalid": { "format": "email", "email": "nobody@nowhere.invalid" }
+    },
+    "transmitter": { "issuer": "https://bridge:8443", "metadata_suffix": "" }
+  }
+}
+JSON
 
 cat > $W/plan.json <<JSON
 {
@@ -119,6 +155,8 @@ $(login_entry)
 JSON
 
 docker compose up -d
+# The operator's tool, ready before a module waits for it.
+docker compose --profile tools pull --quiet admin
 trap 'docker compose logs --no-color bridge idp > $W/containers.log 2>&1 || true; docker compose down -v >/dev/null 2>&1 || true' EXIT
 # The plan only means something against a bridge that answers.
 for i in $(seq 1 60); do
@@ -127,4 +165,13 @@ for i in $(seq 1 60); do
   sleep 2
 done
 echo "the bridge answers discovery"
-$W/driver -config $W/plan.json -expected expected.txt
+# Both plans run, whatever the first one says; the script fails if either did.
+status=0
+$W/driver -config $W/plan.json -expected expected.txt || status=1
+echo
+echo "== openid-ssf-transmitter-caep-test-plan (poll)"
+$W/driver -config $W/ssf.json -expected expected-ssf.txt \
+  -plan openid-ssf-transmitter-caep-test-plan \
+  -trigger "docker compose run --rm -T admin -plaintext -d '{\"username\":\"alice@univ-example.fr\"}' unix:///data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
+  -variant '{"ssf_delivery_mode":"poll","client_registration":"static_client","server_metadata":"discovery","client_auth_type":"client_secret_basic","ssf_server_metadata":"discovery","ssf_auth_mode":"dynamic"}' || status=1
+exit $status
