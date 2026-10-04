@@ -139,6 +139,14 @@ together with RENATER's discovery service (which cannot be restricted).
   person is disabled here the next NFS call, the SFTP session already open and
   a new SFTP login are all refused within seconds -- through the CRL and the
   KRL go-fileshare fetches from this provider.
+- The **[OpenID Foundation conformance suite](https://gitlab.com/openid/conformance-suite)**,
+  the one OpenID Provider certification runs, executes its
+  `oidcc-basic-certification-test-plan` (static clients, discovery) against
+  the bridge built from every pull request, logging in through a SAML IdP on
+  the way (`conformance/`). Every module passes or is listed, with why, in
+  `conformance/expected.txt` -- the two deliberate refusals: a request with
+  neither PKCE nor a nonce, and `acr_values` an IdP did not honour. The
+  workflow fails on any other, and on a listed one that starts passing.
 - The **relying party is also [openid-client](https://github.com/panva/openid-client)**,
   an OpenID Certified one, over TLS: discovery's issuer, the RFC 9207 `iss`
   parameter, the ID token, userinfo against its `sub`, the access token as an
