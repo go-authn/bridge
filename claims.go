@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -82,7 +83,11 @@ func newPerson(a *saml.Assertion, c *claimsBlock) (*person, error) {
 		p.username = strings.ToLower(p.username)
 	}
 	for _, g := range c.Groups {
-		p.groups = append(p.groups, a.Attributes[groupAttributes[g]]...)
+		for _, v := range a.Attributes[groupAttributes[g]] {
+			if g == "scoped_affiliation" || c.groupAllowed(a.IdP, v) {
+				p.groups = append(p.groups, v)
+			}
+		}
 	}
 	slices.Sort(p.groups)
 	p.groups = slices.Compact(p.groups)
@@ -114,8 +119,18 @@ func newPerson(a *saml.Assertion, c *claimsBlock) (*person, error) {
 
 	set(p.edu, "eduperson_principal_name", saml.EduPersonPrincipalName)
 	setAll(p.edu, "eduperson_scoped_affiliation", saml.EduPersonScopedAffiliation)
-	setAll(p.edu, "eduperson_entitlement", saml.EduPersonEntitlement)
-	setAll(p.edu, "entitlements", saml.EduPersonEntitlement)
+	// Entitlements are authorization data (RFC 9068 2.2.3.1, AARC-G069), held
+	// to the asserting IdP's namespaces as the groups claim is.
+	var ents []string
+	for _, v := range a.Attributes[saml.EduPersonEntitlement] {
+		if c.groupAllowed(a.IdP, v) {
+			ents = append(ents, v)
+		}
+	}
+	if len(ents) > 0 {
+		p.edu["eduperson_entitlement"] = ents
+		p.edu["entitlements"] = ents
+	}
 	setAll(p.edu, "eduperson_assurance", saml.EduPersonAssurance)
 	set(p.edu, "eduperson_orcid", saml.EduPersonOrcid)
 	set(p.edu, "schac_home_organization", saml.SchacHomeOrganization)
@@ -171,3 +186,75 @@ func (p *person) claimsFor(scopes []string) map[string]any {
 // scopes the federation grants each IdP: a login in one of them was
 // vouched for by an IdP that holds the scope.
 var scopedUsername = map[string]bool{"eppn": true, "subject_id": true}
+
+// groupAllowed says whether idp may assert v, a group or entitlement value.
+//
+// With exactly one IdP allowed to log in, it may assert anything. With more,
+// a value is kept only if its namespace is one the asserting IdP owns: one
+// of its shibmd scopes or a subdomain of one, which is what the federation
+// vouches for. The namespace of
+//
+//	urn:mace:<domain>:...                     (the MACE URN registry)
+//	urn:geant:<domain>:...[#<authority>]      (AARC-G002)
+//	https://<host>/...
+//
+// is the domain; any other value has none, and is dropped. The AARC-G002
+// authority is not a namespace: it names the system that manages the group,
+// and a value under another namespace never equals one of this IdP's anyway. TrustedGroups
+// widens an IdP's namespaces by prefix.
+func (c *claimsBlock) groupAllowed(idp *saml.IdP, v string) bool {
+	if c.oneIdP {
+		return true
+	}
+	for _, p := range c.TrustedGroups[idp.EntityID] {
+		if p != "" && strings.HasPrefix(v, p) {
+			return true
+		}
+	}
+	domains := groupDomains(v)
+	if len(domains) == 0 {
+		return false
+	}
+	for _, d := range domains {
+		if !ownsDomain(idp.Scopes, d) {
+			return false
+		}
+	}
+	return true
+}
+
+// groupDomains are the domains a group value is issued under; nil when it
+// names none.
+func groupDomains(v string) []string {
+	lv := strings.ToLower(v)
+	for _, nid := range []string{"urn:mace:", "urn:geant:"} {
+		if !strings.HasPrefix(lv, nid) {
+			continue
+		}
+		rest := lv[len(nid):]
+		i := strings.IndexAny(rest, ":#")
+		if i <= 0 {
+			return nil
+		}
+		return []string{rest[:i]}
+	}
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.Hostname() == "" {
+		return nil
+	}
+	return []string{strings.ToLower(u.Hostname())}
+}
+
+// ownsDomain says whether d is one of scopes or under one.
+func ownsDomain(scopes []string, d string) bool {
+	if d == "" {
+		return false
+	}
+	for _, s := range scopes {
+		s = strings.ToLower(s)
+		if s != "" && (d == s || strings.HasSuffix(d, "."+s)) {
+			return true
+		}
+	}
+	return false
+}

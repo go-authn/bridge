@@ -28,6 +28,16 @@ type ttl[V any] struct {
 	// has one, or a flood of them is memory without end (measured: 100,000
 	// logins, 63 MB, from as many unauthenticated /authorize).
 	max int
+	// evict, when set, makes a put past max push out the OLDEST entry instead
+	// of being refused. A refusal hands the store to whoever fills it
+	// first, for as long as entries live -- 20,000 anonymous /authorize in
+	// 15 minutes locked everybody out (measured). Evicting, a login is lost
+	// only if the ceiling's worth of new ones arrive before it completes:
+	// the same flood per MINUTE, not per quarter of an hour.
+	evict bool
+	// order is the keys in insertion order, for evict; it may hold keys
+	// already gone.
+	order []string
 	// swept is when expired entries were last removed: at most once a
 	// second, not at every put -- sweeping a map of 100,000 under the lock
 	// at every insert made the 100th thousand 80 times slower than the first.
@@ -41,6 +51,26 @@ var errFull = errors.New("too many in progress; try again in a minute")
 func (t *ttl[V]) capped(n int) *ttl[V] {
 	t.max = n
 	return t
+}
+
+// evicting makes a full t push out its oldest entry rather than refuse;
+// it returns t.
+func (t *ttl[V]) evicting() *ttl[V] {
+	t.evict = true
+	return t
+}
+
+// evictOldest removes the oldest entry still there.
+func (t *ttl[V]) evictOldest() {
+	for len(t.order) > 0 {
+		k := t.order[0]
+		t.order = t.order[1:]
+		if _, ok := t.m[k]; ok {
+			delete(t.m, k)
+			t.forget(k)
+			return
+		}
+	}
 }
 
 type entry[V any] struct {
@@ -62,10 +92,26 @@ func (t *ttl[V]) put(k string, v V, expires time.Time) error {
 
 func (t *ttl[V]) putLocked(k string, v V, expires time.Time) error {
 	t.sweep()
-	if _, there := t.m[k]; !there && t.max > 0 && len(t.m) >= t.max {
+	_, there := t.m[k]
+	if !there && t.max > 0 && len(t.m) >= t.max {
 		t.sweepNow()
 		if len(t.m) >= t.max {
-			return errFull
+			if !t.evict {
+				return errFull
+			}
+			t.evictOldest()
+		}
+	}
+	if !there && t.evict {
+		t.order = append(t.order, k)
+		if len(t.order) > 2*len(t.m)+64 {
+			live := t.order[:0]
+			for _, o := range t.order {
+				if _, ok := t.m[o]; ok || o == k {
+					live = append(live, o)
+				}
+			}
+			t.order = live
 		}
 	}
 	t.m[k] = entry[V]{v, expires}

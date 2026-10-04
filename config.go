@@ -231,6 +231,16 @@ type claimsBlock struct {
 	// "entitlement", "scoped_affiliation", "affiliation", "is_member_of".
 	// Entitlements by default.
 	Groups []string `hcl:"groups,optional"`
+
+	// TrustedGroups names, by IdP entity ID, namespaces that IdP may assert
+	// groups in beyond its own scopes: a community proxy (eduTEAMS, say)
+	// asserting urn:geant:eduteams.org:... for people of many institutions.
+	// Each is a prefix of the value. Only read when more than one IdP may
+	// log in; with exactly one, that IdP is trusted for every value.
+	TrustedGroups map[string][]string `hcl:"trusted_groups,optional"`
+
+	// oneIdP is set at load: saml { idps } lists exactly one IdP.
+	oneIdP bool
 }
 
 // One relying party.
@@ -483,6 +493,15 @@ func (c *config) check() error {
 		if _, ok := groupAttributes[g]; !ok {
 			return fmt.Errorf("claims: groups %q: one of entitlement, scoped_affiliation, affiliation, is_member_of", g)
 		}
+	}
+	// ⛔ Groups decide what a person may do, at every resource server and in
+	// every certificate, and the federation has hundreds of IdPs: a value is
+	// kept only if the IdP that asserted it owns its namespace (groupAllowed).
+	// affiliation has no namespace at all -- "staff" from one university is
+	// "staff" from any -- so, like uid and mail, only with exactly one IdP.
+	c.Claims.oneIdP = len(c.SAML.IdPs) == 1
+	if !c.Claims.oneIdP && slices.Contains(c.Claims.Groups, "affiliation") {
+		return fmt.Errorf("claims: groups = \"affiliation\" carries no institution, so any IdP of the federation could grant any of its values: it needs saml { idps } to list exactly one IdP; with more, use scoped_affiliation")
 	}
 
 	if c.SSHCA != nil && c.CertificatesFile == "" {

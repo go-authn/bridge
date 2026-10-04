@@ -172,11 +172,12 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	at := map[string]any{
 		"iss":       s.cfg.Issuer,
 		"sub":       sub,
-		"aud":       audience(client.Audience),
+		"aud":       s.accessAudience(client, scopes),
 		"client_id": client.ID,
 		"exp":       now.Add(s.cfg.tokenTTL).Unix(),
 		"iat":       now.Unix(),
 		"jti":       jti,
+		"idp":       who.idp,
 		"scope":     strings.Join(scopes, " "),
 		"auth_time": who.authTime.Unix(),
 	}
@@ -201,7 +202,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 
 	info := who.claimsFor(scopes)
 	info["sub"] = sub
-	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp}, now.Add(s.cfg.tokenTTL))
+	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp, subject: who.subject}, now.Add(s.cfg.tokenTTL))
 	// A disable between the check above and this put would not find the
 	// token it is revoking: the disable is recorded before it revokes, so
 	// looking again after the put closes the window.
@@ -295,3 +296,22 @@ func audience(aud []string) any {
 
 // spentFamily marks, among what a spent code bought, its refresh family.
 const spentFamily = "family:"
+
+// bridgeScopes are the scopes that open an endpoint of this provider's own:
+// an SSH certificate, an NFS certificate, an application password.
+var bridgeScopes = []string{"ssh", "nfs", "app_password"}
+
+// accessAudience is who an access token is for (RFC 9068 3: aud names the
+// resource). A token carrying a bridge scope is for THIS provider alone:
+// addressed to the client's resource servers as well, any of them could
+// replay it here -- measured, a token for fileshare reset the person's
+// application password -- and one a resource server receives never names
+// this provider.
+func (s *server) accessAudience(client *clientBlock, scopes []string) any {
+	for _, sc := range bridgeScopes {
+		if slices.Contains(scopes, sc) {
+			return s.cfg.Issuer
+		}
+	}
+	return audience(client.Audience)
+}

@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +26,8 @@ import (
 // does not come back. The review's proofs were throwaway; these are not.
 
 // A flood of anonymous /authorize meets the store's ceiling, not the
-// memory's; past an address's allowance it is told 429.
+// memory's -- and past it pushes out the oldest login rather than locking
+// everybody out; past an address's allowance it is told 429.
 func TestLoginsAreCapped(t *testing.T) {
 	f := newFixture(t, "")
 	f.s.limiter = nil // the ceiling alone first
@@ -36,8 +38,8 @@ func TestLoginsAreCapped(t *testing.T) {
 			t.Fatalf("login %d refused: %d", i+1, res.StatusCode)
 		}
 	}
-	if res := newBrowser(t).get(r.authURL()); res.StatusCode != http.StatusServiceUnavailable {
-		t.Errorf("a fourth login past a ceiling of 3: %d", res.StatusCode)
+	if res := newBrowser(t).get(r.authURL()); res.StatusCode >= 400 {
+		t.Errorf("a fourth login past a ceiling of 3 was refused: %d", res.StatusCode)
 	}
 	if n := f.s.logins.count(); n != 3 {
 		t.Errorf("%d logins held", n)
@@ -269,3 +271,79 @@ func TestConcurrentRotationRevokesTheFamily(t *testing.T) {
 }
 
 var ssfStreamConfig = ssf.StreamConfig{EventsRequested: []string{eventSessionRevoked}, Delivery: ssf.Delivery{Method: deliveryPoll}}
+
+// A full store pushes out its oldest entry, and keeps its ceiling.
+func TestAFullStoreEvictsTheOldest(t *testing.T) {
+	now := time.Now()
+	tt := newTTL[int](func() time.Time { return now }).capped(3).evicting()
+	for i, k := range []string{"a", "b", "c", "d"} {
+		if err := tt.put(k, i, now.Add(time.Minute)); err != nil {
+			t.Fatalf("put %s: %v", k, err)
+		}
+	}
+	if _, ok := tt.get("a"); ok {
+		t.Error("the oldest entry is still there")
+	}
+	for _, k := range []string{"b", "c", "d"} {
+		if _, ok := tt.get(k); !ok {
+			t.Errorf("%s was evicted", k)
+		}
+	}
+	if n := tt.count(); n != 3 {
+		t.Errorf("%d entries held, ceiling 3", n)
+	}
+	// An entry taken before it is evicted is not counted twice.
+	tt.take("b")
+	tt.put("e", 5, now.Add(time.Minute))
+	tt.put("f", 6, now.Add(time.Minute))
+	if _, ok := tt.get("c"); ok {
+		t.Error("c should have gone, the oldest once b was taken")
+	}
+	if _, ok := tt.get("d"); !ok {
+		t.Error("d went though b's taking had made room")
+	}
+	// Without evicting, the ceiling still refuses.
+	plain := newTTL[int](func() time.Time { return now }).capped(1)
+	plain.put("x", 1, now.Add(time.Minute))
+	if err := plain.put("y", 2, now.Add(time.Minute)); err != errFull {
+		t.Errorf("a store that does not evict: %v", err)
+	}
+}
+
+// One host holds a whole IPv6 /64, and one site a /48 or an IPv4 /24: the
+// limit is theirs, not each address's. Measured before: 20,000 logins from
+// one /64 in 134 ms.
+func TestTheLimitIsPerNetwork(t *testing.T) {
+	now := time.Now()
+	l := newRateLimiter(120, func() time.Time { return now })
+	allowed := func(addrs func(i int) string, n int) int {
+		ok := 0
+		for i := range n {
+			if l.allow(addrs(i)) {
+				ok++
+			}
+		}
+		return ok
+	}
+	// Distinct addresses of one /64.
+	if n := allowed(func(i int) string { return fmt.Sprintf("2001:db8:1:2::%x", i+1) }, 1000); n != 120 {
+		t.Errorf("one /64: %d of 1000 allowed, want 120", n)
+	}
+	// Distinct /64s of one /48: ten allowances, then nothing.
+	if n := allowed(func(i int) string { return fmt.Sprintf("2001:db8:1:%x::1", i+3) }, 5000); n != 120*coarseFactor-120 {
+		t.Errorf("one /48: %d allowed, want %d", n, 120*coarseFactor-120)
+	}
+	// Another network is unaffected.
+	if !l.allow("2001:db8:2::1") || !l.allow("192.0.2.1") {
+		t.Error("another network was refused")
+	}
+	// IPv4: each address its own, a /24 shared at ten times.
+	if n := allowed(func(i int) string { return fmt.Sprintf("198.51.100.%d", i%250+1) }, 5000); n != 120*coarseFactor {
+		t.Errorf("one /24: %d allowed, want %d", n, 120*coarseFactor)
+	}
+	// A minute later, refilled.
+	now = now.Add(time.Minute)
+	if !l.allow("2001:db8:1:2::1") {
+		t.Error("not refilled after a minute")
+	}
+}

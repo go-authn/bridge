@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,24 +87,28 @@ type revoked struct {
 // certificate or an application password asked with that token -- so the
 // person gets nothing new; and an SSH certificate already issued lasts its
 // validity, which is why that is short.
-func (s *server) revokePerson(username string) (revoked, error) {
+func (s *server) revokePerson(username string, subjects ...string) (revoked, error) {
 	username = s.normUsername(username)
-	if username == "" {
+	if username == "" && len(subjects) == 0 {
 		return revoked{}, nil
 	}
 	// To whoever verifies this provider's tokens on their own (ssf.go)
 	// FIRST: a step below failing -- the certificates file, the application
 	// password table -- must not leave them uninformed, again at every retry.
-	s.broadcast(accountSubject(username), s.now(), "", nil)
-	r := s.revokeMatching(func(u, _ string) bool { return u == username })
+	if username != "" {
+		s.broadcast(accountSubject(username), s.now(), "", nil)
+	}
+	r := s.revokeMatching(func(u, _, subject string) bool {
+		return (username != "" && strings.EqualFold(u, username)) || (subject != "" && slices.Contains(subjects, subject))
+	})
 	// Every step is tried, whatever an earlier one did.
 	var errs []error
-	if n, err := s.certs.revoke(func(p, _ string) bool { return p == username }, s.now()); err != nil {
+	if n, err := s.certs.revoke(func(p, _ string) bool { return username != "" && strings.EqualFold(p, username) }, s.now()); err != nil {
 		errs = append(errs, fmt.Errorf("revoking certificates: %w", err))
 	} else {
 		r.certificates = n
 	}
-	if ap := s.cfg.AppPasswords; ap != nil {
+	if ap := s.cfg.AppPasswords; ap != nil && username != "" {
 		if n, err := ap.removeCount(username); err != nil {
 			errs = append(errs, fmt.Errorf("removing the application password: %w", err))
 		} else {
@@ -117,7 +123,7 @@ func (s *server) revokePerson(username string) (revoked, error) {
 // revokeIdP ends everything this provider still holds for the people one
 // institution vouched for, application passwords included.
 func (s *server) revokeIdP(entityID string) (revoked, error) {
-	r := s.revokeMatching(func(_, idp string) bool { return idp == entityID })
+	r := s.revokeMatching(func(_, idp, _ string) bool { return idp == entityID })
 	// Every step is tried, whatever an earlier one did.
 	var errs []error
 	if n, err := s.certs.revoke(func(_, idp string) bool { return idp == entityID }, s.now()); err != nil {
@@ -145,11 +151,11 @@ func (s *server) revokeIdP(entityID string) (revoked, error) {
 
 // revokeMatching ends the grants, tokens and logins of whoever match says,
 // by username and IdP.
-func (s *server) revokeMatching(match func(username, idp string) bool) revoked {
+func (s *server) revokeMatching(match func(username, idp, subject string) bool) revoked {
 	var r revoked
 	var families, rts []string
 	s.refresh.each(func(rt string, g *refreshGrant) {
-		if match(g.who.username, g.who.idp) {
+		if match(g.who.username, g.who.idp, g.who.subject) {
 			families = append(families, g.family)
 			rts = append(rts, rt)
 		}
@@ -167,7 +173,7 @@ func (s *server) revokeMatching(match func(username, idp string) bool) revoked {
 	}
 	var jtis []string
 	s.issued.each(func(jti string, it issuedToken) {
-		if match(it.username, it.idp) {
+		if match(it.username, it.idp, it.subject) {
 			jtis = append(jtis, jti)
 		}
 	})
@@ -178,12 +184,12 @@ func (s *server) revokeMatching(match func(username, idp string) bool) revoked {
 	}
 	var codes, devices []string
 	s.codes.each(func(c string, g *grant) {
-		if match(g.who.username, g.who.idp) {
+		if match(g.who.username, g.who.idp, g.who.subject) {
 			codes = append(codes, c)
 		}
 	})
 	s.devices.each(func(dc string, g *deviceGrant) {
-		if g.who != nil && match(g.who.username, g.who.idp) {
+		if g.who != nil && match(g.who.username, g.who.idp, g.who.subject) {
 			devices = append(devices, dc)
 		}
 	})

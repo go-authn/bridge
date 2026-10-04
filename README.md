@@ -66,7 +66,7 @@ on its metadata page; the one above is the 2026 certificate's.
 |---|---|
 | **flow** | authorization code, with **PKCE S256 required for every client** |
 | **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash` |
-| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, with `preferred_username` and `groups` so that a resource server can decide without asking anybody |
+| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs` or `app_password` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
@@ -83,6 +83,26 @@ it.
 request (they may) is **refused**, so a client that asked for REFEDS MFA is
 never told it got a second factor when it did not.
 
+**Groups are held to the IdP that asserted them.** A federation has hundreds
+of IdPs, and groups decide what a person may do -- at every resource server,
+in the SSH and X.509 certificates. With more than one IdP allowed to log in,
+an `eduPersonEntitlement` or `isMemberOf` value is kept only if its namespace
+is one of that IdP's shibmd scopes or under one: `urn:mace:<domain>:...`,
+`urn:geant:<domain>:...` (AARC-G002), `https://<host>/...`. Any other value
+is dropped, in `groups` and in `entitlements` alike. `affiliation`, which names
+no institution, needs `saml { idps }` to list exactly one IdP. A community
+proxy asserting groups for people of many institutions is named explicitly:
+
+```hcl
+claims {
+  trusted_groups = {
+    "https://proxy.eduteams.org/saml2/idp/metadata.php" = ["urn:geant:eduteams.org:"]
+  }
+}
+```
+
+With exactly one IdP, that IdP is trusted for every value, as before.
+
 ## What it refuses
 
 | | why |
@@ -95,6 +115,7 @@ never told it got a second factor when it did not.
 | a **public client that sends a secret** | it is configured as something it is not |
 | an IdP response delivered **into another browser** | the login is found through a cookie, not through the RelayState the response carries -- otherwise anybody could log somebody else in as themselves |
 | an IdP that releases **no persistent identifier** | nobody could be recognised twice |
+| a **username with a comma, a space, a quote or a control character**, for an SSH or X.509 certificate | sshd reads `principals="a,b"` and AuthorizedPrincipalsFile entries as lists: one such name is two |
 | everything [go-authn/saml](https://github.com/go-authn/saml#what-it-refuses) refuses | unsigned or SHA-1 assertions, several assertions, replay, foreign scopes, unauthenticated CBC... |
 
 And at configuration time: an issuer that is not https, a salt under 32 bytes,
@@ -509,6 +530,12 @@ with `grpc.health.v1` beside it:
 | `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
 | `ListDisabled` | who is disabled, why, by whom, until when |
 
+A person is disabled as who they are: usernames compare without case (eppn,
+uid, mail and subject-id all compare so), the entry records the stable
+identity of everybody known under that name, so another spelling from their
+IdP does not let them back in, and a person whose IdP releases no username
+is disabled by the `sub` a relying party knows them by.
+
 Disabling is kept in a file, and refused without one -- somebody disabled
 until the next restart would be let back in by the next deployment:
 
@@ -603,8 +630,12 @@ requests_per_minute = 120             # per address; 0 turns the limit off
 
 Starting a login, a device grant and posting to the ACS cost memory or an RSA
 operation before anybody is authenticated, so each address gets so many a
-minute (429 past it), and the logins and device grants in progress are capped
-(503 past 20,000). Behind a proxy, name it in `trusted_proxies`, or every
+minute (429 past it). An address is an IPv4 address or an IPv6 /64 -- one host
+holds a whole /64 -- and each IPv4 /24 and IPv6 /48 shares ten times that, so
+a flood needs many networks rather than many addresses. The logins and device
+grants in progress are capped at 20,000; past that, the oldest is pushed out
+rather than everybody being refused, so a login is lost only if 20,000 others
+start before it completes. Behind a proxy, name it in `trusted_proxies`, or every
 request is the proxy's: one address for the whole internet, and the wrong
 device codes of one person lock out everybody. Every request is bounded: 1 MiB,
 30 s to read, 60 s to answer, 2 min idle.
