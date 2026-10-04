@@ -41,13 +41,20 @@ type rateLimiter struct {
 type bucket struct {
 	tokens float64
 	at     time.Time
+	size   float64 // tokens when full
+	rate   float64 // tokens a second
 }
 
 func newRateLimiter(perMinute int, now func() time.Time) *rateLimiter {
 	return &rateLimiter{perMinute: perMinute, now: now, m: map[string]bucket{}}
 }
 
-// allow takes one token for addr, if it has one.
+// coarseFactor is how many times an address's allowance its wider
+// network gets (limitKeys).
+const coarseFactor = 10
+
+// allow takes one token for addr, and one for its wider network, if both
+// have one.
 func (l *rateLimiter) allow(addr string) bool {
 	if l == nil || l.perMinute <= 0 {
 		return true
@@ -55,30 +62,59 @@ func (l *rateLimiter) allow(addr string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
-	rate := float64(l.perMinute) / 60 // per second
 	// A full bucket is the same as no bucket: forget those every minute,
 	// or the map keeps every address that ever asked.
 	if now.Sub(l.swept) >= time.Minute {
 		for a, b := range l.m {
-			if b.tokens+now.Sub(b.at).Seconds()*rate >= float64(l.perMinute) {
+			if b.tokens+now.Sub(b.at).Seconds()*b.rate >= b.size {
 				delete(l.m, a)
 			}
 		}
 		l.swept = now
 	}
-	b, ok := l.m[addr]
-	if !ok {
-		b = bucket{tokens: float64(l.perMinute), at: now}
-	}
-	b.tokens = min(float64(l.perMinute), b.tokens+now.Sub(b.at).Seconds()*rate)
-	b.at = now
-	if b.tokens < 1 {
-		l.m[addr] = b
+	fine, coarse := limitKeys(addr)
+	size := float64(l.perMinute)
+	f := l.refill(fine, size, now)
+	c := l.refill(coarse, size*coarseFactor, now)
+	if f.tokens < 1 || c.tokens < 1 {
+		l.m[fine], l.m[coarse] = f, c
 		return false
 	}
-	b.tokens--
-	l.m[addr] = b
+	f.tokens--
+	c.tokens--
+	l.m[fine], l.m[coarse] = f, c
 	return true
+}
+
+// refill is the bucket under key, brought up to now.
+func (l *rateLimiter) refill(key string, size float64, now time.Time) bucket {
+	b, ok := l.m[key]
+	if !ok {
+		b = bucket{tokens: size, at: now, size: size, rate: size / 60}
+	}
+	b.tokens = min(b.size, b.tokens+now.Sub(b.at).Seconds()*b.rate)
+	b.at = now
+	return b
+}
+
+// limitKeys are the buckets an address draws on. One host holds a whole
+// IPv6 /64 (RFC 6177, RFC 8981 privacy addresses rotate inside it), so
+// an address-per-bucket limit is no limit at all there: the /64 is the
+// host. And one site holds a /48, or an IPv4 /24, so those share a wider
+// bucket, coarseFactor times larger: a campus behind one /24 still logs
+// in by the thousand a minute, and flooding needs many networks rather
+// than many addresses -- measured before this, one /64 filled the login
+// store in 134 ms.
+func limitKeys(addr string) (fine, coarse string) {
+	a, err := netip.ParseAddr(addr)
+	if err != nil {
+		return addr, "?" + addr
+	}
+	a = a.Unmap()
+	if a.Is4() {
+		return a.String(), netip.PrefixFrom(a, 24).Masked().String()
+	}
+	return netip.PrefixFrom(a, 64).Masked().String(), netip.PrefixFrom(a, 48).Masked().String()
 }
 
 // limited wraps h: an address past its allowance is told so, 429.

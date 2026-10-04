@@ -102,6 +102,9 @@ type issuedToken struct {
 	info     map[string]any
 	username string
 	idp      string
+	// subject is the person's stable identity (person.subject), by which
+	// disabling finds them when the username will not do.
+	subject string
 }
 
 // A grant is what a code stands for.
@@ -131,14 +134,14 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	}
 	now := func() time.Time { return s.now() }
 	// What anonymous requests fill is capped (store.go).
-	s.logins = newTTL[*login](now).capped(maxPending)
+	s.logins = newTTL[*login](now).capped(maxPending).evicting()
 	s.limiter = newRateLimiter(*cfg.RequestsPerMinute, now)
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
 	s.issued = newTTL[issuedToken](now)
-	s.devices = newTTL[*deviceGrant](now).capped(maxPending)
+	s.devices = newTTL[*deviceGrant](now).capped(maxPending).evicting()
 	s.poll = deviceInterval * time.Second
-	s.userCodes = newTTL[string](now).capped(maxPending)
+	s.userCodes = newTTL[string](now).capped(maxPending).evicting()
 	s.tries = &attempts{m: map[string][]time.Time{}, now: now}
 	s.refresh = newTTL[*refreshGrant](now)
 	s.rotated = newTTL[string](now)

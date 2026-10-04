@@ -279,6 +279,7 @@ type storedIssued struct {
 	Info     map[string]any `json:"info"`
 	Username string         `json:"username,omitempty"`
 	IdP      string         `json:"idp,omitempty"`
+	Subject  string         `json:"subject,omitempty"`
 }
 
 var errUnknownClient = errors.New("a client the configuration no longer has")
@@ -320,11 +321,13 @@ func (s *server) persistStores() error {
 		return err
 	}
 	return s.issued.persist(s.state, "issued",
-		func(it issuedToken) ([]byte, error) { return json.Marshal(storedIssued{it.info, it.username, it.idp}) },
+		func(it issuedToken) ([]byte, error) {
+			return json.Marshal(storedIssued{it.info, it.username, it.idp, it.subject})
+		},
 		func(b []byte) (issuedToken, error) {
 			var st storedIssued
 			err := json.Unmarshal(b, &st)
-			return issuedToken{info: st.Info, username: st.Username, idp: st.IdP}, err
+			return issuedToken{info: st.Info, username: st.Username, idp: st.IdP, subject: st.Subject}, err
 		})
 }
 

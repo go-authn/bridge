@@ -4,9 +4,9 @@ go 1.26.8
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-authn/directory v0.8.0
+	github.com/go-authn/directory v0.10.0
 	github.com/go-authn/krl v0.2.0
-	github.com/go-authn/oidc v0.1.0
+	github.com/go-authn/oidc v0.2.0
 	github.com/go-authn/revocation v0.1.1
 	github.com/go-authn/saml v0.2.0
 	github.com/go-authn/servercert v0.1.2

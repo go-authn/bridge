@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-authn/krl"
 	"github.com/go-authn/revocation"
@@ -95,6 +96,41 @@ func generateSSHCA(file string) (string, error) {
 
 // bearerClaims verifies an access token this provider issued and that has
 // not been revoked, returning its claims.
+// certifiableName refuses a username that would not stay ONE name in a
+// certificate. sshd reads principals="a,b" in authorized_keys and
+// AuthorizedPrincipalsFile entries as comma- and space-separated lists
+// (sshd(8) AUTHORIZED_KEYS FILE FORMAT), so a principal holding a comma is
+// two names to whatever splits it; a quote or a control character breaks
+// those files' own quoting, and in an X.509 CN reaches DN parsers too. The
+// IdP chose the name, and the federation vouched only for its scope.
+func certifiableName(u string) error {
+	for _, r := range u {
+		if r == ',' || r == '"' || r == '\\' || unicode.IsSpace(r) || !unicode.IsPrint(r) {
+			return fmt.Errorf("the username %q cannot be put in a certificate: it holds %q", u, r)
+		}
+	}
+	return nil
+}
+
+// addressedHere says whether a token is addressed to this provider
+// (accessAudience). Its own endpoints ask, after the scope: a token a
+// resource server received must not be replayable here.
+func (s *server) addressedHere(claims map[string]any) bool {
+	switch aud := claims["aud"].(type) {
+	case string:
+		return aud == s.cfg.Issuer
+	case []any:
+		return slices.Contains(aud, any(s.cfg.Issuer))
+	}
+	return false
+}
+
+// notAddressedHere answers a token addressed to somebody else (RFC 6750 3.1).
+func notAddressedHere(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token", error_description="not addressed to this provider"`)
+	http.Error(w, "the token is addressed to another audience", http.StatusUnauthorized)
+}
+
 func (s *server) bearerClaims(r *http.Request) (map[string]any, error) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
@@ -138,9 +174,17 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "this token may not have SSH keys certified", http.StatusForbidden)
 		return
 	}
+	if !s.addressedHere(claims) {
+		notAddressedHere(w)
+		return
+	}
 	user, _ := claims["preferred_username"].(string)
 	if user == "" {
 		http.Error(w, "the institution released no username to put in a certificate", http.StatusForbidden)
+		return
+	}
+	if err := certifiableName(user); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))

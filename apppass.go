@@ -132,7 +132,7 @@ func (b *appPasswordsBlock) set(login, idp, password string, expires time.Time) 
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM `+b.Table+` WHERE login = `+b.arg(1), login); err != nil {
+	if _, err := tx.Exec(`DELETE FROM `+b.Table+` WHERE LOWER(login) = LOWER(`+b.arg(1)+`)`, login); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`INSERT INTO `+b.Table+` (login, password, nt_hash, expires, idp) VALUES (`+
@@ -240,6 +240,10 @@ func (s *server) appPassword(w http.ResponseWriter, r *http.Request) {
 	if !ok || !client.AppPasswords || !slices.Contains(strings.Fields(scope), "app_password") {
 		w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope", scope="app_password"`)
 		http.Error(w, "this token may not set application passwords", http.StatusForbidden)
+		return
+	}
+	if !s.addressedHere(claims) {
+		notAddressedHere(w)
 		return
 	}
 	user, _ := claims["preferred_username"].(string)
