@@ -1,0 +1,4 @@
+# Modules of oidcc-basic-certification-test-plan that are expected not to
+# pass, one per line: module RESULT  # why
+# The driver fails on any other non-passing module, and on a module listed
+# here that starts passing (so that this list cannot go stale).
