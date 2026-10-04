@@ -299,7 +299,7 @@ func (s *server) sshKRLSig(w http.ResponseWriter, r *http.Request) {
 // issueKRL is the KRL currently issued: the CA's revoked serials, an
 // expiry listValidity on, signed.
 func (s *server) issueKRL(ca *sshCABlock) (*issuedList, error) {
-	return s.issueList("ssh", func(revoked []issuedCert, version uint64, now time.Time) ([]byte, []byte, error) {
+	return s.issueList("ssh", func(revoked []issuedCert, version, _ uint64, now time.Time) ([]byte, []byte, error) {
 		b := krl.NewBuilder(version, "go-authn/bridge "+s.cfg.Issuer)
 		for _, c := range revoked {
 			n, err := strconv.ParseUint(c.Serial, 10, 64)

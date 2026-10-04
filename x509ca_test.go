@@ -543,12 +543,15 @@ func TestNFSCertificatesRevokedWithTheirIdP(t *testing.T) {
 	if s, b := postCSR(t, f, tok.AccessToken, csrFor(t, key)); s != http.StatusOK {
 		t.Fatalf("%d %s", s, b)
 	}
+	before, _, _ := getCRL(t, f)
 	_, r, err := f.s.disableIdP(idpEntity, "compromised", "test", time.Time{})
 	if err != nil || r.certificates != 1 {
 		t.Fatalf("disabling the IdP: %v, %d certificates", err, r.certificates)
 	}
-	if crl, _, _ := getCRL(t, f); len(crl.RevokedCertificateEntries) != 1 || crl.Number.Int64() != 1 {
-		t.Errorf("CRL %d entries, number %s", len(crl.RevokedCertificateEntries), crl.Number)
+	// The number moved: higher than before the revocation (it rises at
+	// every issue, revlists.go).
+	if crl, _, _ := getCRL(t, f); len(crl.RevokedCertificateEntries) != 1 || crl.Number.Cmp(before.Number) <= 0 {
+		t.Errorf("CRL %d entries, number %s after %s", len(crl.RevokedCertificateEntries), crl.Number, before.Number)
 	}
 	// Through the command line: a client that may not ask for the nfs scope
 	// is refused before any login.
