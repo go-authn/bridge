@@ -29,8 +29,40 @@ done
 # keygen runs where the containers do: this script is for linux/amd64 (CI).
 $W/bridge keygen --key $W/oidc.key --salt $W/salt
 fp=$(openssl x509 -in $W/fed.crt -outform der | openssl dgst -sha256 -r | cut -d' ' -f1 | tr a-f A-F)
-for c in 1 2; do openssl rand -hex 24 > $W/client$c.secret; done
+# The two clients' credentials: throwaway, made here and kept in variables,
+# written once for the bridge and never read back.
+c1=$(openssl rand -hex 24)
+c2=$(openssl rand -hex 24)
+printf '%s' "$c1" > $W/client1.secret
+printf '%s' "$c2" > $W/client2.secret
 cb="https://localhost.emobix.co.uk:8443/test/a/bridge/callback"
+
+# The browser, as the suite drives it: through the IdP's login page when it
+# shows one (with "shot", its screenshot is what prompt=login and max_age=1
+# ask a person to upload), its auto-posted answer, back to the suite.
+login_entry() {
+  local first='[ "click", "id", "testidp-login", "optional" ]'
+  if [ "${1:-}" = shot ]; then
+    first='[ "wait", "xpath", "//*", 10, "Sign in to the test IdP", "update-image-placeholder-optional" ], [ "click", "id", "testidp-login", "optional" ]'
+  fi
+  cat <<E
+    { "match": "https://bridge:8443/authorize*", "tasks": [
+        { "task": "Sign in at the IdP", "optional": true, "match": "https://idp:8443/sso*", "commands": [ $first ] },
+        { "task": "Post the IdP's answer", "optional": true, "match": "https://idp:8443/sso*",
+          "commands": [ [ "click", "id", "SAMLSubmitButton", "optional" ] ] },
+        { "task": "Verify Complete", "match": "*/test/*/callback*",
+          "commands": [ [ "wait", "id", "submission_complete", 10 ] ] } ] }
+E
+}
+# A redirect URI the client did not register: the bridge answers with a page
+# of its own, never a redirect, and the suite wants it shown.
+error_entry() {
+  cat <<E
+    { "match": "https://bridge:8443/authorize*", "tasks": [
+        { "task": "Expect the redirect URI error page", "match": "https://bridge:8443/authorize*",
+          "commands": [ [ "wait", "xpath", "//*", 10, "did not register", "update-image-placeholder" ] ] } ] }
+E
+}
 
 cat > $W/bridge.hcl <<HCL
 issuer            = "https://bridge:8443"
@@ -71,19 +103,18 @@ cat > $W/plan.json <<JSON
   "alias": "bridge",
   "description": "go-authn/bridge",
   "server": { "discoveryUrl": "https://bridge:8443/.well-known/openid-configuration" },
-  "client":  { "client_id": "conformance1", "client_secret": "$(cat $W/client1.secret)" },
-  "client2": { "client_id": "conformance2", "client_secret": "$(cat $W/client2.secret)" },
+  "client":  { "client_id": "conformance1", "client_secret": "$c1" },
+  "client2": { "client_id": "conformance2", "client_secret": "$c2" },
+  "client_secret_post": { "client_id": "conformance1", "client_secret": "$c1" },
   "browser": [
-    {
-      "match": "https://bridge:8443/authorize*",
-      "tasks": [
-        { "task": "Post the IdP's answer", "optional": true, "match": "https://idp:8443/sso*",
-          "commands": [ [ "click", "id", "SAMLSubmitButton", "optional" ] ] },
-        { "task": "Verify Complete", "match": "*/test/*/callback*",
-          "commands": [ [ "wait", "id", "submission_complete", 10 ] ] }
-      ]
-    }
-  ]
+$(login_entry)
+  ],
+  "override": {
+    "oidcc-prompt-login": { "browser": [ $(login_entry shot) ] },
+    "oidcc-max-age-1": { "browser": [ $(login_entry shot) ] },
+    "oidcc-ensure-registered-redirect-uri": { "browser": [ $(error_entry) ] },
+    "oidcc-ensure-request-object-with-redirect-uri": { "browser": [ $(error_entry) ] }
+  }
 }
 JSON
 

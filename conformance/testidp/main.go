@@ -14,15 +14,18 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -58,7 +61,7 @@ func main() {
 		SSOURL:                  *b.JoinPath("sso"),
 		SignatureMethod:         dsig.RSASHA256SignatureMethod,
 		ServiceProviderProvider: sps,
-		SessionProvider: session{
+		SessionProvider: &sessions{key: key, cert: cert, entity: b.JoinPath("metadata").String(), person: cj.Session{
 			ID:                     "conformance",
 			NameID:                 "alice",
 			UserName:               "alice",
@@ -68,7 +71,7 @@ func main() {
 			UserSurname:            "Martin",
 			UserCommonName:         "Alice Martin",
 			SubjectID:              "a1b2c3@" + *scope,
-		},
+		}},
 	}
 	md, err := xml.Marshal(idp.Metadata())
 	if err != nil {
@@ -125,16 +128,6 @@ func loadPair(keyFile, certFile string) (*rsa.PrivateKey, *x509.Certificate) {
 		log.Fatal(err)
 	}
 	return key, cert
-}
-
-// session is the one person, always logged in.
-type session cj.Session
-
-func (s session) GetSession(http.ResponseWriter, *http.Request, *cj.IdpAuthnRequest) *cj.Session {
-	cs := cj.Session(s)
-	cs.CreateTime = time.Now()
-	cs.ExpireTime = time.Now().Add(time.Hour)
-	return &cs
 }
 
 // spFetcher reads the bridge's SP metadata when a request first names it:
@@ -212,3 +205,113 @@ func federate(entity []byte, scope string, key *rsa.PrivateKey, cert *x509.Certi
 	out.SetRoot(signed)
 	return out.WriteToBytes()
 }
+
+// sessions is the one person, logged in the way an IdP logs people in: a
+// login page when the browser has no session or the request says
+// ForceAuthn, a session cookie that keeps the time of that login (what
+// AuthnInstant reports, so prompt=none sees the same auth_time), and
+// NoPassive to an IsPassive request from a browser with no session.
+type sessions struct {
+	key    *rsa.PrivateKey
+	cert   *x509.Certificate
+	entity string
+	person cj.Session
+}
+
+const sessionCookie = "testidp_auth"
+
+func (s *sessions) GetSession(w http.ResponseWriter, r *http.Request, req *cj.IdpAuthnRequest) *cj.Session {
+	now := time.Now()
+	if r.Method == http.MethodPost && r.PostFormValue("testidp_login") == "yes" {
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: strconv.FormatInt(now.Unix(), 10),
+			Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+		return s.at(now)
+	}
+	var at time.Time
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if n, err := strconv.ParseInt(c.Value, 10, 64); err == nil {
+			at = time.Unix(n, 0)
+		}
+	}
+	passive := req.Request.IsPassive != nil && *req.Request.IsPassive
+	force := req.Request.ForceAuthn != nil && *req.Request.ForceAuthn
+	switch {
+	case at.IsZero() && passive:
+		s.noPassive(w, req)
+		return nil
+	case at.IsZero() || force:
+		loginPage.Execute(w, map[string]string{
+			"Request": base64.StdEncoding.EncodeToString(req.RequestBuffer),
+			"Relay":   req.RelayState,
+		})
+		return nil
+	}
+	return s.at(at)
+}
+
+func (s *sessions) at(t time.Time) *cj.Session {
+	p := s.person
+	p.CreateTime = t
+	p.ExpireTime = t.Add(8 * time.Hour)
+	return &p
+}
+
+var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
+<html><head><title>Sign in to the test IdP</title></head><body>
+<h1>Sign in to the test IdP</h1>
+<form method="post" action="/sso">
+<input type="hidden" name="SAMLRequest" value="{{.Request}}">
+<input type="hidden" name="RelayState" value="{{.Relay}}">
+<input type="hidden" name="testidp_login" value="yes">
+<button id="testidp-login" type="submit">Sign in</button>
+</form></body></html>`))
+
+// noPassive answers an IsPassive request with no session: a signed
+// Response, status Responder/NoPassive, posted back to the ACS.
+func (s *sessions) noPassive(w http.ResponseWriter, req *cj.IdpAuthnRequest) {
+	doc := etree.NewDocument()
+	resp := doc.CreateElement("samlp:Response")
+	resp.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	resp.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
+	resp.CreateAttr("ID", fmt.Sprintf("id-%d", time.Now().UnixNano()))
+	resp.CreateAttr("Version", "2.0")
+	resp.CreateAttr("IssueInstant", time.Now().UTC().Format(time.RFC3339))
+	resp.CreateAttr("Destination", req.ACSEndpoint.Location)
+	resp.CreateAttr("InResponseTo", req.Request.ID)
+	resp.CreateElement("saml:Issuer").SetText(s.entity)
+	st := resp.CreateElement("samlp:Status").CreateElement("samlp:StatusCode")
+	st.CreateAttr("Value", "urn:oasis:names:tc:SAML:2.0:status:Responder")
+	st.CreateElement("samlp:StatusCode").CreateAttr("Value", "urn:oasis:names:tc:SAML:2.0:status:NoPassive")
+
+	ctx := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(tls.Certificate{Certificate: [][]byte{s.cert.Raw}, PrivateKey: s.key, Leaf: s.cert}))
+	ctx.Hash = crypto.SHA256
+	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+	signed, err := ctx.SignEnveloped(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// The schema puts the Signature right after the Issuer.
+	last := len(signed.Child) - 1
+	sig := signed.Child[last]
+	rest := signed.Child[:last]
+	signed.Child = append([]etree.Token{rest[0], sig}, rest[1:]...)
+	out := etree.NewDocument()
+	out.SetRoot(signed)
+	b, err := out.WriteToBytes()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	postForm.Execute(w, map[string]string{
+		"URL": req.ACSEndpoint.Location, "Response": base64.StdEncoding.EncodeToString(b), "Relay": req.RelayState,
+	})
+}
+
+var postForm = template.Must(template.New("post").Parse(`<!doctype html>
+<html><body onload="document.forms[0].submit()">
+<form method="post" action="{{.URL}}">
+<input type="hidden" name="SAMLResponse" value="{{.Response}}">
+<input type="hidden" name="RelayState" value="{{.Relay}}">
+<input id="SAMLSubmitButton" type="submit" value="Continue">
+</form></body></html>`))
