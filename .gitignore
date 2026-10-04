@@ -33,3 +33,6 @@ go.work.sum
 
 # openid-client judge (npm ci in CI)
 testdata/openid-client/node_modules/
+
+# conformance run output (keys, binaries)
+conformance/work/

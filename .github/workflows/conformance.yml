@@ -1,0 +1,37 @@
+name: conformance
+
+# The OpenID Foundation's conformance suite -- the one OpenID certification
+# runs -- against the bridge built from this tree: oidcc-basic-
+# certification-test-plan, static clients, discovery. Its own workflow: it
+# takes minutes and pulls the suite's images from GitLab's registry.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: "off"
+
+jobs:
+  oidcc-basic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            conformance/go.sum
+      - name: run the plan
+        run: conformance/run.sh
+      - name: the bridge's and the IdP's logs
+        if: always()
+        run: cat conformance/work/containers.log || true

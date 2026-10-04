@@ -1,0 +1,44 @@
+# The OpenID Foundation conformance suite, the bridge and a test SAML IdP on
+# one network. run.sh writes ./work (binaries, keys, configuration) first.
+services:
+  mongodb:
+    image: mongo:6.0.13
+  server:
+    image: registry.gitlab.com/openid/conformance-suite:${SUITE_TAG:-release-v5.3.1}
+    environment:
+      BASE_URL: https://localhost.emobix.co.uk:8443
+      BASE_MTLS_URL: https://localhost.emobix.co.uk:8444
+      MONGODB_HOST: mongodb
+      SPRING_PROFILES_ACTIVE: dev
+      OIDC_GOOGLE_CLIENTID: unused
+      OIDC_GOOGLE_SECRET: unused
+      OIDC_GITLAB_CLIENTID: unused
+      OIDC_GITLAB_SECRET: unused
+    depends_on: [mongodb]
+  nginx:
+    image: registry.gitlab.com/openid/conformance-suite/nginx:${SUITE_TAG:-release-v5.3.1}
+    ports: ["8443:8443"]
+    networks:
+      default:
+        # the suite's browser follows redirects to its own public name
+        aliases: [localhost.emobix.co.uk]
+    depends_on: [server]
+  idp:
+    image: alpine:3.22
+    volumes: ["./work:/work:ro"]
+    command: ["/work/testidp", "-listen", ":8443", "-base", "https://idp:8443",
+      "-tls-cert", "/work/idp-tls.crt", "-tls-key", "/work/idp-tls.key",
+      "-idp-key", "/work/idp.key", "-idp-cert", "/work/idp.crt",
+      "-fed-key", "/work/fed.key", "-fed-cert", "/work/fed.crt",
+      "-sp-metadata", "https://bridge:8443/saml/metadata"]
+  bridge:
+    image: alpine:3.22
+    volumes: ["./work:/work:ro"]
+    command: ["/work/bridge", "-c", "/work/bridge.hcl"]
+    # the run's CA, for the IdP's metadata over https (Go reads it on Linux)
+    environment:
+      SSL_CERT_FILE: /work/ca.crt
+    ports: ["9443:8443"]
+    # it reads the IdP's metadata at start, so it waits for the IdP
+    restart: on-failure
+    depends_on: [idp]

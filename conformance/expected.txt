@@ -1,0 +1,16 @@
+# Modules of oidcc-basic-certification-test-plan that are expected not to
+# pass, one per line: module RESULT  # why
+# The driver fails on any other non-passing module, and on a module listed
+# here that starts passing (so that this list cannot go stale).
+
+# A code asked for with neither PKCE nor a nonce has nothing binding it to
+# the client that asked (RFC 9700 2.1.1). The bridge requires PKCE, or for
+# a pkce = "or_nonce" client the nonce, and refuses a request with neither.
+oidcc-ensure-request-without-nonce-succeeds-for-code-flow FAILED
+
+# acr_values become the SAML RequestedAuthnContext, and an IdP that answers
+# with another class is refused rather than reported, so that a client that
+# asked for a second factor is never told it got one when it did not
+# (README, "What an application gets"). OIDC Core makes acr_values a
+# voluntary request; the suite sends values no IdP knows.
+oidcc-ensure-request-with-acr-values-succeeds FAILED
