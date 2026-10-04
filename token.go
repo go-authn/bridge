@@ -128,14 +128,24 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		return
 	}
 	v := r.PostForm.Get("code_verifier")
-	if !codeVerifier.MatchString(v) {
-		tokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier is missing or malformed")
-		return
-	}
-	sum := sha256.Sum256([]byte(v))
-	if subtle.ConstantTimeCompare([]byte(base64.RawURLEncoding.EncodeToString(sum[:])), []byte(g.challenge)) != 1 {
-		tokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier does not match code_challenge")
-		return
+	if g.challenge == "" {
+		// RFC 9700 2.1.1: a code asked for without a code_challenge is not
+		// exchanged with a code_verifier -- otherwise whoever stripped the
+		// challenge from the request would never be noticed.
+		if r.PostForm.Has("code_verifier") {
+			tokenError(w, http.StatusBadRequest, "invalid_grant", "a code_verifier for an authorization request that carried no code_challenge")
+			return
+		}
+	} else {
+		if !codeVerifier.MatchString(v) {
+			tokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier is missing or malformed")
+			return
+		}
+		sum := sha256.Sum256([]byte(v))
+		if subtle.ConstantTimeCompare([]byte(base64.RawURLEncoding.EncodeToString(sum[:])), []byte(g.challenge)) != 1 {
+			tokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier does not match code_challenge")
+			return
+		}
 	}
 	resp, jti, err := s.issue(client, g.who, g.scopes, g.nonce)
 	if err != nil {

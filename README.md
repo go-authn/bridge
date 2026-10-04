@@ -107,7 +107,7 @@ With exactly one IdP, that IdP is trusted for every value, as before.
 
 | | why |
 |---|---|
-| an authorization request **without PKCE S256** | RFC 7636 makes `plain` the default when no method is given, so a missing method is refused rather than read as S256 |
+| an authorization request **without PKCE S256** | RFC 7636 makes `plain` the default when no method is given, so a missing method is refused rather than read as S256 | A **confidential** client configured `pkce = "or_nonce"` may send an OpenID `nonce` instead, as RFC 9700 2.1.1 allows; then a `code_verifier` for that code is refused, which is the RFC's downgrade check. A public client cannot be so configured. |
 | a **redirect URI** not registered exactly | shown on the page, never sent to the URI: an error sent anywhere a request names is an open redirector. Loopback URIs may change port (RFC 8252) |
 | a parameter **twice** | RFC 6749 3.1 |
 | a **code used twice** | refused, and the token the first use bought stops working (RFC 6749 4.1.2) |
