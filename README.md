@@ -78,7 +78,10 @@ address, which is not the same as anybody having verified that the person reads
 it.
 
 `prompt=none` becomes `IsPassive`, and an IdP with no session answers
-`login_required`. `prompt=login` and `max_age` become `ForceAuthn`.
+`login_required`. `prompt=login` and `max_age=0` become `ForceAuthn`; any other
+`max_age` goes without it, and when the IdP's `AuthnInstant` is older than
+`max_age` the person is sent back to it with `ForceAuthn` (OIDC Core 3.1.2.1:
+re-authenticate only "if the elapsed time is greater").
 `acr_values` becomes `RequestedAuthnContext` -- and an IdP that ignores the
 request (they may) is **refused**, so a client that asked for REFEDS MFA is
 never told it got a second factor when it did not.
