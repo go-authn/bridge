@@ -33,10 +33,10 @@ services:
       "-sp-metadata", "https://bridge:8443/saml/metadata"]
   bridge:
     image: alpine:3.22
-    volumes: ["./work:/work:ro"]
+    volumes: ["./work:/work:ro", "bridgedata:/data"]
     command: ["/work/bridge", "-c", "/work/bridge.hcl"]
-    # the SSF queue and the state it needs: written, so not in ./work
-    tmpfs: ["/data"]
+    # the SSF queue, its state and the admin socket: written, so not in
+    # ./work; a named volume, so that grpcurl can reach the socket
     # the run's CA, for the IdP's metadata over https (Go reads it on Linux)
     environment:
       SSL_CERT_FILE: /work/ca.crt
@@ -44,3 +44,12 @@ services:
     # it reads the IdP's metadata at start, so it waits for the IdP
     restart: on-failure
     depends_on: [idp]
+  # The operator's side of an SSF event: the bridge's admin API, by grpcurl
+  # on its unix socket. Run by the driver when a module asks; not started.
+  admin:
+    image: fullstorydev/grpcurl:v1.9.3
+    volumes: ["bridgedata:/data"]
+    profiles: ["tools"]
+
+volumes:
+  bridgedata:

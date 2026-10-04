@@ -106,6 +106,10 @@ state {
   driver   = "sqlite"
   dsn_file = "/work/state.dsn"
 }
+admin {
+  listen     = "unix:///data/admin.sock"
+  reflection = true
+}
 ssf {}
 client "ssf-receiver" {
   secret_file  = "/work/client3.secret"
@@ -165,5 +169,6 @@ echo
 echo "== openid-ssf-transmitter-caep-test-plan (poll)"
 $W/driver -config $W/ssf.json -expected expected-ssf.txt \
   -plan openid-ssf-transmitter-caep-test-plan \
+  -trigger "docker compose run --rm -T admin -plaintext -unix -d '{\"username\":\"alice@univ-example.fr\"}' /data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
   -variant '{"ssf_delivery_mode":"poll","client_registration":"static_client","server_metadata":"discovery","client_auth_type":"client_secret_basic","ssf_server_metadata":"discovery","ssf_auth_mode":"dynamic"}' || status=1
 exit $status
