@@ -388,6 +388,15 @@ acme {
 `directory_ca_file` trusts a private ACME CA (step-ca) for the directory's own
 TLS.
 
+`cache_dir` holds private keys, so the provider refuses to start on one that
+anybody else could reach or re-point. That means a symbolic link, mode beyond
+`0700`, or an owner other than the provider's user. **Every directory above
+it** is held to sshd's StrictModes rule: owned by root or that user, and not
+writable by group or others unless sticky. A missing `cache_dir` is created
+`0700`. Since bridge v0.16.5 (go-authn/servercert v0.3.0) the directories
+above are checked too, not only the last one. A `/var/lib/bridge` that a
+group can write now stops the provider at startup, naming the path.
+
 ⛔ golang.org/x/crypto/acme (v0.57.0) polls a finalized order at the URL in
 the finalize response's `Location` header, which RFC 8555 does not put there
 ([golang/go#77704](https://github.com/golang/go/issues/77704)): Let's
@@ -399,6 +408,7 @@ HARICA sends the header is not known here; with this, it does not matter.
 ⛔ The SAML key and certificate (`saml { key_file cert_file }`) are not this
 certificate and never change with it: they are in the federation's metadata,
 and every IdP encrypts to them.
+
 ## ssh-oidc (KIT: oidc-agent, mccli, motley-cue, pam-ssh-oidc)
 
 [ssh-oidc](https://ssh-oidc-doc.data.kit.edu/) logs people into SSH with an
