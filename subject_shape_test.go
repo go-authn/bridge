@@ -10,9 +10,10 @@ import (
 // party then sees a new person, and their refresh grants, application
 // passwords and disable-by-sub entries stop matching.
 //
-// go-authn/saml v0.3.0 does exactly that for the shapes below. It is not
-// taken for that reason, and this test is what makes a dependency update to
-// it fail here rather than pass and rename people.
+// go-authn/saml v0.3.0 did exactly that for the shapes below, and bridge
+// v0.18.0 took it knowingly (README, "Upgrading to v0.18.0"): the shapes
+// pinned here are v0.3.0's. The next change of shape fails here too, rather
+// than passing and renaming people again.
 func TestASubjectKeepsItsShape(t *testing.T) {
 	const opaque = "a1b2c3"
 	for _, tc := range []struct {
@@ -22,17 +23,17 @@ func TestASubjectKeepsItsShape(t *testing.T) {
 	}{
 		{"an opaque eduPersonTargetedID",
 			func(string) assertionOpts { return assertionOpts{eptid: opaque} },
-			func(string) string { return idpEntity + "!" + opaque }},
+			func(sp string) string { return idpEntity + "!" + idpEntity + "!" + sp + "!" + opaque }},
 		{"an eduPersonTargetedID NameID with no NameQualifier",
 			func(sp string) assertionOpts {
 				return assertionOpts{eptid: `<saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" SPNameQualifier="` + sp + `">` + opaque + `</saml:NameID>`}
 			},
-			func(sp string) string { return idpEntity + "!!" + sp + "!" + opaque }},
+			func(sp string) string { return idpEntity + "!" + idpEntity + "!" + sp + "!" + opaque }},
 		{"a persistent NameID with no NameQualifier",
 			func(sp string) assertionOpts {
 				return assertionOpts{nameID: `<saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" SPNameQualifier="` + sp + `">` + opaque + `</saml:NameID>`}
 			},
-			func(sp string) string { return idpEntity + "!!" + sp + "!" + opaque }},
+			func(sp string) string { return idpEntity + "!" + idpEntity + "!" + sp + "!" + opaque }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t, "")

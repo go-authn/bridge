@@ -66,8 +66,8 @@ on its metadata page; the one above is the 2026 certificate's.
 | | |
 |---|---|
 | **flow** | authorization code, with **PKCE S256 required for every client** |
-| **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash` |
-| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs` or `app_password` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
+| **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash`, and **nothing about the person**: what the scopes release is at `/userinfo` (OIDC Core §5.4, since an access token is always issued). A client whose ID token is itself the credential, such as opkssh, sets `id_token_claims = true` to have them copied in |
+| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
@@ -411,6 +411,9 @@ verifying and never signing, for at least the longest PK Token lifetime any
 verifier allows (opkssh: a day by default, up to a week). Give opkssh a client
 of its own -- `http://localhost:3000/login-callback` and its two siblings as
 redirect URIs -- because its ID token travels to every server it logs into.
+That client needs `id_token_claims = true`: opkssh matches people on the PK
+Token's claims (`email`, `preferred_username`), and since v0.18.0 an ID token
+carries none unless its client asks.
 
 Judged by the openpubkey library itself: its client makes PK Tokens through
 the device flow, with GQ signatures, and through the loopback code flow; its
@@ -776,6 +779,35 @@ device codes of one person lock out everybody. Every request is bounded: 1 MiB,
 `claims { username = "uid" }` or `"mail"` needs `saml { idps }` to list exactly
 one IdP: neither is held to an IdP's scopes, so with two, one names the
 other's people.
+
+## Upgrading to v0.18.0
+
+Two changes a deployment must look at.
+
+**The ID token carries nothing about the person.** `email`, `name`,
+`preferred_username` and the eduperson claims are at `/userinfo`, as OIDC Core
+§5.4 says when an access token is issued; the OpenID Foundation's suite warned
+about them. An application that read them from the ID token calls `/userinfo`
+instead, or its client sets `id_token_claims = true` (an opkssh client must).
+
+**Some people get a new `sub`.** go-authn/saml v0.3.0 holds an unscoped
+identifier to the IdP that signed it, and that changes two shapes of the
+identifier `sub` is derived from:
+
+| the IdP releases | `sub` before (an HMAC of) | from v0.18.0 |
+|---|---|---|
+| an opaque string eduPersonTargetedID `v` | `idp!v` | `idp!idp!sp!v` |
+| an ePTID or persistent NameID with no NameQualifier | `idp!!spq!v` | `idp!idp!spq!v` |
+
+subject-id, pairwise-id, eppn and correctly qualified identifiers are
+unchanged. A person in the two rows above is **a new person** to every relying
+party: their refresh grants, application passwords, WireGuard keys and
+disable-by-sub entries no longer match. The change cannot be undone after the
+fact, since two old identifiers can map to one new one. Before upgrading, find
+the IdPs that release only those shapes (a log line `login: ... via <idp>` and
+the attribute the IdP sends) and tell their users that their accounts at the
+relying parties start afresh. `TestASubjectKeepsItsShape` pins the new shapes,
+so the next change will show up as a failing test, not as renamed people.
 
 ## What it is not, yet
 
