@@ -315,8 +315,9 @@ func audience(aud []string) any {
 const spentFamily = "family:"
 
 // bridgeScopes are the scopes that open an endpoint of this provider's own:
-// an SSH certificate, an NFS certificate, an application password.
-var bridgeScopes = []string{"ssh", "nfs", "app_password"}
+// an SSH certificate, an NFS certificate, an application password, a
+// WireGuard key, the list of WireGuard keys.
+var bridgeScopes = []string{"ssh", "nfs", "app_password", "wireguard", "wireguard_peers"}
 
 // accessAudience is who an access token is for (RFC 9068 3: aud names the
 // resource). A token carrying a bridge scope is for THIS provider alone:

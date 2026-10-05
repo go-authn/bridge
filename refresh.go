@@ -5,6 +5,8 @@ package main
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -47,6 +49,21 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, j
 // rotate is the token request with grant_type refresh_token.
 func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBlock) {
 	rt := r.PostForm.Get("refresh_token")
+	// RFC 6749 6: a refresh may ask for less than was granted -- a client
+	// that logged in for "openid wireguard" asks for "openid" alone, and
+	// gets a token for its own resource servers rather than for this
+	// provider. Nothing that was not granted, and checked BEFORE the token
+	// is spent, so that asking for too much does not cost the client its
+	// refresh token. The refresh token itself keeps everything it had.
+	asked := strings.Fields(r.PostForm.Get("scope"))
+	if peek, ok := s.refresh.get(hashToken(rt)); ok {
+		for _, sc := range asked {
+			if !slices.Contains(peek.scopes, sc) {
+				tokenError(w, http.StatusBadRequest, "invalid_scope", "the refresh token was not granted "+sc)
+				return
+			}
+		}
+	}
 	// Kept under their hashes (state.go): what the store holds is no token.
 	g, ok := s.refresh.take(hashToken(rt))
 	if !ok {
@@ -72,7 +89,16 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 		tokenError(w, http.StatusBadRequest, "invalid_grant", "the refresh token was revoked")
 		return
 	}
-	resp, jti, err := s.issue(client, g.who, g.scopes, "")
+	scopes := g.scopes
+	if len(asked) > 0 {
+		scopes = nil
+		for _, sc := range asked {
+			if slices.Contains(g.scopes, sc) && !slices.Contains(scopes, sc) {
+				scopes = append(scopes, sc)
+			}
+		}
+	}
+	resp, jti, err := s.issue(client, g.who, scopes, "")
 	if err != nil {
 		s.logf("token: %v", err)
 		if errors.Is(err, errDisabled) {

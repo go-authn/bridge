@@ -559,19 +559,35 @@ func (s *server) ssfHandlers(mux *http.ServeMux) {
 // an SSF receiver and nothing else: a token for the ssf scope, its subject
 // the client (RFC 9068 2.2), no refresh token.
 func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, client *clientBlock) {
-	if client.public() || !client.SSFReceiver || s.cfg.SSF == nil {
+	// What a client's own credentials may buy: the SSF transmitter for a
+	// receiver, the WireGuard list for a gateway. Nothing for a person.
+	var allowed []string
+	if !client.public() && client.SSFReceiver && s.cfg.SSF != nil {
+		allowed = append(allowed, "ssf")
+	}
+	if !client.public() && len(client.WireGuardPeers) > 0 && s.cfg.WireGuard != nil {
+		allowed = append(allowed, "wireguard_peers")
+	}
+	if len(allowed) == 0 {
 		tokenError(w, http.StatusBadRequest, "unauthorized_client", "this client may not use the client_credentials grant")
 		return
 	}
-	if sc := strings.Fields(r.PostForm.Get("scope")); len(sc) > 0 && !slices.Equal(sc, []string{"ssf"}) {
-		tokenError(w, http.StatusBadRequest, "invalid_scope", "the only scope for client credentials is ssf")
-		return
+	scopes := strings.Fields(r.PostForm.Get("scope"))
+	if len(scopes) == 0 {
+		scopes = allowed
 	}
+	for _, sc := range scopes {
+		if !slices.Contains(allowed, sc) {
+			tokenError(w, http.StatusBadRequest, "invalid_scope", "this client's credentials are for "+strings.Join(allowed, " ")+" only")
+			return
+		}
+	}
+	scope := strings.Join(scopes, " ")
 	now := s.now()
 	jti := token()
 	at := map[string]any{
-		"iss": s.cfg.Issuer, "sub": client.ID, "aud": audience(client.Audience), "client_id": client.ID,
-		"exp": now.Add(s.cfg.tokenTTL).Unix(), "iat": now.Unix(), "jti": jti, "scope": "ssf",
+		"iss": s.cfg.Issuer, "sub": client.ID, "aud": s.accessAudience(client, scopes), "client_id": client.ID,
+		"exp": now.Add(s.cfg.tokenTTL).Unix(), "iat": now.Unix(), "jti": jti, "scope": scope,
 	}
 	access, err := s.cfg.accessKey.sign("at+jwt", at)
 	if err != nil {
@@ -583,7 +599,7 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token": access, "token_type": "Bearer",
-		"expires_in": int(s.cfg.tokenTTL.Seconds()), "scope": "ssf",
+		"expires_in": int(s.cfg.tokenTTL.Seconds()), "scope": scope,
 	})
 }
 
