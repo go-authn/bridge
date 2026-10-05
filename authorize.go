@@ -88,6 +88,14 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "the ssf scope is for client credentials, not for a login")
 		return
 	}
+	if slices.Contains(scopes, "wireguard") && !client.WireGuardKeys {
+		fail("invalid_scope", "this client may not register WireGuard keys")
+		return
+	}
+	if slices.Contains(scopes, "wireguard_peers") {
+		fail("invalid_scope", "the wireguard_peers scope is for a gateway's client credentials, not for a login")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		fail("invalid_scope", "this client may not set application passwords")
 		return

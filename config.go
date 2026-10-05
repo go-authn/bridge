@@ -111,6 +111,10 @@ type config struct {
 	// X509CA issues X.509 client certificates for NFS over TLS (x509ca.go).
 	X509CA *x509CABlock `hcl:"x509_ca,block"`
 
+	// WireGuard keeps the WireGuard public keys people register, and serves
+	// a gateway the signed list of them (wireguard.go).
+	WireGuard *wireguardBlock `hcl:"wireguard,block"`
+
 	// Admin serves the gRPC administration API (proto/bridge/admin/v1).
 	// Absent, there is none.
 	Admin *adminBlock `hcl:"admin,block"`
@@ -220,6 +224,19 @@ type sshCABlock struct {
 	validity time.Duration
 }
 
+// The WireGuard key registry.
+type wireguardBlock struct {
+	// Lifetime is how long a registered key is listed: 24h by default. A
+	// client registers its key again to keep it, as it would heartbeat; a
+	// device that stops is dropped by every gateway when this runs out.
+	Lifetime string `hcl:"lifetime,optional"`
+	// MaxKeys is how many keys one person may hold at once, a device each:
+	// 10 by default.
+	MaxKeys int `hcl:"max_keys,optional"`
+
+	lifetime time.Duration
+}
+
 // How what the IdP said becomes claims.
 type claimsBlock struct {
 	// Username is the SAML attribute that becomes preferred_username: "eppn"
@@ -289,6 +306,16 @@ type clientBlock struct {
 	// have an X.509 client certificate issued by the x509_ca block -- which
 	// is how NFS over TLS (RFC 9289) names a federated person.
 	X509Certificates bool `hcl:"x509_certificates,optional"`
+
+	// WireGuardKeys lets tokens of this client, with the "wireguard" scope,
+	// register a WireGuard public key for the person -- how a VPN client
+	// such as claimward's enrols a device.
+	WireGuardKeys bool `hcl:"wireguard_keys,optional"`
+
+	// WireGuardPeers makes this confidential client a gateway: with client
+	// credentials and the "wireguard_peers" scope it reads the signed list
+	// of the keys registered through the clients named here.
+	WireGuardPeers []string `hcl:"wireguard_peers,optional"`
 
 	// SSFReceiver lets this confidential client get a token for the ssf
 	// scope with client credentials, and poll the SSF transmitter.
@@ -534,6 +561,25 @@ func (c *config) check() error {
 			return fmt.Errorf("ssh_ca: %w", err)
 		}
 	}
+	if wg := c.WireGuard; wg != nil {
+		if c.CertificatesFile == "" {
+			return errors.New("wireguard: certificates_file is required: a key that is not recorded can never be taken back")
+		}
+		wg.lifetime = 24 * time.Hour
+		if wg.Lifetime != "" {
+			d, err := time.ParseDuration(wg.Lifetime)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("wireguard: lifetime %q is not a positive duration", wg.Lifetime)
+			}
+			wg.lifetime = d
+		}
+		switch {
+		case wg.MaxKeys == 0:
+			wg.MaxKeys = 10
+		case wg.MaxKeys < 0:
+			return fmt.Errorf("wireguard: max_keys = %d", wg.MaxKeys)
+		}
+	}
 
 	if a := c.Admin; a != nil {
 		if !haveGRPC {
@@ -593,9 +639,9 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: a secret of %d characters is a password somebody can guess", cl.ID, len(cl.secret))
 			}
 		}
-		// An SSF receiver is a machine with client credentials: no person
-		// logs in through it.
-		if len(cl.RedirectURIs) == 0 && !cl.Device && !cl.SSFReceiver {
+		// An SSF receiver and a WireGuard gateway are machines with client
+		// credentials: no person logs in through them.
+		if len(cl.RedirectURIs) == 0 && !cl.Device && !cl.SSFReceiver && len(cl.WireGuardPeers) == 0 {
 			return fmt.Errorf("client %q: no redirect_uris, and not a device client", cl.ID)
 		}
 		if cl.RefreshLifetime != "" {
@@ -622,6 +668,12 @@ func (c *config) check() error {
 		}
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
+		}
+		if (cl.WireGuardKeys || len(cl.WireGuardPeers) > 0) && c.WireGuard == nil {
+			return fmt.Errorf("client %q: wireguard_keys and wireguard_peers need a wireguard block", cl.ID)
+		}
+		if len(cl.WireGuardPeers) > 0 && cl.SecretFile == "" {
+			return fmt.Errorf("client %q: wireguard_peers is for a gateway's own confidential client; a public client has no credentials to read the list with", cl.ID)
 		}
 		switch cl.PKCE {
 		case "":
@@ -656,6 +708,16 @@ func (c *config) check() error {
 		}
 		if cl.Name == "" {
 			cl.Name = cl.ID
+		}
+	}
+	// A gateway reads the keys of the clients it names, and only of clients
+	// that register keys: a name that is not one would be a gateway that
+	// admits nobody and looks configured.
+	for _, cl := range c.Clients {
+		for _, id := range cl.WireGuardPeers {
+			if src, ok := c.client(id); !ok || !src.WireGuardKeys {
+				return fmt.Errorf("client %q: wireguard_peers names %q, which is not a client with wireguard_keys", cl.ID, id)
+			}
 		}
 	}
 	return nil

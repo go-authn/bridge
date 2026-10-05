@@ -211,6 +211,8 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
 	mux.HandleFunc("GET /x509/crl", s.x509CRL)
 	mux.HandleFunc("/app-password", s.appPassword)
+	mux.HandleFunc("/wireguard/key", s.limited(s.wireguardKey))
+	mux.HandleFunc("GET /wireguard/peers", s.wireguardPeers)
 	return mux
 }
 

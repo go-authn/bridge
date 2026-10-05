@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -34,13 +35,18 @@ import (
 
 // issuedCert is one certificate.
 type issuedCert struct {
-	Kind      string    `json:"kind"`   // "ssh" or "x509"
+	Kind      string    `json:"kind"`   // "ssh", "x509" or "wireguard"
 	Serial    string    `json:"serial"` // decimal
 	KeyID     string    `json:"key_id,omitempty"`
 	Principal string    `json:"principal"`
 	IdP       string    `json:"idp,omitempty"`
 	NotAfter  time.Time `json:"not_after"`
 	Revoked   time.Time `json:"revoked,omitzero"`
+
+	// A WireGuard key also records the client it was registered through,
+	// and the person's sub as that client sees it: what a gateway is told.
+	Client string `json:"client,omitempty"`
+	Sub    string `json:"sub,omitempty"`
 }
 
 // certStore is certificates_file.
@@ -181,6 +187,98 @@ func (s *certStore) revoked(kind string, now time.Time) ([]issuedCert, uint64) {
 	for _, c := range s.Certs {
 		if c.Kind == kind && !c.Revoked.IsZero() && now.Before(c.NotAfter) {
 			out = append(out, c)
+		}
+	}
+	return out, s.Version
+}
+
+// The ways a WireGuard key is refused.
+var (
+	errKeyTaken   = errors.New("this key is registered to somebody else")
+	errKeyRevoked = errors.New("this key was taken back; make a new one")
+	errTooMany    = errors.New("too many keys")
+)
+
+// sameOwner is whether two records are one person's: the name as the IdP
+// spelled it, compared without case as disabling compares it, and the IdP.
+func sameOwner(a, b issuedCert) bool {
+	return strings.EqualFold(a.Principal, b.Principal) && a.IdP == b.IdP
+}
+
+// registerKey records a WireGuard key for a person, or renews it when it is
+// already theirs, and saves.
+//
+// ⛔ A public key is PUBLIC: anybody can read one off a configuration, a
+// screenshot or a gateway. So a key is its first owner's until it expires
+// or is taken back -- registering it again under another name is refused,
+// not a transfer -- and a key taken back stays refused, since it may have
+// been taken back because the device holding its private half was lost.
+func (s *certStore) registerKey(c issuedCert, max int, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.path == "" {
+		return errNoCertStore
+	}
+	old := slices.Clone(s.Certs)
+	s.pruneLocked(now)
+	held := 0
+	for i, x := range s.Certs {
+		if x.Kind != "wireguard" {
+			continue
+		}
+		if x.Serial == c.Serial {
+			switch {
+			case !x.Revoked.IsZero():
+				s.Certs = old
+				return errKeyRevoked
+			case !sameOwner(x, c):
+				s.Certs = old
+				return errKeyTaken
+			}
+			s.Certs[i].NotAfter, s.Certs[i].KeyID, s.Certs[i].Client, s.Certs[i].Sub = c.NotAfter, c.KeyID, c.Client, c.Sub
+			if err := writeJSONFile(s.path, s); err != nil {
+				s.Certs = old
+				return err
+			}
+			return nil
+		}
+		if x.Revoked.IsZero() && sameOwner(x, c) {
+			held++
+		}
+	}
+	if held >= max {
+		s.Certs = old
+		return fmt.Errorf("%w: %d is the most one person may hold", errTooMany, max)
+	}
+	s.Certs = append(s.Certs, c)
+	if err := writeJSONFile(s.path, s); err != nil {
+		s.Certs = old
+		return err
+	}
+	return nil
+}
+
+// ownsKey is whether key is a live WireGuard key of the person c names.
+func (s *certStore) ownsKey(key string, c issuedCert, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, x := range s.Certs {
+		if x.Kind == "wireguard" && x.Serial == key && x.Revoked.IsZero() && now.Before(x.NotAfter) && sameOwner(x, c) {
+			return true
+		}
+	}
+	return false
+}
+
+// liveKeys is the WireGuard keys registered through the given clients, not
+// taken back and not expired, and the store's version.
+func (s *certStore) liveKeys(clients []string, now time.Time) ([]issuedCert, uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []issuedCert
+	for _, x := range s.Certs {
+		if x.Kind == "wireguard" && x.Revoked.IsZero() && now.Before(x.NotAfter) && slices.Contains(clients, x.Client) {
+			out = append(out, x)
 		}
 	}
 	return out, s.Version

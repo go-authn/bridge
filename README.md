@@ -322,6 +322,77 @@ select login, password, nt_hash from app_passwords where expires > strftime('%s'
 
 (This is the query the tests run through sqldir.)
 
+## WireGuard keys, for a VPN such as claimward
+
+WireGuard authenticates a peer by its public key and by nothing else: the
+protocol has no certificates, no expiry and no revocation. bridge keeps the
+answer to *whose is this key, and may it still connect?*:
+- a person's VPN client registers the public key of its device, for a lease;
+- the private key never leaves the device;
+- a gateway reads the live keys back as a list signed for it alone.
+
+The format both sides share, and the gateway's side, are in
+[go-authn/wireguard](https://github.com/go-authn/wireguard).
+
+```hcl
+certificates_file = "/var/lib/bridge/certs.json"   # keys are recorded beside the certificates
+
+wireguard {
+  lifetime = "24h"              # a key is listed this long; registering it again renews it
+  max_keys = 10                 # devices per person
+}
+
+client "claimward" {            # the VPN client people log in with
+  device           = true
+  wireguard_keys   = true       # its tokens, with the wireguard scope, may register a key
+  refresh_lifetime = "720h"
+}
+
+client "claimward-gw" {         # the gateway's own client
+  secret_file     = "/etc/bridge/claimward-gw.secret"
+  wireguard_peers = ["claimward"]   # it reads the keys registered through these clients
+  ssf_receiver    = true            # optional: told at once when somebody is disabled
+}
+```
+
+| | |
+|---|---|
+| `POST /wireguard/key` | `{"public_key": "...", "device": "laptop"}` with a token of the `wireguard` scope. Answers the lease's end. |
+| `DELETE /wireguard/key` | `{"public_key": "..."}`: the owner takes a key back |
+| `GET /wireguard/peers` | for the gateway's own `client_credentials` token, scope `wireguard_peers`: a JWT of type `wireguard-peers+jwt`, signed with the access-token key (in the JWKS), addressed to that gateway, valid five minutes |
+
+**What it refuses:**
+- **A key someone else holds** (409). A public key is public, so whoever reads
+  one off a configuration must not be able to take it over.
+- **A key that was taken back** (409). It may have been taken back because its
+  device was lost.
+- **One key too many** (409).
+- **A point of low order**, a key in any but its canonical spelling, or a device
+  name that does not print (400).
+- **A token for the list from a person**, or a gateway's token registering a key
+  (403).
+
+**Taking keys back.** Disabling a person or an institution takes their keys
+back with their certificates, and the list's `version` goes up. go-authn/wireguard's
+`Source` refuses a list older than one it has seen, so the list from before
+the disabling, still signed and still in its five minutes, cannot be
+replayed. A gateway that is also an SSF receiver is told at once and fetches
+the list then; otherwise its next fetch does it. A registration held open
+across a disabling is answered 401, and its key taken back.
+
+**`sub` in the list** is the person as the *registering* client sees them,
+public or pairwise. It is the same value the gateway finds in that person's
+tokens for that client.
+
+**One login, two tokens.** A token with the `wireguard` scope is addressed to
+bridge alone, like every scope of bridge's own: it is never one a VPN server
+can be shown. A client therefore logs in once for `openid wireguard`, registers
+its key with that token, and refreshes asking for `scope=openid`. RFC 6749 §6
+lets a refresh ask for less than was granted, which bridge honours since
+v0.17.0. The narrower token is addressed to the client's own audience
+(`claimward`, unless `audience` says otherwise), and the refresh token keeps
+everything it had.
+
 ## OpenPubkey and opkssh
 
 [OpenPubkey](https://github.com/openpubkey/openpubkey) commits the user's key in
