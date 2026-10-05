@@ -78,6 +78,14 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "the ssf scope is for client credentials, not for a login")
 		return
 	}
+	if slices.Contains(scopes, "wireguard") && !client.WireGuardKeys {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not register WireGuard keys")
+		return
+	}
+	if slices.Contains(scopes, "wireguard_peers") {
+		tokenError(w, http.StatusBadRequest, "invalid_scope", "the wireguard_peers scope is for a gateway's client credentials, not for a login")
+		return
+	}
 	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
 		tokenError(w, http.StatusBadRequest, "invalid_scope", "this client may not set application passwords")
 		return
