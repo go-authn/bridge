@@ -1,6 +1,6 @@
 module github.com/go-authn/bridge
 
-go 1.26.8
+go 1.27.1
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0

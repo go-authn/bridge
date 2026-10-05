@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: stable
+          go-version: 1.27.1
           check-latest: true
           cache: true
       # The federation and the IdP are xmlsec1, which nobody here wrote; the
