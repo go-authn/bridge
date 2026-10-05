@@ -307,6 +307,12 @@ type clientBlock struct {
 	// is how NFS over TLS (RFC 9289) names a federated person.
 	X509Certificates bool `hcl:"x509_certificates,optional"`
 
+	// IDTokenClaims puts the claims the scopes release (profile, email,
+	// eduperson) in the ID token as well as at /userinfo: for a client whose
+	// ID token is itself the credential, such as opkssh, matching people by
+	// email. Off by default (OIDC Core 5.4).
+	IDTokenClaims bool `hcl:"id_token_claims,optional"`
+
 	// WireGuardKeys lets tokens of this client, with the "wireguard" scope,
 	// register a WireGuard public key for the person -- how a VPN client
 	// such as claimward's enrols a device.

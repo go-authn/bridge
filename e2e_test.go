@@ -105,21 +105,22 @@ func TestLoginEndToEnd(t *testing.T) {
 	if err := idt.VerifyAccessToken(tok.AccessToken); err != nil {
 		t.Errorf("at_hash: %v", err)
 	}
+	// ⛔ What the scopes release is at /userinfo, NOT in the ID token (OIDC
+	// Core 5.4: an access token was issued). The ID token says who, and
+	// nothing about them.
 	var claims map[string]any
 	idt.Claims(&claims)
-	for k, want := range map[string]any{
+	released := map[string]any{
 		"preferred_username":       "alice@" + idpScope,
 		"name":                     "Alice Martin",
 		"email":                    "alice@" + idpScope,
 		"eduperson_principal_name": "alice@" + idpScope,
 		"voperson_id":              "a1b2c3@" + idpScope,
-	} {
-		if claims[k] != want {
-			t.Errorf("%s = %v, want %v", k, claims[k], want)
-		}
 	}
-	if _, ok := claims["email_verified"]; ok {
-		t.Error("email_verified was claimed: nobody verified the address")
+	for k := range released {
+		if v, ok := claims[k]; ok {
+			t.Errorf("the ID token carries %s = %v", k, v)
+		}
 	}
 	if strings.Contains(idt.Subject, "alice") || strings.Contains(idt.Subject, "A1B2C3") {
 		t.Errorf("sub %q exposes the institution's identifier", idt.Subject)
@@ -152,6 +153,16 @@ func TestLoginEndToEnd(t *testing.T) {
 	}
 	if ui.Subject != idt.Subject || ui.Email != "alice@"+idpScope {
 		t.Errorf("userinfo = %+v", ui)
+	}
+	var uc map[string]any
+	ui.Claims(&uc)
+	for k, want := range released {
+		if uc[k] != want {
+			t.Errorf("userinfo %s = %v, want %v", k, uc[k], want)
+		}
+	}
+	if _, ok := uc["email_verified"]; ok {
+		t.Error("email_verified was claimed: nobody verified the address")
 	}
 }
 
