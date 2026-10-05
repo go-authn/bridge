@@ -239,8 +239,16 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	if who.acr != "" {
 		id["acr"] = who.acr
 	}
-	for k, v := range info {
-		id[k] = v
+	// ⛔ The claims a scope releases -- profile, email, eduperson -- are for
+	// /userinfo, not for the ID token: OIDC Core 5.4 puts them in the ID
+	// token only when no access token is issued, and here one always is.
+	// Copied in, every holder of the ID token held the person's address,
+	// including every server an opkssh PK Token logs into. A client whose
+	// ID token IS the credential, and who needs them in it, says so.
+	if client.IDTokenClaims {
+		for k, v := range info {
+			id[k] = v
+		}
 	}
 	resp := map[string]any{
 		"access_token": access,

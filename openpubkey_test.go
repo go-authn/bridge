@@ -104,8 +104,9 @@ func (f *fixture) deviceAuth(op providers.BrowserOpenIdProvider, opts ...client.
 
 const opkClients = `
 client "opk" {
-  device = true
-  name   = "opkssh"
+  device          = true
+  name            = "opkssh"
+  id_token_claims = true # a PK Token is the ID token, and opkssh matches on its claims
 }
 `
 
@@ -163,7 +164,8 @@ func TestOpenPubkeyCodeFlow(t *testing.T) {
 	redirect := fmt.Sprintf("http://localhost:%d/login-callback", port)
 	f := newFixture(t, fmt.Sprintf(`
 client "opkssh" {
-  redirect_uris = [%q]
+  redirect_uris   = [%q]
+  id_token_claims = true
 }
 `, redirect))
 	op := opkOp(f, "opkssh", false, false, redirect)
