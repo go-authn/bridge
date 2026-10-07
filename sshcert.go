@@ -25,6 +25,7 @@ import (
 //	sftp alice@univ-example.fr@files.example.org
 func newSSHCertCmd(out io.Writer) *cobra.Command {
 	var issuer, clientID, keyFile, cacheDir string
+	var scopes []string
 	cmd := &cobra.Command{
 		Use:   "ssh-cert",
 		Short: "have an SSH public key certified, and write <key>-cert.pub beside it",
@@ -39,7 +40,7 @@ func newSSHCertCmd(out io.Writer) *cobra.Command {
 				}
 				keyFile = filepath.Join(home, ".ssh", "id_ed25519.pub")
 			}
-			p, err := certifyKey(cmd.Context(), issuer, clientID, keyFile, cacheDir, cmd.ErrOrStderr())
+			p, err := certifyKey(cmd.Context(), issuer, clientID, keyFile, cacheDir, cmd.ErrOrStderr(), scopes...)
 			if err != nil {
 				return err
 			}
@@ -51,10 +52,11 @@ func newSSHCertCmd(out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&clientID, "client", "", "the client ID it knows this program by")
 	cmd.Flags().StringVar(&keyFile, "key", "", "the public key to certify (default ~/.ssh/id_ed25519.pub)")
 	cmd.Flags().StringVar(&cacheDir, "cache", "", "where to keep the login (default: the user's configuration directory)")
+	cmd.Flags().StringSliceVar(&scopes, "scope", nil, "a scope to ask for besides openid and ssh: eduperson, for a client whose certificates name the person by voperson_id or eduperson_principal_name")
 	return cmd
 }
 
-func certifyKey(ctx context.Context, issuer, clientID, keyFile, cacheDir string, tell io.Writer) (string, error) {
+func certifyKey(ctx context.Context, issuer, clientID, keyFile, cacheDir string, tell io.Writer, scopes ...string) (string, error) {
 	if !strings.HasSuffix(keyFile, ".pub") {
 		// A private key sent to a server is a private key that has left the
 		// machine.
@@ -64,7 +66,7 @@ func certifyKey(ctx context.Context, issuer, clientID, keyFile, cacheDir string,
 	if err != nil {
 		return "", err
 	}
-	tok, err := clientToken(ctx, issuer, clientID, []string{"openid", "ssh"}, cacheDir, tell)
+	tok, err := clientToken(ctx, issuer, clientID, append([]string{"openid", "ssh"}, scopes...), cacheDir, tell)
 	if err != nil {
 		return "", err
 	}

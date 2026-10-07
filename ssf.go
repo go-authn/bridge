@@ -473,7 +473,7 @@ func (s *server) peopleOf(entityID string) []string {
 	})
 	s.certs.mu.Lock()
 	for _, c := range s.certs.Certs {
-		if c.IdP == entityID {
+		if c.IdP == entityID && c.Principal != "" {
 			seen[c.Principal] = true
 		}
 	}
