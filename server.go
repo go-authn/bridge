@@ -207,6 +207,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /ssh/certificate", s.sshCertificate)
 	mux.HandleFunc("GET /ssh/krl", s.sshKRL)
 	mux.HandleFunc("GET /ssh/krl.sig", s.sshKRLSig)
+	mux.HandleFunc("GET /ssh/config", s.sshConfig)
 	s.ssfHandlers(mux)
 	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
 	mux.HandleFunc("GET /x509/crl", s.x509CRL)

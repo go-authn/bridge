@@ -302,6 +302,32 @@ type clientBlock struct {
 	// federated person reaches go-fileshare over SFTP.
 	SSHCertificates bool `hcl:"ssh_certificates,optional"`
 
+	// The SSH certificate's profile, for this client's certificates alone
+	// (sshprofile.go). Every one is optional and, left out, is the profile
+	// above unchanged: the preferred_username, no permit-* extension, the
+	// ssh_ca validity. Together they make the EuroHPC Federation Platform
+	// SSH CA's profile; each needs ssh_certificates.
+	//
+	// SSHPrincipalClaim is the claim the one principal is taken from:
+	// "preferred_username" (the default), "voperson_id" (EFP's CUID; the
+	// SAML subject-id), "eduperson_principal_name" or "sub". The eduperson
+	// ones are released by the "eduperson" scope, which the token must hold.
+	SSHPrincipalClaim string `hcl:"ssh_principal_claim,optional"`
+	// SSHExtensions are the OpenSSH permit-* extensions granted: permit-pty,
+	// permit-user-rc, permit-port-forwarding, permit-agent-forwarding,
+	// permit-X11-forwarding. None by default.
+	SSHExtensions []string `hcl:"ssh_extensions,optional"`
+	// SSHSourceAddress is the source-address critical option: the addresses
+	// or CIDR prefixes the certificate may be used from. None by default.
+	SSHSourceAddress []string `hcl:"ssh_source_address,optional"`
+	// SSHValidity shortens the ssh_ca validity for this client ("1h" for
+	// EFP); never longer than it.
+	SSHValidity string `hcl:"ssh_validity,optional"`
+	// SSHDomainGrants are the domain patterns put in GÉANT's
+	// ssh-domain-grant@core.aai.geant.org extension: the hosting entities
+	// the certificate is meant for.
+	SSHDomainGrants []string `hcl:"ssh_domain_grants,optional"`
+
 	// X509Certificates lets tokens of this client, with the "nfs" scope,
 	// have an X.509 client certificate issued by the x509_ca block -- which
 	// is how NFS over TLS (RFC 9289) names a federated person.
@@ -345,8 +371,9 @@ type clientBlock struct {
 	// send no PKCE. A public client has no such choice (RFC 9700: MUST).
 	PKCE string `hcl:"pkce,optional"`
 
-	secret     string
-	refreshTTL time.Duration
+	secret      string
+	refreshTTL  time.Duration
+	sshValidity time.Duration // ssh_validity, or the ssh_ca validity
 }
 
 func (c *clientBlock) public() bool { return c.secret == "" }
@@ -671,6 +698,9 @@ func (c *config) check() error {
 		}
 		if cl.SSHCertificates && c.SSHCA == nil {
 			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
+		}
+		if err := cl.checkSSHProfile(c.SSHCA); err != nil {
+			return fmt.Errorf("client %q: %w", cl.ID, err)
 		}
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)

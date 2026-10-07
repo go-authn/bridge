@@ -222,6 +222,82 @@ extension, the person's groups in `groups@go-authn.org`, and it ends with the
 IdP's session when that is sooner. go-fileshare trusts it with `oidc {
 ssh_ca_file }`.
 
+## EuroHPC SSH CA profile
+
+A client can have its certificates issued in the profile of the [EuroHPC
+Federation Platform SSH
+CA](https://integration.docs.my-eurohpc.eu/aai/ssh-ca-overview/) (GÉANT /
+MyAccessID): Ed25519, one hour, ONE principal that names the person across
+the federation, and the hosting entity's domain in an extension. Every key
+below is per client and optional; a client that sets none of them gets the
+certificate above, unchanged byte for byte apart from serial, nonce,
+signature and times.
+
+```hcl
+ssh_ca {
+  key_file = "/var/lib/bridge/ssh-ca"
+  validity = "12h"                       # the most any client may ask for
+}
+client "efp" {
+  device              = true
+  ssh_certificates    = true
+  ssh_principal_claim = "voperson_id"    # preferred_username (default), voperson_id, eduperson_principal_name, sub
+  ssh_validity        = "1h"             # never longer than ssh_ca's, nor past the IdP's session
+  ssh_extensions      = ["permit-pty"]   # none by default
+  # ssh_source_address = ["192.0.2.0/24"]          # the source-address critical option
+  # ssh_domain_grants  = ["login.my-hpc.eu"]       # see below: not yet available
+}
+```
+
+| key | |
+|---|---|
+| `ssh_principal_claim` | the claim the one principal comes from. `voperson_id` and `eduperson_principal_name` are released by the `eduperson` scope, which the token must hold (`bridge ssh-cert --scope eduperson`); a token without it, or a person whose IdP released no such attribute, gets a **403** saying which. The value goes through the same check as a username: a comma, a quote, a space or a control character is refused, since sshd would read two names. |
+| `ssh_extensions` | OpenSSH's `permit-pty`, `permit-user-rc`, `permit-port-forwarding`, `permit-agent-forwarding`, `permit-X11-forwarding`, and nothing else: an unknown name stops the provider from starting. Not `no-touch-required`: it waives the user-presence test of the person's own security key, which is not the provider's to give away. |
+| `ssh_source_address` | addresses or CIDR prefixes (no host bits under the mask), in the `source-address` critical option. |
+| `ssh_validity` | shorter than `ssh_ca`'s `validity`, for this client. |
+| `ssh_domain_grants` | domain patterns for GÉANT's `ssh-domain-grant@core.aai.geant.org` extension, checked at load by go-authn/sshcert's `ValidatePattern` (the specification's syntax), then lower case, at least two labels, and a wildcard only under a registrable domain (what stays fixed to its right is not a public suffix: `*.ac.uk`, `*.gouv.fr`, `*.github.io` are refused, `*.hpc.example.ac.uk` is not); encoded by go-authn/sshcert. |
+
+**`GET /ssh/config`** publishes the CA key as EFP publishes its own,
+`{"PublicKey":"ssh-ed25519 AAAA..."}`, so a site follows EFP's
+[trust instructions](https://integration.docs.my-eurohpc.eu/aai/ssh-ca-trust/)
+with this provider's URL in place of EFP's:
+
+```sh
+curl -s https://login.example.org/ssh/config | jq -r '.PublicKey' > /etc/ssh/bridge-ssh-ca.pub
+echo "TrustedUserCAKeys /etc/ssh/bridge-ssh-ca.pub" >> /etc/ssh/sshd_config
+```
+
+and authorizes the principal as EFP's [authorization
+instructions](https://integration.docs.my-eurohpc.eu/aai/ssh-ca-authz/) say:
+an `AuthorizedPrincipalsCommand` that reads the domain grant and refuses a
+certificate meant for another hosting entity, and the
+person's principal mapped to a local account. Use go-authn/sshcert's
+`sshcert-authorize`, a drop-in for GÉANT's `ssh-cert-authorize` with one
+difference that matters: GÉANT's lets in a certificate that carries **no**
+domain grant, so on a host that trusts this CA and EFP's, or any second CA,
+the grant filters nothing; `sshcert-authorize` refuses it unless told
+otherwise (`--allow-no-grant`). It is not advertised in the
+discovery document: no OpenID Connect metadata names an SSH CA, and this
+provider does not invent one.
+
+What remains different from EFP:
+
+- **The principal is `voperson_id`**, the SAML subject-id the person's own
+  institution released, lower-cased (`a1b2c3@univ-example.fr`) -- not a
+  MyAccessID CUID (`<id>@myaccessid.org`). A site maps the one or the other;
+  a person known to both has two.
+- **There is a KRL.** `GET /ssh/krl`, for `RevokedKeys`, lists the
+  certificates of the people disabled here, these included; EFP documents no
+  revocation, so a site configured only as EFP says is not told.
+- **The groups extension** (`groups@go-authn.org`) is still there when the
+  token carries groups; EFP's certificates have none.
+- **The domain grant** is `ssh-domain-grant@core.aai.geant.org`, as GÉANT's
+  specification and EFP's authorisation page spell it, encoded by
+  [go-authn/sshcert](https://github.com/go-authn/sshcert). Its patterns follow
+  the specification, and this provider refuses one more thing: a wildcard over
+  a public suffix (`*.ac.uk`, by the Public Suffix List), which would grant
+  every institution under it.
+
 ## X.509 certificates, for NFS over TLS
 
 NFS over TLS (RFC 9289) can name the client by its certificate. This
