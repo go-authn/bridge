@@ -2,7 +2,7 @@
 # one network. run.sh writes ./work (binaries, keys, configuration) first.
 services:
   mongodb:
-    image: mongo:6.0.28
+    image: mongo:9.0.2
   server:
     image: registry.gitlab.com/openid/conformance-suite:${SUITE_TAG:-release-v5.3.1}
     environment:
