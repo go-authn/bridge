@@ -143,6 +143,15 @@ together with RENATER's discovery service (which cannot be restricted).
   person is disabled here the next NFS call, the SFTP session already open and
   a new SFTP login are all refused within seconds -- through the CRL and the
   KRL go-fileshare fetches from this provider.
+- **go-fileshare against the EuroHPC SSH CA profile**: go-fileshare v0.22.1
+  is configured as a site trusting EFP's CA would be. The CA key comes from
+  `GET /ssh/config` into `trusted_user_ca_file`, and `ssh_domains` names the
+  host. A certificate from an EFP-profile client logs in only where both of
+  these hold: its `ssh_domain_grants` name the host, and its
+  `ssh_source_address` allows the address the connection comes from. A
+  certificate granted another host is refused and logged as such. One pinned
+  elsewhere is refused. On Linux, the same certificate that gets in from
+  127.0.0.1 is refused from 127.0.0.2 (`interop_efp_test.go`).
 - The **[OpenID Foundation conformance suite](https://gitlab.com/openid/conformance-suite)**,
   the one OpenID Provider certification runs, executes its
   `oidcc-basic-certification-test-plan` (static clients, discovery) against
@@ -245,7 +254,7 @@ client "efp" {
   ssh_validity        = "1h"             # never longer than ssh_ca's, nor past the IdP's session
   ssh_extensions      = ["permit-pty"]   # none by default
   # ssh_source_address = ["192.0.2.0/24"]          # the source-address critical option
-  # ssh_domain_grants  = ["login.my-hpc.eu"]       # see below: not yet available
+  # ssh_domain_grants  = ["login.my-hpc.eu"]       # the hosting entity's hosts: see below
 }
 ```
 
@@ -253,7 +262,7 @@ client "efp" {
 |---|---|
 | `ssh_principal_claim` | the claim the one principal comes from. `voperson_id` and `eduperson_principal_name` are released by the `eduperson` scope, which the token must hold (`bridge ssh-cert --scope eduperson`); a token without it, or a person whose IdP released no such attribute, gets a **403** saying which. The value goes through the same check as a username: a comma, a quote, a space or a control character is refused, since sshd would read two names. |
 | `ssh_extensions` | OpenSSH's `permit-pty`, `permit-user-rc`, `permit-port-forwarding`, `permit-agent-forwarding`, `permit-X11-forwarding`, and nothing else: an unknown name stops the provider from starting. Not `no-touch-required`: it waives the user-presence test of the person's own security key, which is not the provider's to give away. |
-| `ssh_source_address` | addresses or CIDR prefixes (no host bits under the mask), in the `source-address` critical option. |
+| `ssh_source_address` | addresses or CIDR prefixes (no host bits under the mask), in the `source-address` critical option. OpenSSH's sshd enforces it, and so does go-fileshare: with `ssh_domains` as without it, since fileshare v0.22.1. |
 | `ssh_validity` | shorter than `ssh_ca`'s `validity`, for this client. |
 | `ssh_domain_grants` | domain patterns for GÉANT's `ssh-domain-grant@core.aai.geant.org` extension, checked at load by go-authn/sshcert's `ValidatePattern` (the specification's syntax), then lower case, at least two labels, and a wildcard only under a registrable domain (what stays fixed to its right is not a public suffix: `*.ac.uk`, `*.gouv.fr`, `*.github.io` are refused, `*.hpc.example.ac.uk` is not); encoded by go-authn/sshcert. |
 
