@@ -10,6 +10,7 @@ require (
 	github.com/go-authn/revocation v0.4.0
 	github.com/go-authn/saml v0.4.0
 	github.com/go-authn/servercert v0.4.0
+	github.com/go-authn/sshcert v0.1.0
 	github.com/go-authn/wireguard v0.1.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-net-health/endpoint v0.1.0
@@ -24,6 +25,7 @@ require (
 	github.com/prometheus/common v0.72.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.57.0
+	golang.org/x/net v0.59.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -91,7 +93,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

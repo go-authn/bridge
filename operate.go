@@ -104,7 +104,12 @@ func (s *server) revokePerson(username string, subjects ...string) (revoked, err
 	})
 	// Every step is tried, whatever an earlier one did.
 	var errs []error
-	if n, err := s.certs.revoke(func(p, _ string) bool { return username != "" && strings.EqualFold(p, username) }, s.now()); err != nil {
+	// A certificate by the username it was issued to, or by the stable
+	// identity one naming another claim recorded (ssh_principal_claim).
+	if n, err := s.certs.revokeWhere(func(c issuedCert) bool {
+		return (username != "" && strings.EqualFold(c.Principal, username)) ||
+			(c.Subject != "" && slices.Contains(subjects, c.Subject))
+	}, s.now()); err != nil {
 		errs = append(errs, fmt.Errorf("revoking certificates: %w", err))
 	} else {
 		r.certificates = n

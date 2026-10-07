@@ -203,12 +203,18 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		notAddressedHere(w)
 		return
 	}
+	// The person, as disabling knows them, and the one principal the
+	// certificate names: their username, unless the client's profile says
+	// another claim (sshprofile.go).
 	user, _ := claims["preferred_username"].(string)
-	if user == "" {
-		http.Error(w, "the institution released no username to put in a certificate", http.StatusForbidden)
+	jti, _ := claims["jti"].(string)
+	it, _ := s.issued.get(jti)
+	principal, err := sshPrincipal(client, claims, it)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
-	if err := certifiableName(user); err != nil {
+	if err := certifiableName(principal); err != nil {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
@@ -232,7 +238,11 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := s.now()
-	until := now.Add(ca.validity)
+	validity := ca.validity
+	if client.sshValidity > 0 {
+		validity = client.sshValidity
+	}
+	until := now.Add(validity)
 	// Not past the IdP's session, when it said when that ends -- carried in
 	// the token as the time the provider must stop vouching.
 	if end, ok := claims["session_end"].(float64); ok && end > 0 && time.Unix(int64(end), 0).Before(until) {
@@ -250,39 +260,48 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		Serial:   serial.Uint64(),
 		CertType: ssh.UserCert,
 		// The key ID is what sshd logs: who, and which login.
-		KeyId:           fmt.Sprintf("%s sub=%s jti=%s", user, sub, claims["jti"]),
-		ValidPrincipals: []string{user},
+		KeyId:           fmt.Sprintf("%s sub=%s jti=%s", principal, sub, claims["jti"]),
+		ValidPrincipals: []string{principal},
 		ValidAfter:      uint64(now.Add(-sshSkew).Unix()),
 		ValidBefore:     uint64(until.Unix()),
-		// No permit-* extensions: SFTP needs none, and a certificate that
-		// does not permit a pty, forwarding or an rc file is one that grants
-		// file access and nothing else.
+		// No permit-* extensions unless the client's profile grants them:
+		// SFTP needs none, and a certificate that does not permit a pty,
+		// forwarding or an rc file is one that grants file access and
+		// nothing else.
 	}
 	// The groups, for a server that authorizes by them (go-fileshare's
 	// oidc:groups: rules): one per line, in an extension OpenSSH ignores,
 	// as PROTOCOL.certkeys says an unrecognised extension must be. It grants
 	// nothing by itself; it is signed, so a server trusting this CA can
 	// believe it.
-	if gs, ok := claims["groups"].([]any); ok && len(gs) > 0 {
-		var lines []string
+	var lines []string
+	if gs, ok := claims["groups"].([]any); ok {
 		for _, g := range gs {
 			if s, ok := g.(string); ok && s != "" && !strings.ContainsRune(s, '\n') {
 				lines = append(lines, s)
 			}
 		}
-		if len(lines) > 0 {
-			cert.Permissions.Extensions = map[string]string{GroupsExtension: strings.Join(lines, "\n")}
-		}
+	}
+	if cert.Permissions, err = sshPermissions(client, lines); err != nil {
+		s.logf("ssh: %v", err)
+		http.Error(w, "the certificate could not be made", http.StatusInternalServerError)
+		return
 	}
 	if err := cert.SignCert(rand.Reader, ca.signer); err != nil {
 		s.logf("ssh: %v", err)
 		http.Error(w, "the certificate could not be signed", http.StatusInternalServerError)
 		return
 	}
-	// Recorded before it is handed out: one that is not can never be revoked.
-	jti, _ := claims["jti"].(string)
-	it, _ := s.issued.get(jti)
-	if err := s.certs.add(issuedCert{Kind: "ssh", Serial: serial.String(), KeyID: cert.KeyId, Principal: user, IdP: it.idp, NotAfter: until}, now); err != nil {
+	// Recorded before it is handed out: one that is not can never be
+	// revoked. Principal stays the username, which disabling and SSF look
+	// people up by; a certificate naming another claim records that too,
+	// and the person's stable identity, by which disabling finds it when
+	// they have no username (revokePerson).
+	rec := issuedCert{Kind: "ssh", Serial: serial.String(), KeyID: cert.KeyId, Principal: user, IdP: it.idp, NotAfter: until}
+	if principal != user {
+		rec.CertPrincipal, rec.Subject = principal, it.subject
+	}
+	if err := s.certs.add(rec, now); err != nil {
 		s.logf("ssh: recording the certificate: %v", err)
 		http.Error(w, "the certificate could not be recorded, so it is not issued", http.StatusInternalServerError)
 		return
@@ -291,7 +310,7 @@ func (s *server) sshCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.counters.inc("bridge_ssh_certificates_total", "")
-	s.logf("ssh: certified a %s key for %s until %s", key.Type(), user, until.UTC().Format(time.RFC3339))
+	s.logf("ssh: certified a %s key for %s until %s", key.Type(), principal, until.UTC().Format(time.RFC3339))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(ssh.MarshalAuthorizedKey(cert))

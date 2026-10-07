@@ -47,6 +47,13 @@ type issuedCert struct {
 	// and the person's sub as that client sees it: what a gateway is told.
 	Client string `json:"client,omitempty"`
 	Sub    string `json:"sub,omitempty"`
+
+	// An SSH certificate whose client names the person by another claim
+	// than the username (ssh_principal_claim) records the principal it
+	// names, and the person's stable identity (person.subject), by which
+	// disabling finds it when they have no username. Absent otherwise.
+	CertPrincipal string `json:"cert_principal,omitempty"`
+	Subject       string `json:"subject,omitempty"`
 }
 
 // certStore is certificates_file.
