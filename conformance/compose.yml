@@ -2,7 +2,7 @@
 # one network. run.sh writes ./work (binaries, keys, configuration) first.
 services:
   mongodb:
-    image: mongo:6.0.13
+    image: mongo:6.0.28
   server:
     image: registry.gitlab.com/openid/conformance-suite:${SUITE_TAG:-release-v5.3.1}
     environment:
@@ -24,7 +24,7 @@ services:
         aliases: [localhost.emobix.co.uk]
     depends_on: [server]
   idp:
-    image: alpine:3.22
+    image: alpine:3.24
     volumes: ["./work:/work:ro"]
     command: ["/work/testidp", "-listen", ":8443", "-base", "https://idp:8443",
       "-tls-cert", "/work/idp-tls.crt", "-tls-key", "/work/idp-tls.key",
@@ -32,7 +32,7 @@ services:
       "-fed-key", "/work/fed.key", "-fed-cert", "/work/fed.crt",
       "-sp-metadata", "https://bridge:8443/saml/metadata"]
   bridge:
-    image: alpine:3.22
+    image: alpine:3.24
     volumes: ["./work:/work:ro", "bridgedata:/data"]
     command: ["/work/bridge", "-c", "/work/bridge.hcl"]
     # the SSF queue, its state and the admin socket: written, so not in
