@@ -8,6 +8,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/go-authn/sshcert"
 	"io"
 	"net"
 	"net/http"
@@ -58,6 +61,7 @@ client "efp" {
   ssh_extensions      = ["permit-pty", "permit-agent-forwarding"]
   ssh_source_address  = ["127.0.0.1", "10.0.0.0/8"]
   ssh_validity        = "1h"
+  ssh_domain_grants   = ["login.example.org", "*.hpc.example.org"]
 }
 `+extra)
 	f.s.poll = time.Second
@@ -151,6 +155,18 @@ func TestSSHProfileEFP(t *testing.T) {
 	if got := cert.CriticalOptions["source-address"]; got != "127.0.0.1,10.0.0.0/8" {
 		t.Errorf("source-address %q", got)
 	}
+	// The domain grant, read back by the library sites use: the patterns
+	// configured, for the hosting entity's hosts and no other.
+	grants, present, err := sshcert.DomainGrant(cert)
+	if err != nil || !present || !slices.Equal(grants, []string{"login.example.org", "*.hpc.example.org"}) {
+		t.Errorf("domain grant %q present=%v: %v", grants, present, err)
+	}
+	for host, want := range map[string]bool{"login.example.org": true, "gpu1.hpc.example.org": true, "evil.example.net": false, "hpc.example.org": false} {
+		if got := sshcert.Grants(grants, host); got != want {
+			t.Errorf("granted on %s: %v, want %v", host, got, want)
+		}
+	}
+	authorizeJudge(t, body, cuid)
 
 	if out := keygenL(t, body); out != "" {
 		for _, want := range []string{
@@ -158,6 +174,11 @@ func TestSSHProfileEFP(t *testing.T) {
 			"Principals: \n                " + cuid + "\n",
 			"source-address 127.0.0.1,10.0.0.0/8",
 			"permit-pty", "permit-agent-forwarding", GroupsExtension,
+			// ssh-keygen does not know GÉANT's extension and prints its
+			// data raw: a length, then the compact JSON array, as the
+			// specification's test vectors are written -- computed here from
+			// the JSON, not from the library that encoded it.
+			DomainGrantExtension + " UNKNOWN OPTION: " + specGrantHex(`["login.example.org","*.hpc.example.org"]`),
 		} {
 			if !strings.Contains(out, want) {
 				t.Errorf("ssh-keygen -L does not show %q:\n%s", want, out)
@@ -471,30 +492,30 @@ func TestSSHProfileConfig(t *testing.T) {
 		return head + "client \"p\" {\ndevice = true\nssh_certificates = true\n" + body + "\n}\n"
 	}
 	for name, c2 := range map[string][2]string{
-		"an unknown claim":          {client(`ssh_principal_claim = "email"`), "ssh_principal_claim = \"email\""},
-		"an unknown extension":      {client(`ssh_extensions = ["permit-everything"]`), "\"permit-everything\" is not one of"},
-		"no-touch-required":         {client(`ssh_extensions = ["no-touch-required"]`), "\"no-touch-required\" is not one of"},
-		"a critical option":         {client(`ssh_extensions = ["force-command"]`), "\"force-command\" is not one of"},
-		"an extension twice":        {client(`ssh_extensions = ["permit-pty", "permit-pty"]`), "twice"},
-		"a validity past the CA's":  {client(`ssh_validity = "3h"`), "longer than the ssh_ca validity"},
-		"a validity":                {client(`ssh_validity = "soon"`), "a positive duration"},
-		"a zero validity":           {client(`ssh_validity = "0s"`), "a positive duration"},
-		"a host name":               {client(`ssh_source_address = ["login.example.org"]`), "not an address or a CIDR prefix"},
-		"bits under the mask":       {client(`ssh_source_address = ["10.1.2.3/8"]`), "bits set under its mask"},
-		"two in one":                {client(`ssh_source_address = ["10.0.0.1,10.0.0.2"]`), "not an address or a CIDR prefix"},
-		"a zone":                    {client(`ssh_source_address = ["fe80::1%en0"]`), "not an address or a CIDR prefix"},
-		"a domain with a comma":     {client(`ssh_domain_grants = ["a.example.org,b.example.org"]`), "',' is not"},
-		"an upper-case domain":      {client(`ssh_domain_grants = ["Login.example.org"]`), "'L' is not"},
-		"one label":                 {client(`ssh_domain_grants = ["localhost"]`), "at least two labels"},
-		"a top-level wildcard":      {client(`ssh_domain_grants = ["*.eu"]`), "whole top-level domain"},
-		"an empty label":            {client(`ssh_domain_grants = ["login..example.org"]`), "an empty label"},
-		"a domain twice":            {client(`ssh_domain_grants = ["login.example.org", "login.example.org"]`), "twice"},
-		"a profile with no ssh":     {head + "client \"p\" {\ndevice = true\nssh_principal_claim = \"voperson_id\"\n}\n", "need ssh_certificates"},
-		"extensions with no ssh":    {head + "client \"p\" {\ndevice = true\nssh_extensions = [\"permit-pty\"]\n}\n", "need ssh_certificates"},
-		"a validity with no ssh":    {head + "client \"p\" {\ndevice = true\nssh_validity = \"1h\"\n}\n", "need ssh_certificates"},
-		"domain grants with no ssh": {head + "client \"p\" {\ndevice = true\nssh_domain_grants = [\"login.example.org\"]\n}\n", "need ssh_certificates"},
-		"a source address no ssh":   {head + "client \"p\" {\ndevice = true\nssh_source_address = [\"10.0.0.0/8\"]\n}\n", "need ssh_certificates"},
-		"domain grants, not wired":  {client(`ssh_domain_grants = ["login.example.org", "*.hpc.example.org"]`), "go-authn/sshcert"},
+		"an unknown claim":                 {client(`ssh_principal_claim = "email"`), "ssh_principal_claim = \"email\""},
+		"an unknown extension":             {client(`ssh_extensions = ["permit-everything"]`), "\"permit-everything\" is not one of"},
+		"no-touch-required":                {client(`ssh_extensions = ["no-touch-required"]`), "\"no-touch-required\" is not one of"},
+		"a critical option":                {client(`ssh_extensions = ["force-command"]`), "\"force-command\" is not one of"},
+		"an extension twice":               {client(`ssh_extensions = ["permit-pty", "permit-pty"]`), "twice"},
+		"a validity past the CA's":         {client(`ssh_validity = "3h"`), "longer than the ssh_ca validity"},
+		"a validity":                       {client(`ssh_validity = "soon"`), "a positive duration"},
+		"a zero validity":                  {client(`ssh_validity = "0s"`), "a positive duration"},
+		"a host name":                      {client(`ssh_source_address = ["login.example.org"]`), "not an address or a CIDR prefix"},
+		"bits under the mask":              {client(`ssh_source_address = ["10.1.2.3/8"]`), "bits set under its mask"},
+		"two in one":                       {client(`ssh_source_address = ["10.0.0.1,10.0.0.2"]`), "not an address or a CIDR prefix"},
+		"a zone":                           {client(`ssh_source_address = ["fe80::1%en0"]`), "not an address or a CIDR prefix"},
+		"a domain with a comma":            {client(`ssh_domain_grants = ["a.example.org,b.example.org"]`), "contains ','"},
+		"an upper-case domain":             {client(`ssh_domain_grants = ["Login.example.org"]`), "lower case"},
+		"one label":                        {client(`ssh_domain_grants = ["localhost"]`), "at least two labels"},
+		"a top-level wildcard":             {client(`ssh_domain_grants = ["*.eu"]`), "public suffix"},
+		"an empty label":                   {client(`ssh_domain_grants = ["login..example.org"]`), "an empty label"},
+		"a domain twice":                   {client(`ssh_domain_grants = ["login.example.org", "login.example.org"]`), "twice"},
+		"more patterns than a grant holds": {client("ssh_domain_grants = [" + manyGrants(sshcert.MaxPatterns+1) + "]"), "sshcert"},
+		"a profile with no ssh":            {head + "client \"p\" {\ndevice = true\nssh_principal_claim = \"voperson_id\"\n}\n", "need ssh_certificates"},
+		"extensions with no ssh":           {head + "client \"p\" {\ndevice = true\nssh_extensions = [\"permit-pty\"]\n}\n", "need ssh_certificates"},
+		"a validity with no ssh":           {head + "client \"p\" {\ndevice = true\nssh_validity = \"1h\"\n}\n", "need ssh_certificates"},
+		"domain grants with no ssh":        {head + "client \"p\" {\ndevice = true\nssh_domain_grants = [\"login.example.org\"]\n}\n", "need ssh_certificates"},
+		"a source address no ssh":          {head + "client \"p\" {\ndevice = true\nssh_source_address = [\"10.0.0.0/8\"]\n}\n", "need ssh_certificates"},
 	} {
 		if _, err := c.load(t, c2[0]); err == nil || !strings.Contains(err.Error(), c2[1]) {
 			t.Errorf("%s: %v, want an error saying %q", name, err, c2[1])
@@ -537,13 +558,25 @@ ssh_validity        = "2h"
 // person is disabled. Run as whoever runs the tests, so it can only log
 // that user in: sshd's own rule, not this test's.
 func TestSSHProfileAgainstSSHD(t *testing.T) {
+	// A lane that has OpenSSH installed (BRIDGE_REQUIRE_JUDGE, ubuntu in CI)
+	// fails rather than skips: a judge that may stay silent proves nothing.
+	skip := func(why string) {
+		t.Helper()
+		if os.Getenv("BRIDGE_REQUIRE_JUDGE") != "" {
+			t.Fatalf("sshd is required here: %s", why)
+		}
+		t.Skip(why)
+	}
 	sshd := "/usr/sbin/sshd"
-	if _, err := os.Stat(sshd); err != nil || runtime.GOOS == "windows" {
-		t.Skip("no sshd here")
+	if runtime.GOOS == "windows" {
+		t.Skip("sshd is not run on Windows")
+	}
+	if _, err := os.Stat(sshd); err != nil {
+		skip("no sshd here")
 	}
 	kg, err := exec.LookPath("ssh-keygen")
 	if err != nil {
-		t.Skip("no ssh-keygen here")
+		skip("no ssh-keygen here")
 	}
 	me, err := user.Current()
 	if err != nil {
@@ -645,7 +678,7 @@ func TestSSHProfileAgainstSSHD(t *testing.T) {
 			case <-exited:
 				// An sshd that will not run as this user (a missing privilege
 				// separation directory, say) is not a verdict on the certificate.
-				t.Skipf("sshd exited before it listened:\n%s", log.String())
+				skip("sshd exited before it listened:\n" + log.String())
 			default:
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -684,4 +717,76 @@ func TestSSHProfileAgainstSSHD(t *testing.T) {
 	} else if !strings.Contains(log.String(), "revoked") {
 		t.Errorf("refused, but not for revocation: %v\n%s", err, log.String())
 	}
+}
+
+// authorizeJudge runs the command a site runs, go-authn/sshcert's
+// sshcert-authorize, built from the version this module requires, on the
+// certificate the bridge issued: the CUID is let in on a host the grant
+// names, and on no other.
+func authorizeJudge(t *testing.T, certLine []byte, cuid string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	bin := filepath.Join(t.TempDir(), "sshcert-authorize")
+	if out, err := exec.Command("go", "build", "-o", bin, "github.com/go-authn/sshcert/cmd/sshcert-authorize").CombinedOutput(); err != nil {
+		t.Fatalf("building sshcert-authorize: %v\n%s", err, out)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "alice"), []byte(cuid+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fields := strings.Fields(string(certLine))
+	for host, want := range map[string]string{"login.example.org": cuid, "gpu1.hpc.example.org": cuid, "evil.example.net": ""} {
+		out, _ := exec.Command(bin, "--syslog=false", "--domain", host, "--principals-dir", dir, "alice", fields[1]).Output()
+		if got := strings.TrimSpace(string(out)); got != want {
+			t.Errorf("sshcert-authorize on %s printed %q, want %q", host, got, want)
+		}
+	}
+}
+
+// specGrantHex is the domain-grant data as GÉANT's specification writes its
+// test vectors: a big-endian uint32 length, then the JSON, in hex.
+func specGrantHex(json string) string {
+	return fmt.Sprintf("%08x", len(json)) + hex.EncodeToString([]byte(json))
+}
+
+// domainPattern applies the specification's syntax itself, not only through
+// the encoder that runs after it at load: the two are separate layers, and a
+// test that went through both could not tell which refused.
+func TestDomainPatternAppliesTheSpecification(t *testing.T) {
+	for _, p := range []string{"a.example.org,b.example.org", "a.example.org.", "*", "a b.example.org"} {
+		if err := domainPattern(p); err == nil || !errors.Is(err, sshcert.ErrInvalidPattern) {
+			t.Errorf("domainPattern(%q) = %v, want sshcert's refusal", p, err)
+		}
+	}
+	for p, want := range map[string]string{
+		"Login.example.org": "lower case", "example": "at least two labels",
+		"login.*.org": "public suffix", "*.eu": "public suffix", "*.ac.uk": "public suffix",
+		"*.gouv.fr": "public suffix", "*.github.io": "public suffix", "gpu-*.co.jp": "public suffix",
+	} {
+		if err := domainPattern(p); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("domainPattern(%q) = %v, want %q", p, err, want)
+		}
+	}
+	// Under a registrable domain a wildcard is the hosting entity's own;
+	// "a**" is two wildcards of one or more characters each, which the
+	// specification allows.
+	for _, p := range []string{"login.example.org", "*.hpc.example.org", "gpu-*.hpc.example.org", "*.example.ac.uk", "*.example.org", "a**.example.org"} {
+		if err := domainPattern(p); err != nil {
+			t.Errorf("domainPattern(%q): %v", p, err)
+		}
+	}
+}
+
+// manyGrants is n distinct valid patterns, as an HCL list body.
+func manyGrants(n int) string {
+	var b strings.Builder
+	for i := range n {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", fmt.Sprintf("h%d.example.org", i))
+	}
+	return b.String()
 }

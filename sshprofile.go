@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-authn/sshcert"
+	"golang.org/x/net/publicsuffix"
 	"net/http"
 	"net/netip"
 	"slices"
@@ -29,8 +31,8 @@ import (
 // the hosting entity's domain.
 
 // DomainGrantExtension is GÉANT's extension naming the domains a certificate
-// is meant for (ssh-cert-tool, docs/ssh-domain-grant-ext.md).
-const DomainGrantExtension = "ssh-domain-grant@core.aai.geant.org"
+// is meant for (the EuroHPC SSH CA profile), as go-authn/sshcert names it.
+const DomainGrantExtension = sshcert.DomainGrantExtension
 
 // sshPrincipalClaims are the claims a certificate's principal may come from,
 // and the scope that releases each one beyond the access token itself.
@@ -108,8 +110,8 @@ func (cl *clientBlock) checkSSHProfile(ca *sshCABlock) error {
 		}
 	}
 	if len(cl.SSHDomainGrants) > 0 {
-		// Refused here rather than at the first certificate: a client
-		// configured for domain grants must never be handed one without.
+		// Encoded once here as well: a grant the encoder refuses (too many
+		// patterns, too long) fails at load, never at the first certificate.
 		if _, _, err := domainGrantExtension(cl.SSHDomainGrants); err != nil {
 			return fmt.Errorf("ssh_domain_grants: %w", err)
 		}
@@ -138,62 +140,52 @@ func sourceAddress(a string) (string, error) {
 	return ip.String(), nil
 }
 
-// domainPattern checks one domain pattern of the domain-grant extension, by
-// the syntax GÉANT's specification gives: dot-separated labels of letters,
-// digits and hyphens, where "*" stands for one or more characters inside a
-// label. Lower case, as the hosting entities' domains are compared. A
-// pattern must name a domain under a fixed top-level label: "*" or "*.eu"
-// alone would grant every host of a federation.
+// domainPattern checks one domain pattern of the domain-grant extension:
+// first the specification's syntax, as go-authn/sshcert reads it (the code
+// that sites run, sshcert-authorize, judges certificates by the same
+// function); then this provider's own policy on top. Lower case, as the
+// configuration is compared; at least two labels; and a wildcard only under a
+// registrable domain: what stays fixed to the right of the last wildcard must
+// not be a public suffix (the Public Suffix List, ICANN and private
+// sections). "*.eu", "*.ac.uk", "*.gouv.fr" or "*.github.io" would grant the
+// hosts of a whole namespace nobody here administers. The specification
+// forbids a wildcard only in the rightmost label, which leaves those open.
 func domainPattern(p string) error {
-	if p == "" || len(p) > 253 {
-		return fmt.Errorf("%q: a domain pattern of 1 to 253 characters", p)
+	if err := sshcert.ValidatePattern(p); err != nil {
+		return fmt.Errorf("%q: %w", p, err)
+	}
+	if p != strings.ToLower(p) {
+		return fmt.Errorf("%q: written in lower case, as hosting entities' domains are compared", p)
 	}
 	labels := strings.Split(p, ".")
 	if len(labels) < 2 {
 		return fmt.Errorf("%q: a domain, with at least two labels", p)
 	}
+	last := -1
 	for i, l := range labels {
-		if l == "" || len(l) > 63 {
-			return fmt.Errorf("%q: an empty label, or one over 63 characters", p)
+		if strings.Contains(l, "*") {
+			last = i
 		}
-		if l[0] == '-' || l[len(l)-1] == '-' {
-			return fmt.Errorf("%q: a label starts or ends with a hyphen", p)
-		}
-		for _, r := range l {
-			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '*') {
-				return fmt.Errorf("%q: %q is not a lower-case letter, a digit, a hyphen or *", p, r)
-			}
-		}
-		if strings.Contains(l, "**") {
-			return fmt.Errorf("%q: ** in a label", p)
-		}
-		if i >= len(labels)-2 && strings.Contains(l, "*") {
-			return fmt.Errorf("%q: a wildcard in the last two labels grants a whole top-level domain", p)
+	}
+	if last >= 0 {
+		fixed := strings.Join(labels[last+1:], ".")
+		if suffix, _ := publicsuffix.PublicSuffix(fixed); suffix == fixed {
+			return fmt.Errorf("%q: a wildcard over the public suffix %q grants every domain under it", p, fixed)
 		}
 	}
 	return nil
 }
 
-// errDomainGrantsNotWired is domainGrantExtension before go-authn/sshcert.
-var errDomainGrantsNotWired = errors.New("the ssh-domain-grant extension is not available in this build yet (it waits for go-authn/sshcert v0.1.0)")
-
 // domainGrantExtension is the ssh-domain-grant@core.aai.geant.org extension
 // for grants: its name, and its value as Certificate.Permissions.Extensions
-// holds it (the extension data -- an SSH string around the compact JSON
-// array, GÉANT's Appendix B test vectors).
-//
-// TODO(go-authn/sshcert v0.1.0): the encoding is go-authn/sshcert's, judged
-// against GÉANT's test vectors there, and is deliberately NOT written here.
-// Once v0.1.0 is tagged, this function becomes:
-//
-//	return sshcert.DomainGrantExtension, <sshcert's encoder>(grants), err
-//
-// and errDomainGrantsNotWired goes. Until then every client with
-// ssh_domain_grants is refused at load (checkSSHProfile), so no certificate
-// is ever issued without the grant its configuration asked for.
+// holds it. The encoding is go-authn/sshcert's, judged there byte for byte
+// against GÉANT's test vectors, by ssh-keygen and by GÉANT's own parser.
 func domainGrantExtension(grants []string) (name, value string, err error) {
-	_ = grants
-	return DomainGrantExtension, "", errDomainGrantsNotWired
+	value, err = sshcert.EncodeDomainGrant(grants)
+	if err != nil {
+		return "", "", err
+	}
+	return sshcert.DomainGrantExtension, value, nil
 }
 
 // sshPrincipal is the one principal the client's certificates name: the

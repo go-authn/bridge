@@ -255,7 +255,7 @@ client "efp" {
 | `ssh_extensions` | OpenSSH's `permit-pty`, `permit-user-rc`, `permit-port-forwarding`, `permit-agent-forwarding`, `permit-X11-forwarding`, and nothing else: an unknown name stops the provider from starting. Not `no-touch-required`: it waives the user-presence test of the person's own security key, which is not the provider's to give away. |
 | `ssh_source_address` | addresses or CIDR prefixes (no host bits under the mask), in the `source-address` critical option. |
 | `ssh_validity` | shorter than `ssh_ca`'s `validity`, for this client. |
-| `ssh_domain_grants` | domain patterns for GÉANT's `ssh-domain-grant@core.aai.geant.org` extension, checked at load (lower case, at least two labels, `*` inside a label, no wildcard in the last two). **Not issued yet**: its encoding comes from go-authn/sshcert, which is not released, and until it is a client that sets this key is refused at load rather than issued certificates without the grant. |
+| `ssh_domain_grants` | domain patterns for GÉANT's `ssh-domain-grant@core.aai.geant.org` extension, checked at load by go-authn/sshcert's `ValidatePattern` (the specification's syntax), then lower case, at least two labels, and a wildcard only under a registrable domain (what stays fixed to its right is not a public suffix: `*.ac.uk`, `*.gouv.fr`, `*.github.io` are refused, `*.hpc.example.ac.uk` is not); encoded by go-authn/sshcert. |
 
 **`GET /ssh/config`** publishes the CA key as EFP publishes its own,
 `{"PublicKey":"ssh-ed25519 AAAA..."}`, so a site follows EFP's
@@ -270,9 +270,13 @@ echo "TrustedUserCAKeys /etc/ssh/bridge-ssh-ca.pub" >> /etc/ssh/sshd_config
 and authorizes the principal as EFP's [authorization
 instructions](https://integration.docs.my-eurohpc.eu/aai/ssh-ca-authz/) say:
 an `AuthorizedPrincipalsCommand` that reads the domain grant and refuses a
-certificate meant for another hosting entity -- go-authn/sshcert's
-fail-closed `sshcert-authorize` (not released yet either), or GÉANT's `ssh-cert-authorize` -- and the
-person's principal mapped to a local account. It is not advertised in the
+certificate meant for another hosting entity, and the
+person's principal mapped to a local account. Use go-authn/sshcert's
+`sshcert-authorize`, a drop-in for GÉANT's `ssh-cert-authorize` with one
+difference that matters: GÉANT's lets in a certificate that carries **no**
+domain grant, so on a host that trusts this CA and EFP's, or any second CA,
+the grant filters nothing; `sshcert-authorize` refuses it unless told
+otherwise (`--allow-no-grant`). It is not advertised in the
 discovery document: no OpenID Connect metadata names an SSH CA, and this
 provider does not invent one.
 
@@ -287,10 +291,12 @@ What remains different from EFP:
   revocation, so a site configured only as EFP says is not told.
 - **The groups extension** (`groups@go-authn.org`) is still there when the
   token carries groups; EFP's certificates have none.
-- **The domain grant** is not issued until go-authn/sshcert is (above).
-  EFP's authorization page spells the extension `ssh-domain-grant@core.aai.org`;
-  GÉANT's tool and specification, and this provider, use
-  `ssh-domain-grant@core.aai.geant.org`.
+- **The domain grant** is `ssh-domain-grant@core.aai.geant.org`, as GÉANT's
+  specification and EFP's authorisation page spell it, encoded by
+  [go-authn/sshcert](https://github.com/go-authn/sshcert). Its patterns follow
+  the specification, and this provider refuses one more thing: a wildcard over
+  a public suffix (`*.ac.uk`, by the Public Suffix List), which would grant
+  every institution under it.
 
 ## X.509 certificates, for NFS over TLS
 
