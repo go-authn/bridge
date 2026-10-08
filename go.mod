@@ -10,7 +10,7 @@ require (
 	github.com/go-authn/revocation v0.4.0
 	github.com/go-authn/saml v0.4.0
 	github.com/go-authn/servercert v0.4.0
-	github.com/go-authn/sshcert v0.1.0
+	github.com/go-authn/sshcert v0.1.1
 	github.com/go-authn/wireguard v0.1.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/go-net-health/endpoint v0.1.0
