@@ -1,4 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>go-authn/.github"]
+  "extends": ["github>go-authn/.github"],
+  "packageRules": [
+    {
+      "description": "The OpenID conformance suite (conformance/compose.yml) runs its server on MongoDB 6. With mongo 9 it never becomes ready, and oidcc-basic fails with 'the suite never became ready' (go-authn/bridge#50). Hold the major until the suite supports a newer one; patch and minor updates still come.",
+      "matchFileNames": ["conformance/compose.yml"],
+      "matchPackageNames": ["mongo"],
+      "allowedVersions": "<7"
+    }
+  ]
 }
