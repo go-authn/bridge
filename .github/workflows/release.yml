@@ -61,15 +61,20 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -eu
-          mkdir dist
+          # ⛔ OUTSIDE the checkout. A dist/ inside it is an untracked file to
+          # git, so Go stamped the build as modified: v0.9.2 shipped
+          # reporting "v0.9.2+dirty", and the module's build info said
+          # vcs.modified=true for a tree nobody had changed.
+          dist="$RUNNER_TEMP/dist"
+          mkdir "$dist"
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os=${target%/*}; arch=${target#*/}
             out="bridge-${os}-${arch}"; [ "$os" = windows ] && out="${out}.exe"
             echo "building $out"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags="-s -w" -o "dist/${out}" .
+              go build -trimpath -ldflags="-s -w" -o "$dist/${out}" .
           done
-          cd dist && sha256sum bridge-* > SHA256SUMS && cat SHA256SUMS
+          cd "$dist" && sha256sum bridge-* > SHA256SUMS && cat SHA256SUMS
 
       # ⛔ A binary that does not know its own version is one nobody can match
       # to a security advisory. The release stops here rather than publish it.
@@ -78,13 +83,17 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -eu
-          got=$(./dist/bridge-linux-amd64 --version 2>&1 || true)
+          got=$("$RUNNER_TEMP/dist/bridge-linux-amd64" --version 2>&1 || true)
           echo "$got"
-          case "$got" in *"$TAG"*) ;; *) echo "::error::bridge reports '$got', not $TAG"; exit 1;; esac
+          # The version EXACTLY: the last word is the tag, and nothing after
+          # it. "v0.9.2+dirty" contains the tag and is wrong, and the first
+          # version of this guard let it through.
+          last=$(printf '%s\n' "$got" | head -1 | awk '{print $NF}')
+          [ "$last" = "$TAG" ] || { echo "::error::bridge reports '$got', not exactly $TAG"; exit 1; }
 
       - uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/bridge-*
+          subject-path: ${{ runner.temp }}/dist/bridge-*
 
       - name: Publish the GitHub release
         env:
@@ -101,7 +110,7 @@ jobs:
             "    sha256sum -c SHA256SUMS --ignore-missing" \
             "    gh attestation verify bridge-linux-amd64 --repo $bridge")
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
+            gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --clobber
           else
-            gh release create "$TAG" dist/* --title "$TAG" --notes "$notes" --verify-tag
+            gh release create "$TAG" "$RUNNER_TEMP"/dist/* --title "$TAG" --notes "$notes" --verify-tag
           fi
