@@ -903,6 +903,20 @@ so the next change will show up as a failing test, not as renamed people.
   one instance still.
 - No dynamic registration, no front- or back-channel logout.
 
+## Release binaries
+
+Each release carries `bridge` for linux, darwin and windows on amd64 and arm64
+(pure Go, `CGO_ENABLED=0`), a `SHA256SUMS` manifest, and a build provenance
+attestation per binary, made by this repository's release workflow at the
+tag. Check a download before running it:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify bridge-linux-amd64 --repo go-authn/bridge
+```
+
+`bridge --version` prints the tag it was built from.
+
 ## Licence
 
 BSD-3-Clause.
