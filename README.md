@@ -9,13 +9,17 @@ eduGAIN, and applications get an OpenID Connect token. Pure Go,
 `CGO_ENABLED=0`, one binary.
 
 ```sh
-go install github.com/go-authn/bridge@latest
+go install github.com/go-authn/bridge/cmd/authn-bridge@latest
 
-bridge keygen   --key /var/lib/bridge/oidc.key --salt /var/lib/bridge/salt
-bridge metadata --config /etc/bridge.d > sp.xml     # register this with the federation
-bridge check    --config /etc/bridge.d
-bridge          --config /etc/bridge.d
+authn-bridge keygen   --key /var/lib/authn-bridge/oidc.key --salt /var/lib/authn-bridge/salt
+authn-bridge metadata --config /etc/authn-bridge > sp.xml     # register this with the federation
+authn-bridge check    --config /etc/authn-bridge
+authn-bridge          --config /etc/authn-bridge   # serve
 ```
+
+Release binaries, and installing one as a hardened systemd service:
+[docs/install.md](docs/install.md). Before v0.20.0 the command was `bridge`
+(see [Upgrading to v0.20.0](#upgrading-to-v0200)).
 
 It does what SATOSA does for RENATER, which RENATER's technical framework names
 as the gateway a bilateral-trust product such as Keycloak needs. The SAML half
@@ -25,16 +29,16 @@ is [go-authn/saml](https://github.com/go-authn/saml).
 
 ```hcl
 issuer            = "https://login.example.org"
-signing_key_file  = "/var/lib/bridge/oidc.key"   # bridge keygen --key
-subject_salt_file = "/var/lib/bridge/salt"       # bridge keygen --salt; NEVER change it
-listen            = "127.0.0.1:8080"             # the public listener: loopback by default, behind a TLS proxy
+signing_key_file  = "/var/lib/authn-bridge/oidc.key" # authn-bridge keygen --key
+subject_salt_file = "/var/lib/authn-bridge/salt"     # authn-bridge keygen --salt; NEVER change it
+listen            = "127.0.0.1:8080"                 # the public listener: loopback by default, behind a TLS proxy
 
 saml {
-  key_file  = "/etc/bridge/saml.key"             # IdPs encrypt assertions to this
-  cert_file = "/etc/bridge/saml.crt"
+  key_file  = "/etc/authn-bridge/saml.key"   # IdPs encrypt assertions to this
+  cert_file = "/etc/authn-bridge/saml.crt"
 
   metadata_url         = "https://pub.federation.renater.fr/metadata/fer/idps.xml"
-  metadata_cert_file   = "/etc/bridge/metadata-signature-2026.pem"
+  metadata_cert_file   = "/etc/authn-bridge/metadata-signature-2026.pem"
   metadata_fingerprint = "68:2F:20:58:41:9E:D0:79:EB:FE:3C:27:D6:A4:A4:09:39:6F:AE:3F:10:5F:22:EA:04:0F:04:F3:78:2D:5C:C0"
 
   discovery = "https://discovery.renater.fr/renater"   # or leave it out for this provider's own list
@@ -50,7 +54,7 @@ claims {
 }
 
 client "fileshare-web" {
-  secret_file   = "/etc/bridge/fileshare-web.secret"   # absent: a public client
+  secret_file   = "/etc/authn-bridge/fileshare-web.secret"   # absent: a public client
   redirect_uris = ["https://files.example.org/callback"]
   audience      = ["fileshare"]                         # what the access token is for
 }
@@ -178,7 +182,7 @@ together with RENATER's discovery service (which cannot be restricted).
   token type, `email_verified`, and a public client's secret each turn a test
   red.
 
-## Without a browser: the device grant, and `bridge token`
+## Without a browser: the device grant, and `authn-bridge token`
 
 A WebDAV client, a script, a terminal has no browser to send to a university.
 It asks for a code instead (RFC 8628), and the person logs in on any other
@@ -194,7 +198,7 @@ client "rclone" {
 ```
 
 ```sh
-bridge token --issuer https://login.example.org --client rclone
+authn-bridge token --issuer https://login.example.org --client rclone
 ```
 
 prints an access token, logging in the first time and refreshing quietly after
@@ -212,9 +216,9 @@ golang.org/x/oauth2's device client, not one written here.
 ## SSH certificates, for SFTP
 
 ```hcl
-certificates_file = "/var/lib/bridge/certificates.json"   # every certificate issued, and the revoked
+certificates_file = "/var/lib/authn-bridge/certificates.json"   # every certificate issued, and the revoked
 ssh_ca {
-  key_file = "/var/lib/bridge/ssh-ca"   # bridge keygen --ssh-ca
+  key_file = "/var/lib/authn-bridge/ssh-ca"   # authn-bridge keygen --ssh-ca
   validity = "12h"
 }
 client "sftp" {
@@ -223,7 +227,7 @@ client "sftp" {
 }
 ```
 
-`bridge ssh-cert --issuer ... --client sftp` logs in with a code and writes
+`authn-bridge ssh-cert --issuer ... --client sftp` logs in with a code and writes
 `~/.ssh/id_ed25519-cert.pub`, where ssh and sftp find it. The certificate has
 **exactly one principal**, the `preferred_username` -- PROTOCOL.certkeys makes
 an empty list valid for ANY user, so there is never one -- no `permit-*`
@@ -244,7 +248,7 @@ signature and times.
 
 ```hcl
 ssh_ca {
-  key_file = "/var/lib/bridge/ssh-ca"
+  key_file = "/var/lib/authn-bridge/ssh-ca"
   validity = "12h"                       # the most any client may ask for
 }
 client "efp" {
@@ -260,7 +264,7 @@ client "efp" {
 
 | key | |
 |---|---|
-| `ssh_principal_claim` | the claim the one principal comes from. `voperson_id` and `eduperson_principal_name` are released by the `eduperson` scope, which the token must hold (`bridge ssh-cert --scope eduperson`); a token without it, or a person whose IdP released no such attribute, gets a **403** saying which. The value goes through the same check as a username: a comma, a quote, a space or a control character is refused, since sshd would read two names. |
+| `ssh_principal_claim` | the claim the one principal comes from. `voperson_id` and `eduperson_principal_name` are released by the `eduperson` scope, which the token must hold (`authn-bridge ssh-cert --scope eduperson`); a token without it, or a person whose IdP released no such attribute, gets a **403** saying which. The value goes through the same check as a username: a comma, a quote, a space or a control character is refused, since sshd would read two names. |
 | `ssh_extensions` | OpenSSH's `permit-pty`, `permit-user-rc`, `permit-port-forwarding`, `permit-agent-forwarding`, `permit-X11-forwarding`, and nothing else: an unknown name stops the provider from starting. Not `no-touch-required`: it waives the user-presence test of the person's own security key, which is not the provider's to give away. |
 | `ssh_source_address` | addresses or CIDR prefixes (no host bits under the mask), in the `source-address` critical option. OpenSSH's sshd enforces it, and so does go-fileshare: with `ssh_domains` as without it, since fileshare v0.22.1. |
 | `ssh_validity` | shorter than `ssh_ca`'s `validity`, for this client. |
@@ -313,10 +317,10 @@ NFS over TLS (RFC 9289) can name the client by its certificate. This
 provider issues one to a person who logged in, for a key made on their machine:
 
 ```hcl
-certificates_file = "/var/lib/bridge/certificates.json"
+certificates_file = "/var/lib/authn-bridge/certificates.json"
 x509_ca {
-  key_file  = "/var/lib/bridge/nfs-ca/ca.key"    # bridge keygen --x509-ca /var/lib/bridge/nfs-ca
-  cert_file = "/var/lib/bridge/nfs-ca/ca.crt"    # what go-fileshare trusts
+  key_file  = "/var/lib/authn-bridge/nfs-ca/ca.key"    # authn-bridge keygen --x509-ca /var/lib/authn-bridge/nfs-ca
+  cert_file = "/var/lib/authn-bridge/nfs-ca/ca.crt"    # what go-fileshare trusts
   validity  = "12h"
 }
 client "nfs" {
@@ -325,7 +329,7 @@ client "nfs" {
 }
 ```
 
-`bridge nfs-cert --issuer ... --client nfs` makes a P-256 key, sends a
+`authn-bridge nfs-cert --issuer ... --client nfs` makes a P-256 key, sends a
 certificate request with the "nfs" scope, and writes the certificate and key
 in PEM, and in the DER the kernel keyring takes, with the mount command.
 
@@ -358,7 +362,7 @@ in PEM, and in the DER the kernel keyring takes, with the mount command.
 server 'cannot utilize the remote TLS peer identity to authenticate RPC
 users'. Linux sets the client certificate per mount (`cert_serial`,
 `privkey_serial`), so everybody using that mount is the person it names:
-this is for a machine one person uses, and `bridge nfs-cert` says so.
+this is for a machine one person uses, and `authn-bridge nfs-cert` says so.
 
 On the Linux client (measured by go-fileshare against Linux 6.17 and
 ktls-utils 0.9): tlshd verifies the SERVER's certificate against the system
@@ -366,7 +370,7 @@ trust store only, ignoring `x509.truststore`; certificate files named in
 `/etc/tlshd.conf` must be root's, the key mode 600 -- either mistake shows
 only as `gnutls: Error in the certificate (-43)`; and MOUNT's MNT goes in the
 clear, so a refused person sees "access denied" at the first access, not at
-mount. `bridge nfs-cert` prints all three.
+mount. `authn-bridge nfs-cert` prints all three.
 
 Every certificate, SSH and X.509, is recorded in `certificates_file` before it
 is handed out: one that cannot be recorded is not issued, since it could
@@ -375,7 +379,7 @@ never be revoked. The file is required with `ssh_ca` or `x509_ca`.
 ## Application passwords, for SMB and S3
 
 NTLMv2 and SigV4 prove a secret the server must already hold, so no token will
-do. `bridge app-password --issuer ... --client files` sets one, generated,
+do. `authn-bridge app-password --issuer ... --client files` sets one, generated,
 shown once, into a database go-fileshare reads with a `users "sql"` block:
 
 ```hcl
@@ -386,7 +390,7 @@ client "files" {
 
 app_passwords {
   driver   = "sqlite"          # or postgres, mysql
-  dsn_file = "/etc/bridge/apppw.dsn"
+  dsn_file = "/etc/authn-bridge/apppw.dsn"
   store    = ["nt_hash"]       # SMB only: the default. Add "password" for S3.
   lifetime = "2160h"
 }
@@ -420,7 +424,7 @@ The format both sides share, and the gateway's side, are in
 [go-authn/wireguard](https://github.com/go-authn/wireguard).
 
 ```hcl
-certificates_file = "/var/lib/bridge/certs.json"   # keys are recorded beside the certificates
+certificates_file = "/var/lib/authn-bridge/certs.json"   # keys are recorded beside the certificates
 
 wireguard {
   lifetime = "24h"              # a key is listed this long; registering it again renews it
@@ -434,7 +438,7 @@ client "claimward" {            # the VPN client people log in with
 }
 
 client "claimward-gw" {         # the gateway's own client
-  secret_file     = "/etc/bridge/claimward-gw.secret"
+  secret_file     = "/etc/authn-bridge/claimward-gw.secret"
   wireguard_peers = ["claimward"]   # it reads the keys registered through these clients
   ssf_receiver    = true            # optional: told at once when somebody is disabled
 }
@@ -487,7 +491,7 @@ flow and in the device flow (where the openpubkey client sends it on the
 device authorization request), RS256 so that GQ signatures work, and
 
 ```hcl
-retired_signing_key_files = ["/var/lib/bridge/oidc-2026-03.key"]
+retired_signing_key_files = ["/var/lib/authn-bridge/oidc-2026-03.key"]
 ```
 
 because a PK Token outlives the ID token inside it and the openpubkey verifier
@@ -523,7 +527,7 @@ Or from an ACME CA, for the issuer's host and no other:
 ```hcl
 acme {
   accept_terms_of_service = true             # the operator's agreement; no default
-  cache_dir = "/var/lib/bridge/acme"        # account key and certificates
+  cache_dir = "/var/lib/authn-bridge/acme"  # account key and certificates
   email     = "noc@example.org"
   # Let's Encrypt by default: tls-alpn-01 on the listener itself, which then
   # has to be the one on port 443; or http-01 with
@@ -542,9 +546,9 @@ acme {
   accept_terms_of_service = true
   directory_url     = "<the ACME directory URL cm.harica.gr shows for the account>"
   eab_key_id        = "<key id from cm.harica.gr>"
-  eab_hmac_key_file = "/etc/bridge/harica-eab.key"   # the HMAC key, base64url
+  eab_hmac_key_file = "/etc/authn-bridge/harica-eab.key"   # the HMAC key, base64url
   email             = "noc@example.org"             # HARICA requires one
-  cache_dir         = "/var/lib/bridge/acme"
+  cache_dir         = "/var/lib/authn-bridge/acme"
 }
 ```
 
@@ -557,7 +561,7 @@ anybody else could reach or re-point. That means a symbolic link, mode beyond
 it** is held to sshd's StrictModes rule: owned by root or that user, and not
 writable by group or others unless sticky. A missing `cache_dir` is created
 `0700`. Since bridge v0.16.5 (go-authn/servercert v0.3.0) the directories
-above are checked too, not only the last one. A `/var/lib/bridge` that a
+above are checked too, not only the last one. A `/var/lib/authn-bridge` that a
 group can write now stops the provider at startup, naming the path.
 
 ⛔ golang.org/x/crypto/acme (v0.57.0) polls a finalized order at the URL in
@@ -611,7 +615,7 @@ What to know, read in their sources (not yet run end to end):
   stay RS256 --
 
   ```hcl
-  access_token_key_file = "/var/lib/bridge/access-token.key"   # bridge keygen --access-token-key
+  access_token_key_file = "/var/lib/authn-bridge/access-token.key"   # authn-bridge keygen --access-token-key
   ```
 
   and one with a long eppn and three AARC entitlements is 953 (measured). Past
@@ -628,7 +632,7 @@ What to know, read in their sources (not yet run end to end):
 ```hcl
 state {
   driver   = "postgres"                  # or sqlite, mysql
-  dsn_file = "/etc/bridge/state.dsn"
+  dsn_file = "/etc/authn-bridge/state.dsn"
 }
 ```
 
@@ -677,7 +681,7 @@ for every receiver that asked, go-fileshare among them.
 state { ... }            # required: a queue a restart empties loses revocations
 ssf {}                   # event_retention = "192h" by default
 client "fileshare-ssf" { # a receiver: client credentials, scope ssf
-  secret_file  = "/etc/bridge/fileshare-ssf.secret"
+  secret_file  = "/etc/authn-bridge/fileshare-ssf.secret"
   ssf_receiver = true
   audience     = ["fileshare"]
 }
@@ -722,12 +726,12 @@ the public listener:
 
 ```hcl
 admin {
-  listen = "unix:///run/bridge/admin.sock"      # mode 0600
+  listen = "unix:///run/authn-bridge/admin.sock"      # mode 0600
   # or, over the network, mutual TLS and nothing less (loopback included):
   # listen         = "10.0.0.5:9443"
-  # tls_cert_file  = "/etc/bridge/admin.crt"
-  # tls_key_file   = "/etc/bridge/admin.key"
-  # client_ca_file = "/etc/bridge/operators-ca.crt"
+  # tls_cert_file  = "/etc/authn-bridge/admin.crt"
+  # tls_key_file   = "/etc/authn-bridge/admin.key"
+  # client_ca_file = "/etc/authn-bridge/operators-ca.crt"
   # reflection     = true                       # for grpcurl; off by default
 }
 
@@ -761,7 +765,7 @@ Disabling is kept in a file, and refused without one -- somebody disabled
 until the next restart would be let back in by the next deployment:
 
 ```hcl
-disabled_file = "/var/lib/bridge/disabled.json"   # written whole, mode 0600
+disabled_file = "/var/lib/authn-bridge/disabled.json"   # written whole, mode 0600
 ```
 
 A file that cannot be read stops the provider from starting, for the same
@@ -865,6 +869,31 @@ device codes of one person lock out everybody. Every request is bounded: 1 MiB,
 one IdP: neither is held to an IdP's scopes, so with two, one names the
 other's people.
 
+## Upgrading to v0.20.0
+
+**The command is now `authn-bridge`.** It was `bridge`, which is also
+iproute2's `/sbin/bridge`, installed on practically every Linux distribution:
+whichever came first on `PATH` won. The repository and the module path stay
+`github.com/go-authn/bridge`; only the command and the binary are renamed.
+
+- `go install github.com/go-authn/bridge/cmd/authn-bridge@latest`. The old
+  path, `go install github.com/go-authn/bridge@...`, no longer builds a
+  command from v0.20.0 on: the program moved to `internal/app`, with
+  `cmd/authn-bridge` calling it.
+- The release assets are `authn-bridge-<os>-<arch>`, no longer
+  `bridge-<os>-<arch>`.
+- Scripts, cron jobs, systemd units and `bearer_token_command` lines that run
+  `bridge ...` must run `authn-bridge ...`. The subcommands, flags and
+  configuration are unchanged.
+- The start-up log line and error prefix say `authn-bridge`; a log alert that
+  matched `bridge v0.` matches `authn-bridge v0.` now. Metric names (`bridge_*`),
+  cookie names and the database table `bridge_state` are unchanged.
+- The user-side cache (`~/.config/go-authn-bridge`) is unchanged, so
+  `authn-bridge token` and `ssh-cert` reuse the logins `bridge` cached.
+
+[docs/install.md](docs/install.md) installs it as a hardened systemd service
+(`packaging/systemd/authn-bridge.service`).
+
 ## Upgrading to v0.18.0
 
 Two changes a deployment must look at.
@@ -905,17 +934,19 @@ so the next change will show up as a failing test, not as renamed people.
 
 ## Release binaries
 
-Each release carries `bridge` for linux, darwin and windows on amd64 and arm64
+Each release carries `authn-bridge` for linux, darwin and windows on amd64 and arm64
 (pure Go, `CGO_ENABLED=0`), a `SHA256SUMS` manifest, and a build provenance
 attestation per binary, made by this repository's release workflow at the
 tag. Check a download before running it:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify bridge-linux-amd64 --repo go-authn/bridge
+gh attestation verify authn-bridge-linux-amd64 --repo go-authn/bridge
 ```
 
-`bridge --version` prints the tag it was built from.
+`authn-bridge --version` prints the tag it was built from.
+[docs/install.md](docs/install.md) takes a release binary to a running
+systemd service, upgrades it and rolls it back.
 
 ## Licence
 
