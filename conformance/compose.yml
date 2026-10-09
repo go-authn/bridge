@@ -34,7 +34,7 @@ services:
   bridge:
     image: alpine:3.24
     volumes: ["./work:/work:ro", "bridgedata:/data"]
-    command: ["/work/bridge", "-c", "/work/bridge.hcl"]
+    command: ["/work/authn-bridge", "-c", "/work/bridge.hcl"]
     # the SSF queue, its state and the admin socket: written, so not in
     # ./work; a named volume, so that grpcurl can reach the socket
     # the run's CA, for the IdP's metadata over https (Go reads it on Linux)

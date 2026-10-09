@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# authn-bridge as a systemd service: the reference for a manual install
+# (docs/install.md) and for packagers.
+#
+#   /usr/local/bin/authn-bridge   the binary
+#   /etc/authn-bridge/*.hcl       the configuration, read in name order;
+#                                 root:authn-bridge 0750, files 0640
+#   /var/lib/authn-bridge/        keys, salt, SQLite state, certificates
+#                                 issued, the disabled list: authn-bridge 0700
+#   /run/authn-bridge/            the admin socket, if admin { listen =
+#                                 "unix:///run/authn-bridge/admin.sock" }
+#
+# The user comes from packaging/sysusers.d/authn-bridge.conf, not from
+# DynamicUser=: the signing key, the subject salt, the SAML key and the CAs
+# are made BEFORE the first start (authn-bridge keygen, as that user), live
+# for years, and must keep one owner across reinstalls and restores from
+# backup. A dynamic user's UID is allocated at start and its state directory
+# is a symbolic link into /var/lib/private.
+#
+# It listens on 127.0.0.1:8080 by default, behind a reverse proxy, so it
+# holds no capability at all. To serve TLS itself on port 443 (cert_file or
+# acme), see "Port 443" in docs/install.md for the drop-in.
+#
+# No ExecReload: the provider does not reload its configuration, so a change
+# to /etc/authn-bridge is `systemctl restart authn-bridge`, and `systemctl
+# reload` is refused rather than pretending. A SIGHUP (logrotate, a habit)
+# is caught and logged, and the service stays up: left to Go's default it
+# would kill the process, which systemd counts as a clean exit that
+# Restart=on-failure does not restart. TLS certificate files ARE re-read
+# when they change, without a restart.
+
+[Unit]
+Description=authn-bridge, an OpenID Connect provider in front of a SAML federation
+Documentation=https://github.com/go-authn/bridge/blob/main/docs/install.md
+# It fetches the federation's metadata before it listens, and refuses to
+# start without it.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=authn-bridge
+Group=authn-bridge
+ExecStart=/usr/local/bin/authn-bridge --config /etc/authn-bridge
+Restart=on-failure
+RestartSec=5s
+# It shuts its listener down within 10 seconds of SIGTERM.
+TimeoutStopSec=20s
+
+# The directories systemd makes and owns for it. ProtectSystem=strict makes
+# everything else read-only.
+StateDirectory=authn-bridge
+StateDirectoryMode=0700
+RuntimeDirectory=authn-bridge
+RuntimeDirectoryMode=0700
+ConfigurationDirectory=authn-bridge
+ConfigurationDirectoryMode=0750
+UMask=0077
+
+# No privilege, and no way to gain one.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+PrivateUsers=yes
+
+# The file system: read-only but for the directories above; no home, a
+# /tmp of its own, no devices.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=yes
+PrivateIPC=yes
+
+# The kernel and the host.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+
+# The network: TCP for the listener, the federation's metadata, the ACME CA,
+# PostgreSQL or MySQL; a unix socket for the admin API. Nothing else (no
+# netlink, no raw packets).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# System calls: what a service needs, less privileged and resource-setting
+# calls. Refused with EPERM rather than a kill, so that the Go runtime's
+# optional calls fail softly.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
