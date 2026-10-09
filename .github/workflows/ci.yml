@@ -50,13 +50,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go install github.com/go-fileshare/fileshare@v0.22.1
       # openid-client, an OpenID Certified relying party, as this provider's
-      # client (openidclient_test.go); pinned by testdata/openid-client's lock.
+      # client (openidclient_test.go); pinned by internal/app/testdata/openid-client's lock.
       - uses: actions/setup-node@v7
         if: matrix.os == 'ubuntu-latest'
         with: { node-version: lts/* }
       - name: openid-client
         if: matrix.os == 'ubuntu-latest'
-        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
+        run: npm ci --prefix internal/app/testdata/openid-client --no-audit --no-fund
       # The ACME CA is Pebble, Let's Encrypt's test CA, with External Account
       # Binding required as HARICA requires it. Pure Go, so every OS has it.
       - name: pebble
@@ -78,6 +78,16 @@ jobs:
       - name: buf lint
         if: matrix.os == 'ubuntu-latest'
         run: cd proto && go run github.com/bufbuild/buf/cmd/buf@v1.73.0 lint
+      # ⛔ The command is authn-bridge, not bridge: iproute2 owns that name
+      # on Linux. What `go install .../cmd/authn-bridge` produces must call
+      # itself so, and its version line is what the release guard reads.
+      - name: the command is authn-bridge
+        shell: bash
+        run: |
+          go build -o "$RUNNER_TEMP/authn-bridge" ./cmd/authn-bridge
+          got=$("$RUNNER_TEMP/authn-bridge" --version)
+          echo "$got"
+          case "$got" in "authn-bridge version "*) ;; *) echo "::error::the binary says '$got'"; exit 1 ;; esac
       - run: go test -count=1 ./...
         env:
           # Ubuntu installs xmlsec1 above, so a skipped test there is a lane
@@ -140,7 +150,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: lts/* }
       - name: openid-client
-        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
+        run: npm ci --prefix internal/app/testdata/openid-client --no-audit --no-fund
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: go test -race -count=1 ./...
@@ -169,7 +179,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: lts/* }
       - name: openid-client
-        run: npm ci --prefix testdata/openid-client --no-audit --no-fund
+        run: npm ci --prefix internal/app/testdata/openid-client --no-audit --no-fund
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: |
@@ -177,7 +187,11 @@ jobs:
           FLOOR=88.0
           # proto/ is protoc's output: measuring it measures the generator, and
           # it would pull the total under the floor by code nobody here wrote.
-          pkgs=$(go list ./... | grep -v /proto/ | paste -sd, -)
+          # cmd/ is one line calling internal/app's Main, which is what the
+          # root package's main() was before v0.20.0: the code measured is the
+          # same, and so is the floor.
+          pkgs=$(go list ./... | grep -v -e /proto/ -e /cmd/ | paste -sd, -)
+          echo "measuring: $pkgs"
           go test -coverprofile=cover.out -coverpkg="$pkgs" ./... >/dev/null
           go tool cover -func=cover.out
           cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')

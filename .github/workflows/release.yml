@@ -1,12 +1,12 @@
 name: Release
 
-# A tag publishes bridge for every {linux,darwin,windows} x {amd64,arm64},
+# A tag publishes authn-bridge for every {linux,darwin,windows} x {amd64,arm64},
 # pure Go (CGO_ENABLED=0), with a SHA256SUMS manifest and a build provenance
 # attestation per binary, so that anyone can check a download came from THIS
 # repository's workflow at THIS tag:
 #
 #   sha256sum -c SHA256SUMS --ignore-missing
-#   gh attestation verify bridge-linux-amd64 --repo go-authn/bridge
+#   gh attestation verify authn-bridge-linux-amd64 --repo go-authn/bridge
 #
 # Same shape as go-pkgx/pkgm's release workflow, plus the attestation and a
 # guard that the binary reports the tag it is published under.
@@ -46,7 +46,7 @@ jobs:
 
       # The whole history and the tags: Go stamps the module version from the
       # tag the checkout sits on (debug.ReadBuildInfo), which is what
-      # bridge --version prints.
+      # authn-bridge --version prints.
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.tag.outputs.tag }}
@@ -69,12 +69,12 @@ jobs:
           mkdir "$dist"
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os=${target%/*}; arch=${target#*/}
-            out="bridge-${os}-${arch}"; [ "$os" = windows ] && out="${out}.exe"
+            out="authn-bridge-${os}-${arch}"; [ "$os" = windows ] && out="${out}.exe"
             echo "building $out"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags="-s -w" -o "$dist/${out}" .
+              go build -trimpath -ldflags="-s -w" -o "$dist/${out}" ./cmd/authn-bridge
           done
-          cd "$dist" && sha256sum bridge-* > SHA256SUMS && cat SHA256SUMS
+          cd "$dist" && sha256sum authn-bridge-* > SHA256SUMS && cat SHA256SUMS
 
       # ⛔ A binary that does not know its own version is one nobody can match
       # to a security advisory. The release stops here rather than publish it.
@@ -83,32 +83,52 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -eu
-          got=$("$RUNNER_TEMP/dist/bridge-linux-amd64" --version 2>&1 || true)
+          got=$("$RUNNER_TEMP/dist/authn-bridge-linux-amd64" --version 2>&1 || true)
           echo "$got"
           # The version EXACTLY: the last word is the tag, and nothing after
           # it. "v0.9.2+dirty" contains the tag and is wrong, and the first
           # version of this guard let it through.
           last=$(printf '%s\n' "$got" | head -1 | awk '{print $NF}')
-          [ "$last" = "$TAG" ] || { echo "::error::bridge reports '$got', not exactly $TAG"; exit 1; }
+          [ "$last" = "$TAG" ] || { echo "::error::authn-bridge reports '$got', not exactly $TAG"; exit 1; }
+
+      # ⛔ EVERY binary, not one: only the first build of a loop can be clean
+      # when the tree is dirtied by the loop itself (go-pkgx/bk shipped 13
+      # dirty releases past an exact check on its first binary).
+      - name: Every binary is stamped with the tag, from a clean tree
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -eu
+          bad=0
+          for f in "$RUNNER_TEMP"/dist/authn-bridge-*; do
+            mod=$(go version -m "$f" | awk '$1=="mod"{print $3}')
+            vm=$(go version -m "$f" | awk -F= '/vcs.modified/{print $2}')
+            if [ "$mod" != "$TAG" ] || [ "$vm" != false ]; then
+              echo "::error::$(basename "$f"): module $mod, vcs.modified=$vm"; bad=1
+            fi
+          done
+          exit $bad
 
       - uses: actions/attest-build-provenance@v4
         with:
-          subject-path: ${{ runner.temp }}/dist/bridge-*
+          subject-path: ${{ runner.temp }}/dist/authn-bridge-*
 
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
-          bridge: ${{ github.repository }}
+          REPO: ${{ github.repository }}
         run: |
           set -eu
           notes=$(printf '%s\n' \
-            "Static bridge binaries (CGO_ENABLED=0) for linux, darwin and windows on amd64 and arm64." \
+            "Static authn-bridge binaries (CGO_ENABLED=0) for linux, darwin and windows on amd64 and arm64." \
             "" \
             "Verify a download:" \
             "" \
             "    sha256sum -c SHA256SUMS --ignore-missing" \
-            "    gh attestation verify bridge-linux-amd64 --repo $bridge")
+            "    gh attestation verify authn-bridge-linux-amd64 --repo $REPO" \
+            "" \
+            "Installing it as a systemd service: docs/install.md.")
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --clobber
           else

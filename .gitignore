@@ -36,3 +36,8 @@ testdata/openid-client/node_modules/
 
 # conformance run output (keys, binaries)
 conformance/work/
+
+# the command, built at the root (`go build ./cmd/authn-bridge`); the old
+# name too, so that a checkout from before v0.20.0 leaves nothing to commit
+/authn-bridge
+/bridge

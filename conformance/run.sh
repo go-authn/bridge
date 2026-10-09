@@ -7,7 +7,7 @@ W=work
 rm -rf "$W" && mkdir -p "$W"
 
 # Binaries: the bridge and the IdP for the containers, the driver for here.
-(cd .. && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conformance/$W/bridge .)
+(cd .. && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o conformance/$W/authn-bridge ./cmd/authn-bridge)
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $W/testidp ./testidp
 go build -o $W/driver ./driver
 
@@ -27,7 +27,7 @@ for h in bridge idp; do
     -extfile $out.ext -out $out.crt 2>/dev/null
 done
 # keygen runs where the containers do: this script is for linux/amd64 (CI).
-$W/bridge keygen --key $W/oidc.key --salt $W/salt
+$W/authn-bridge keygen --key $W/oidc.key --salt $W/salt
 fp=$(openssl x509 -in $W/fed.crt -outform der | openssl dgst -sha256 -r | cut -d' ' -f1 | tr a-f A-F)
 # The two clients' credentials: throwaway, made here and kept in variables,
 # written once for the bridge and never read back.
