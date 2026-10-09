@@ -215,6 +215,7 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	defer ignoreHangup(s.logf)()
 	// The metadata is fetched before listening: a provider that cannot
 	// name a single institution is one nobody can log in through, and it
 	// should say so rather than start.

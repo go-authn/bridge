@@ -22,9 +22,13 @@
 # holds no capability at all. To serve TLS itself on port 443 (cert_file or
 # acme), see "Port 443" in docs/install.md for the drop-in.
 #
-# No ExecReload: the provider does not reload its configuration on SIGHUP,
-# so a change to /etc/authn-bridge is `systemctl restart authn-bridge`. TLS
-# certificate files ARE re-read when they change, without a restart.
+# No ExecReload: the provider does not reload its configuration, so a change
+# to /etc/authn-bridge is `systemctl restart authn-bridge`, and `systemctl
+# reload` is refused rather than pretending. A SIGHUP (logrotate, a habit)
+# is caught and logged, and the service stays up: left to Go's default it
+# would kill the process, which systemd counts as a clean exit that
+# Restart=on-failure does not restart. TLS certificate files ARE re-read
+# when they change, without a restart.
 
 [Unit]
 Description=authn-bridge, an OpenID Connect provider in front of a SAML federation

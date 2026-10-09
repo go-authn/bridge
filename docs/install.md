@@ -182,10 +182,12 @@ service needs to work: the host's network, AF_INET, AF_INET6 and AF_UNIX
 sockets, and no IP allow list. You can add `IPAddressAllow=` in a drop-in if
 the federation, the ACME CA and the database have fixed addresses.
 
-**Configuration changes need a restart.** The provider does not reload on
-SIGHUP, so after editing `/etc/authn-bridge`, run
-`systemctl restart authn-bridge`. TLS certificate files are the exception:
-the provider re-reads them when they change.
+**Configuration changes need a restart.** The provider does not reload its
+configuration, so after editing `/etc/authn-bridge`, run
+`systemctl restart authn-bridge`. `systemctl reload` is refused, because the
+unit has no `ExecReload=`. A SIGHUP, from logrotate for example, is logged
+and ignored, and the service stays up. TLS certificate files are the
+exception: the provider re-reads them when they change.
 
 ### Port 443
 
