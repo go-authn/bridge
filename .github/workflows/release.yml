@@ -91,6 +91,24 @@ jobs:
           last=$(printf '%s\n' "$got" | head -1 | awk '{print $NF}')
           [ "$last" = "$TAG" ] || { echo "::error::authn-bridge reports '$got', not exactly $TAG"; exit 1; }
 
+      # ⛔ EVERY binary, not one: only the first build of a loop can be clean
+      # when the tree is dirtied by the loop itself (go-pkgx/bk shipped 13
+      # dirty releases past an exact check on its first binary).
+      - name: Every binary is stamped with the tag, from a clean tree
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -eu
+          bad=0
+          for f in "$RUNNER_TEMP"/dist/authn-bridge-*; do
+            mod=$(go version -m "$f" | awk '$1=="mod"{print $3}')
+            vm=$(go version -m "$f" | awk -F= '/vcs.modified/{print $2}')
+            if [ "$mod" != "$TAG" ] || [ "$vm" != false ]; then
+              echo "::error::$(basename "$f"): module $mod, vcs.modified=$vm"; bad=1
+            fi
+          done
+          exit $bad
+
       - uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ runner.temp }}/dist/authn-bridge-*
