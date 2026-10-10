@@ -97,7 +97,10 @@ type login struct {
 	nonce       string
 	challenge   string
 	scopes      []string
-	options     saml.Options
+	// resources are the RFC 8707 resource indicators the request named:
+	// what the grant is bounded to. None is the client's whole audience.
+	resources []string
+	options   saml.Options
 
 	pending saml.Pending
 	started bool
@@ -126,6 +129,7 @@ type grant struct {
 	challenge   string
 	nonce       string
 	scopes      []string
+	resources   []string // RFC 8707, from the authorization request
 	who         *person
 }
 

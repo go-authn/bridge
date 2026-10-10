@@ -101,6 +101,7 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		challenge:   l.challenge,
 		nonce:       l.nonce,
 		scopes:      l.scopes,
+		resources:   l.resources,
 		who:         who,
 	}, s.now().Add(s.cfg.codeTTL))
 	u, _ := url.Parse(l.redirectURI)

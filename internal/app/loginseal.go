@@ -52,6 +52,7 @@ type sealedLogin struct {
 	Nonce       string       `json:"n,omitempty"`
 	Challenge   string       `json:"h,omitempty"`
 	Scopes      []string     `json:"o,omitempty"`
+	Resources   []string     `json:"rs,omitempty"`
 	Options     saml.Options `json:"p"`
 	Pending     saml.Pending `json:"q"`
 	Started     bool         `json:"t,omitempty"`
@@ -76,7 +77,7 @@ func (s *server) sealLogin(id string, l *login, expires time.Time) (string, erro
 	plain, err := json.Marshal(sealedLogin{
 		ID: id, Expires: expires.Unix(), Kind: l.kind, DeviceCode: l.deviceCode,
 		Client: l.client.ID, RedirectURI: l.redirectURI, State: l.state, Nonce: l.nonce,
-		Challenge: l.challenge, Scopes: l.scopes, Options: l.options, Pending: l.pending,
+		Challenge: l.challenge, Scopes: l.scopes, Resources: l.resources, Options: l.options, Pending: l.pending,
 		Started: l.started, MaxAge: maxAgePtr(l.maxAge),
 	})
 	if err != nil {
@@ -134,7 +135,7 @@ func (s *server) openLogin(v string) (string, *login, time.Time, error) {
 	}
 	return sl.ID, &login{
 		kind: sl.Kind, deviceCode: sl.DeviceCode, client: client, redirectURI: sl.RedirectURI,
-		state: sl.State, nonce: sl.Nonce, challenge: sl.Challenge, scopes: sl.Scopes,
+		state: sl.State, nonce: sl.Nonce, challenge: sl.Challenge, scopes: sl.Scopes, resources: sl.Resources,
 		options: sl.Options, pending: sl.Pending, started: sl.Started,
 		maxAge: maxAgeOf(sl.MaxAge),
 	}, expires, nil
