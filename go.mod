@@ -1,6 +1,6 @@
 module github.com/go-authn/bridge
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
@@ -25,7 +25,7 @@ require (
 	github.com/prometheus/common v0.72.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
