@@ -122,6 +122,20 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RFC 8707 2: the resource servers the grant is for. Repeated, each an
+	// absolute URI the client's audience names -- checked here, so that a
+	// refresh token is bound to what was consented (RFC 9700 4.14.2).
+	var resources []string
+	for _, rs := range q["resource"] {
+		if err := s.checkResource(client, scopes, rs); err != nil {
+			fail("invalid_target", err.Error())
+			return
+		}
+		if !slices.Contains(resources, rs) {
+			resources = append(resources, rs)
+		}
+	}
+
 	var opts saml.Options
 	prompts := strings.Fields(q.Get("prompt"))
 	if slices.Contains(prompts, "none") && len(prompts) > 1 {
@@ -157,6 +171,7 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		nonce:       q.Get("nonce"),
 		challenge:   q.Get("code_challenge"),
 		scopes:      scopes,
+		resources:   resources,
 		options:     opts,
 		maxAge:      maxAge,
 	}

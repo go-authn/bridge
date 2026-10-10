@@ -21,7 +21,10 @@ type refreshGrant struct {
 	client *clientBlock
 	who    *person
 	scopes []string
-	family string
+	// resources bound the grant (RFC 8707, from the authorization
+	// request); none is the client's whole audience.
+	resources []string
+	family    string
 	// until is the end of the family, fixed at the login: rotation does not
 	// extend it. The federation is not asked again before it.
 	until time.Time
@@ -29,7 +32,7 @@ type refreshGrant struct {
 
 // newRefresh starts a family, if the client has refresh tokens at all.
 // It returns the refresh token and its family, or "" and "".
-func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, jti string) (string, string) {
+func (s *server) newRefresh(client *clientBlock, who *person, scopes, resources []string, jti string) (string, string) {
 	if client.refreshTTL == 0 {
 		return "", ""
 	}
@@ -41,7 +44,7 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes []string, j
 	}
 	family := token()
 	rt := token()
-	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, family: family, until: until}, until)
+	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, resources: resources, family: family, until: until}, until)
 	s.families.put(family, []string{jti}, until.Add(s.cfg.tokenTTL))
 	return rt, family
 }
@@ -62,6 +65,12 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 				tokenError(w, http.StatusBadRequest, "invalid_scope", "the refresh token was not granted "+sc)
 				return
 			}
+		}
+		// The same for a resource (RFC 8707 2.2): asking for one the grant
+		// is not for must not cost the refresh token.
+		if _, err := s.targetAudience(client, narrowed(peek.scopes, asked), peek.resources, r.PostForm.Get("resource"), r.PostForm.Has("resource")); err != nil {
+			tokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+			return
 		}
 	}
 	// Kept under their hashes (state.go): what the store holds is no token.
@@ -89,16 +98,17 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 		tokenError(w, http.StatusBadRequest, "invalid_grant", "the refresh token was revoked")
 		return
 	}
-	scopes := g.scopes
-	if len(asked) > 0 {
-		scopes = nil
-		for _, sc := range asked {
-			if slices.Contains(g.scopes, sc) && !slices.Contains(scopes, sc) {
-				scopes = append(scopes, sc)
-			}
-		}
+	scopes := narrowed(g.scopes, asked)
+	// RFC 8707 2.2: a refresh may ask for a token for one of the resources
+	// the grant is for; the refresh token keeps the whole grant. Checked
+	// above before the token was spent; checked again here against the
+	// grant actually taken.
+	aud, err := s.targetAudience(client, scopes, g.resources, r.PostForm.Get("resource"), r.PostForm.Has("resource"))
+	if err != nil {
+		tokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+		return
 	}
-	resp, jti, err := s.issue(client, g.who, scopes, "")
+	resp, jti, err := s.issue(client, g.who, scopes, "", aud)
 	if err != nil {
 		s.logf("token: %v", err)
 		if errors.Is(err, errDisabled) {
@@ -129,4 +139,19 @@ func (s *server) revokeFamily(family string) int {
 		}
 	}
 	return n
+}
+
+// narrowed is the scopes a refresh asks for: those of the grant, or the
+// subset asked (RFC 6749 6).
+func narrowed(granted, asked []string) []string {
+	if len(asked) == 0 {
+		return granted
+	}
+	var out []string
+	for _, sc := range asked {
+		if slices.Contains(granted, sc) && !slices.Contains(out, sc) {
+			out = append(out, sc)
+		}
+	}
+	return out
 }

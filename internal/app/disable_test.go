@@ -171,10 +171,10 @@ func TestAdminDisablePerson(t *testing.T) {
 	// A grant the revocation did not find -- one being made while it ran --
 	// meets the disabling in issue().
 	client, _ := f.s.cfg.client("files")
-	if _, _, err := f.s.issue(client, &person{username: aliceName, idp: idpEntity}, []string{"openid"}, ""); !errors.Is(err, errDisabled) {
+	if _, _, err := f.s.issue(client, &person{username: aliceName, idp: idpEntity}, []string{"openid"}, "", "files"); !errors.Is(err, errDisabled) {
 		t.Errorf("issue() for a disabled person: %v", err)
 	}
-	if _, _, err := f.s.issue(client, &person{username: "bob@" + idpScope, idp: idpEntity}, []string{"openid"}, ""); err != nil {
+	if _, _, err := f.s.issue(client, &person{username: "bob@" + idpScope, idp: idpEntity}, []string{"openid"}, "", "files"); err != nil {
 		t.Errorf("issue() for bob: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestAdminDisableIdP(t *testing.T) {
 	if res.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "cannot be used") {
 		t.Errorf("sent to a disabled IdP: %d %s", res.StatusCode, body)
 	}
-	if _, _, err := f.s.issue(func() *clientBlock { c, _ := f.s.cfg.client("files"); return c }(), &person{username: "zoe@" + idpScope, idp: idpEntity}, nil, ""); !errors.Is(err, errDisabled) {
+	if _, _, err := f.s.issue(func() *clientBlock { c, _ := f.s.cfg.client("files"); return c }(), &person{username: "zoe@" + idpScope, idp: idpEntity}, nil, "", "files"); !errors.Is(err, errDisabled) {
 		t.Errorf("issue() for somebody of a disabled IdP: %v", err)
 	}
 	ls, err := c.ListIdPs(t.Context(), &adminv1.ListIdPsRequest{})
