@@ -339,8 +339,8 @@ func x509KeyStrongEnough(k crypto.PublicKey) error {
 }
 
 // x509CRL is the CA's CRL: every unexpired revoked certificate, signed by
-// the key that signs the certificates, its number the revocation counter
-// shared with the SSH KRL. A verifier treats it as stale past NextUpdate.
+// the key that signs the certificates, its number set in revlists.go
+// (issueList): rising at every issue, never the revocation counter. A verifier treats it as stale past NextUpdate.
 func (s *server) x509CRL(w http.ResponseWriter, r *http.Request) {
 	ca := s.cfg.X509CA
 	if ca == nil {
