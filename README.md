@@ -71,7 +71,7 @@ on its metadata page; the one above is the 2026 certificate's.
 |---|---|
 | **flow** | authorization code, with **PKCE S256 required for every client** |
 | **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash`, and **nothing about the person**: what the scopes release is at `/userinfo` (OIDC Core §5.4, since an access token is always issued). A client whose ID token is itself the credential, such as opkssh, sets `id_token_claims = true` to have them copied in |
-| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
+| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, or the one resource it asked for ([RFC 8707](#several-resource-servers-a-token-for-one-at-a-time)), with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
@@ -212,6 +212,36 @@ golang.org/x/oauth2's device client, not one written here.
 | **the confirmation page** | names the application and says to refuse a code somebody else sent: RFC 8628 5.4's remote phishing, where the ATTACKER's device gets the token |
 | **polling** | `slow_down` adds five seconds for good; a device code buys one set of tokens |
 | **refresh tokens** | rotate (RFC 9700 4.14.2) inside a family whose end is fixed at the login; a retired one used again revokes the family and the access tokens it bought |
+
+## Several resource servers: a token for one at a time
+
+A client whose `audience` names several resource servers -- a
+[go-fileshare/portal](https://github.com/go-fileshare/portal) in front of
+several fileshare servers -- would get tokens addressed to all of them, and
+any one of them could replay a token it received to the others (RFC 8707 §3).
+Since v0.21.0 it can ask for a token for **one**, with RFC 8707's `resource`:
+
+```hcl
+client "portal" {
+  secret_file      = "/etc/authn-bridge/portal.secret"
+  redirect_uris    = ["https://files.example.org/callback"]
+  audience         = ["https://fs-paris.example.org/", "https://fs-lyon.example.org/"]
+  refresh_lifetime = "8h"
+}
+```
+
+| | |
+|---|---|
+| **at the token endpoint** | `resource=https://fs-paris.example.org/` on the `authorization_code` or `refresh_token` grant: the access token's `aud` is that one alone (RFC 8707 §2.2). The refresh token keeps the whole grant, so the next refresh can ask for another server |
+| **at the authorization endpoint** | `resource` may be repeated, and bounds the grant: a later token request can narrow it to one of those, never widen it. A refresh token is bound to what was consented (RFC 9700 §4.14.2), across a restart too |
+| **what may be named** | an absolute URI, without a fragment (RFC 8707 §2), that the client's `audience` lists. With a scope of this provider's own (`ssh`, `nfs`, …) the token is for the provider alone, so only the issuer may be named |
+| **refused** | `invalid_target`, at the authorization endpoint as a redirect, at the token endpoint as an error. A refused refresh does **not** spend the refresh token. `resource` on the device or client-credentials grants is refused rather than ignored: a client that asked for a token for one server must not be handed one for another |
+| **without `resource`** | exactly as before: the grant's resources if the authorization request named some, otherwise the client's whole `audience` |
+
+Refresh tokens still rotate for every client, confidential ones included: RFC
+9700 §4.14.2 requires it only for public clients, but it costs a confidential
+client nothing that does not refresh twice with one token -- and the portal
+spends its refresh token in one place for exactly that reason.
 
 ## SSH certificates, for SFTP
 

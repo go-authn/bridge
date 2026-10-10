@@ -273,6 +273,9 @@ type storedRefresh struct {
 	Scopes []string     `json:"scopes"`
 	Family string       `json:"family"`
 	Until  time.Time    `json:"until"`
+	// Resources: RFC 8707. Absent in a state written before v0.21.0,
+	// which means what it meant then: the client's whole audience.
+	Resources []string `json:"resources,omitempty"`
 }
 
 type storedIssued struct {
@@ -293,7 +296,7 @@ func (s *server) persistStores() error {
 	s.state = &persister{b: b, logf: s.logf}
 	if err := s.refresh.persist(s.state, "refresh",
 		func(g *refreshGrant) ([]byte, error) {
-			return json.Marshal(storedRefresh{g.client.ID, storePerson(g.who), g.scopes, g.family, g.until})
+			return json.Marshal(storedRefresh{g.client.ID, storePerson(g.who), g.scopes, g.family, g.until, g.resources})
 		},
 		func(b []byte) (*refreshGrant, error) {
 			var r storedRefresh
@@ -304,7 +307,7 @@ func (s *server) persistStores() error {
 			if !ok {
 				return nil, errUnknownClient
 			}
-			return &refreshGrant{client: c, who: r.Who.person(), scopes: r.Scopes, family: r.Family, until: r.Until}, nil
+			return &refreshGrant{client: c, who: r.Who.person(), scopes: r.Scopes, resources: r.Resources, family: r.Family, until: r.Until}, nil
 		}); err != nil {
 		return err
 	}

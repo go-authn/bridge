@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -81,6 +82,13 @@ func (s *server) token(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 		return
 	}
+	switch gt := r.PostForm.Get("grant_type"); {
+	case r.PostForm.Has("resource") && gt != "authorization_code" && gt != "refresh_token":
+		// Refused rather than ignored: a client that asked for a token
+		// for one resource must not be handed one for another.
+		tokenError(w, http.StatusBadRequest, "invalid_target", "resource indicators are taken with the authorization_code and refresh_token grants")
+		return
+	}
 	switch r.PostForm.Get("grant_type") {
 	case "authorization_code":
 		s.exchangeCode(w, r, client)
@@ -148,7 +156,12 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 			return
 		}
 	}
-	resp, jti, err := s.issue(client, g.who, g.scopes, g.nonce)
+	aud, err := s.targetAudience(client, g.scopes, g.resources, r.PostForm.Get("resource"), r.PostForm.Has("resource"))
+	if err != nil {
+		tokenError(w, http.StatusBadRequest, "invalid_target", err.Error())
+		return
+	}
+	resp, jti, err := s.issue(client, g.who, g.scopes, g.nonce, aud)
 	if err != nil {
 		s.logf("token: %v", err)
 		if errors.Is(err, errDisabled) {
@@ -160,7 +173,7 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 	}
 	s.counters.inc("bridge_tokens_issued_total", "authorization_code")
 	spent := []string{jti}
-	if rt, family := s.newRefresh(client, g.who, g.scopes, jti); rt != "" {
+	if rt, family := s.newRefresh(client, g.who, g.scopes, g.resources, jti); rt != "" {
 		resp["refresh_token"] = rt
 		spent = append(spent, spentFamily+family)
 	}
@@ -169,7 +182,7 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 }
 
 // issue makes an access token and an ID token for who, for client.
-func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce string) (map[string]any, string, error) {
+func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce string, aud any) (map[string]any, string, error) {
 	if why := s.refused(who); why != "" {
 		return nil, "", fmt.Errorf("%w: %s (%s via %s)", errDisabled, why, orUnnamed(who.username), who.idp)
 	}
@@ -183,7 +196,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	at := map[string]any{
 		"iss":       s.cfg.Issuer,
 		"sub":       sub,
-		"aud":       s.accessAudience(client, scopes),
+		"aud":       aud,
 		"client_id": client.ID,
 		"exp":       now.Add(s.cfg.tokenTTL).Unix(),
 		"iat":       now.Unix(),
@@ -370,4 +383,55 @@ func bearerOf(r *http.Request) (string, error) {
 		return strings.TrimSpace(header), nil
 	}
 	return "", nil
+}
+
+// checkResource says whether rs may be asked for by client (RFC 8707 2): an
+// absolute URI without a fragment, that the client's audience names. A token
+// carrying a bridge scope is for this provider alone, so then only the
+// issuer itself may be named.
+func (s *server) checkResource(client *clientBlock, scopes []string, rs string) error {
+	u, err := url.Parse(rs)
+	if err != nil || !u.IsAbs() || u.Fragment != "" || strings.Contains(rs, "#") {
+		return fmt.Errorf("resource %q is not an absolute URI without a fragment", rs)
+	}
+	if hasBridgeScope(scopes) {
+		if rs != s.cfg.Issuer {
+			return fmt.Errorf("a token with a scope of this provider's own is for this provider alone")
+		}
+		return nil
+	}
+	if !slices.Contains(client.Audience, rs) {
+		return fmt.Errorf("resource %q is not one this client may ask a token for", rs)
+	}
+	return nil
+}
+
+// targetAudience is the "aud" of an access token. With a resource asked for
+// at the token endpoint, it is that one alone (RFC 8707 2.2: a token for one
+// resource server cannot be replayed by it to the others), and it must lie
+// within what the grant was for. Without, it is what the grant was for, and
+// a grant that named nothing is for the client's whole audience, as before.
+func (s *server) targetAudience(client *clientBlock, scopes, granted []string, asked string, has bool) (any, error) {
+	if !has {
+		if len(granted) > 0 && !hasBridgeScope(scopes) {
+			return audience(granted), nil
+		}
+		return s.accessAudience(client, scopes), nil
+	}
+	if err := s.checkResource(client, scopes, asked); err != nil {
+		return nil, err
+	}
+	if len(granted) > 0 && !slices.Contains(granted, asked) {
+		return nil, fmt.Errorf("resource %q was not part of the authorization", asked)
+	}
+	return asked, nil
+}
+
+func hasBridgeScope(scopes []string) bool {
+	for _, sc := range bridgeScopes {
+		if slices.Contains(scopes, sc) {
+			return true
+		}
+	}
+	return false
 }

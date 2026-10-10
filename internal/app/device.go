@@ -341,7 +341,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			tokenError(w, http.StatusBadRequest, "expired_token", "")
 			return
 		}
-		resp, jti, err := s.issue(client, who, scopes, nonce)
+		resp, jti, err := s.issue(client, who, scopes, nonce, s.accessAudience(client, scopes))
 		if err != nil {
 			s.logf("token: %v", err)
 			if errors.Is(err, errDisabled) {
@@ -352,7 +352,7 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 			return
 		}
 		s.counters.inc("bridge_tokens_issued_total", "device_code")
-		if rt, _ := s.newRefresh(client, who, scopes, jti); rt != "" {
+		if rt, _ := s.newRefresh(client, who, scopes, nil, jti); rt != "" {
 			resp["refresh_token"] = rt
 		}
 		writeJSON(w, http.StatusOK, resp)
