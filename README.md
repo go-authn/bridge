@@ -777,7 +777,7 @@ with `grpc.health.v1` beside it:
 | `Status` | version, the federation's metadata (IdPs, valid until, last refresh, last error), what is held in memory |
 | `RefreshMetadata` | fetch the federation's metadata now |
 | `ListIdPs`, `ListClients` | what the institution list shows, and the configured relying parties |
-| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their device grants in progress and their application password |
+| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their device grants in progress and their application password, and revoke everything the certificate store holds for them: SSH and X.509 certificates (into the next KRL and CRL) and WireGuard keys |
 | `DisablePerson`, `EnablePerson` | refuse somebody here -- at login and at every token, whatever their institution says -- and revoke what they hold; optionally until a given time |
 | `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
 | `ListDisabled` | who is disabled, why, by whom, until when |

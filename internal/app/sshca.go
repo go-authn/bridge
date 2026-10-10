@@ -62,7 +62,7 @@ func (b *sshCABlock) load() error {
 			return fmt.Errorf("validity = %q: a positive duration like \"12h\"", b.Validity)
 		}
 		if d > 7*24*time.Hour {
-			return fmt.Errorf("validity = %s: a certificate nobody can revoke, for more than a week", d)
+			return fmt.Errorf("validity = %s: more than a week, and a certificate lives that long on every server its revocation has not reached", d)
 		}
 		b.validity = d
 	}
@@ -340,13 +340,15 @@ func strongEnough(k ssh.PublicKey) error {
 }
 
 // sshKRL is the SSH CA's key revocation list (PROTOCOL.krl): every unexpired
-// revoked certificate by serial, its krl_version the revocation counter
-// shared with the X.509 CRL. Written by go-authn/krl, whose output ssh-keygen
+// revoked certificate by serial, its krl_version and dates set in revlists.go
+// (issueList). Written by go-authn/krl, whose output ssh-keygen
 // -Q reads and which never writes a bitmap ssh-keygen cannot read back.
 //
-// Not signed: OpenSSH no longer verifies KRL signatures (it reads a signed
-// one and skips the signature), so its integrity is the HTTPS it is fetched
-// over. Served with a short max-age: a server that caches it longer, or
+// The KRL itself carries no signature section: OpenSSH never verifies one
+// (it reads a signed KRL and skips the signature). It is signed instead by a
+// detached SSHSIG from the CA key, served at /ssh/krl.sig (sshKRLSig), which
+// go-authn/revocation verifies before any server reads the list. Served with
+// a short max-age: a server that caches it longer, or
 // cannot fetch it, is to fail closed -- go-fileshare does.
 func (s *server) sshKRL(w http.ResponseWriter, r *http.Request) {
 	ca := s.cfg.SSHCA
