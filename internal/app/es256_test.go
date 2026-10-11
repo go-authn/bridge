@@ -58,12 +58,33 @@ func TestES256AccessTokens(t *testing.T) {
 	if h := jwtHeader(t, tok.AccessToken); h["alg"] != "ES256" || h["typ"] != "at+jwt" {
 		t.Errorf("access token header %v", h)
 	}
-	// The fixture's issuer is http://127.0.0.1:port; a real one is longer.
-	// Measured with the difference counted in.
-	real := len(tok.AccessToken) + base64Len(len("https://login.univ-ex.example")) - base64Len(len(f.s.cfg.Issuer))
-	t.Logf("ES256 access token: %d characters (%d with a real issuer)", len(tok.AccessToken), real)
-	if real > 1023 {
-		t.Errorf("%d characters: over what OpenSSH reads as an answer", real)
+	// The fixture's issuer is http://127.0.0.1:port and its scope a
+	// placeholder; real ones are longer. The token is recomputed EXACTLY for
+	// real lengths -- its payload with the issuer and every occurrence of the
+	// scope (in the username, the entitlements, the IdP's entity ID) replaced
+	// -- against the shibmd:Scope lengths of RENATER's metadata, measured on
+	// go-authn/saml's testdata/fer-idps.xml.gz (743 scopes): median 13,
+	// 95th percentile 22 (univ-grenoble-alpes.fr), 99th 29, longest 44.
+	parts := strings.Split(tok.AccessToken, ".")
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	lengthFor := func(scopeLen int) int {
+		p := strings.ReplaceAll(string(payload), f.s.cfg.Issuer, "https://login.renater-member.example")
+		p = strings.ReplaceAll(p, idpScope, strings.Repeat("u", scopeLen))
+		return len(parts[0]) + 1 + base64.RawURLEncoding.EncodedLen(len(p)) + 1 + len(parts[2])
+	}
+	if lengthFor(len(idpScope)) <= len(tok.AccessToken) {
+		t.Fatal("the recomputation is not longer than the token it starts from: it does not measure")
+	}
+	t.Logf("ES256 access token: %d characters; with a real issuer and a scope of 13 / 22 / 29 / 44 characters: %d / %d / %d / %d",
+		len(tok.AccessToken), lengthFor(13), lengthFor(22), lengthFor(29), lengthFor(44))
+	// ⛔ The 99th percentile must fit. v0.21.1 read 1018 for a 15-character
+	// scope and already overflowed at the 95th (22): auth_time and acr were in
+	// the token, and nothing read them.
+	if n := lengthFor(29); n > 1023 {
+		t.Errorf("%d characters for a 29-character scope: over what OpenSSH reads as an answer", n)
 	}
 	if h := jwtHeader(t, tok.Extra("id_token").(string)); h["alg"] != "RS256" {
 		t.Errorf("the ID token is %s; it stays RS256", h["alg"])
@@ -90,7 +111,6 @@ func TestES256AccessTokens(t *testing.T) {
 		t.Errorf("/userinfo: %v %v", err, res.Status)
 	}
 	// One signature bit changed: refused.
-	parts := strings.Split(tok.AccessToken, ".")
 	sig, _ := base64.RawURLEncoding.DecodeString(parts[2])
 	sig[10] ^= 1
 	if _, err := f.s.cfg.accessKey.verify("at+jwt", parts[0]+"."+parts[1]+"."+base64.RawURLEncoding.EncodeToString(sig)); err == nil {

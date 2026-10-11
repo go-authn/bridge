@@ -203,11 +203,14 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 		"jti":       jti,
 		"idp":       who.idp,
 		"scope":     strings.Join(scopes, " "),
-		"auth_time": who.authTime.Unix(),
 	}
-	if who.acr != "" {
-		at["acr"] = who.acr
-	}
+	// ⛔ No auth_time and no acr here, although RFC 9068 allows both. Nothing
+	// reads them from an access token -- not this provider, which looks a
+	// token up by its jti, and not go-fileshare -- while the token is pasted
+	// as an SSH keyboard-interactive answer, and OpenSSH reads 1023 characters
+	// of one. An IdP's acr alone ("urn:oasis:names:tc:SAML:2.0:ac:classes:
+	// PasswordProtectedTransport") is about 90 of them. Both stay in the ID
+	// token, where OIDC Core puts them.
 	if who.username != "" {
 		at["preferred_username"] = who.username
 	}
