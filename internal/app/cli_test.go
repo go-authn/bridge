@@ -120,9 +120,9 @@ func TestSingleIdP(t *testing.T) {
 	}
 	// And one that is not on the list is refused at the disco step.
 	b := newBrowser(t)
-	f.s.cfg.SAML.IdPs = []string{idpEntity, "https://idp.univ-example.fr/other"}
+	f.s.cfg.SAML.IdPs = []string{idpEntity, "https://idp.univ-ex.example/other"}
 	location(t, b.get(r.authURL()))
-	if got := b.get(f.s.cfg.Issuer + "/saml/disco?entityID=" + url.QueryEscape("https://idp.other-univ.fr/idp")); got.StatusCode != http.StatusBadRequest {
+	if got := b.get(f.s.cfg.Issuer + "/saml/disco?entityID=" + url.QueryEscape("https://idp.other-univ.example/idp")); got.StatusCode != http.StatusBadRequest {
 		t.Errorf("an IdP outside the allowlist: %d", got.StatusCode)
 	}
 }
@@ -207,7 +207,7 @@ func TestChooseFilter(t *testing.T) {
 		raw, _ := io.ReadAll(b.get(f.s.cfg.Issuer + "/saml/choose?q=" + url.QueryEscape(q)).Body)
 		return string(raw)
 	}
-	if s := body("OTHER"); !strings.Contains(s, "other-univ.fr") || strings.Contains(s, ">"+idpScope+"<") {
+	if s := body("OTHER"); !strings.Contains(s, "other-univ.example") || strings.Contains(s, ">"+idpScope+"<") {
 		t.Errorf("filtering by name:\n%s", s)
 	}
 	if s := body("shibboleth"); !strings.Contains(s, ">"+idpScope+"<") {

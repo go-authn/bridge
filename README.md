@@ -42,7 +42,7 @@ saml {
   metadata_fingerprint = "68:2F:20:58:41:9E:D0:79:EB:FE:3C:27:D6:A4:A4:09:39:6F:AE:3F:10:5F:22:EA:04:0F:04:F3:78:2D:5C:C0"
 
   discovery = "https://discovery.renater.fr/renater"   # or leave it out for this provider's own list
-  # idps    = ["https://idp.univ-example.fr/idp/shibboleth"]   # restrict; one entry skips the choice
+  # idps    = ["https://idp.univ-example.example/idp/shibboleth"]   # restrict; one entry skips the choice
 
   names             = { fr = "Passerelle OIDC de l'IRHC", en = "IRHC OIDC gateway" }
   technical_contact = "admin@example.org"
@@ -326,7 +326,7 @@ provider does not invent one.
 What remains different from EFP:
 
 - **The principal is `voperson_id`**, the SAML subject-id the person's own
-  institution released, lower-cased (`a1b2c3@univ-example.fr`) -- not a
+  institution released, lower-cased (`a1b2c3@univ-example.example`) -- not a
   MyAccessID CUID (`<id>@myaccessid.org`). A site maps the one or the other;
   a person known to both has two.
 - **There is a KRL.** `GET /ssh/krl`, for `RevokedKeys`, lists the

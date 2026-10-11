@@ -39,8 +39,12 @@ import (
 // skip, in the CI lanes that install it.
 
 const (
-	idpEntity = "https://idp.univ-example.fr/idp/shibboleth"
-	idpScope  = "univ-example.fr"
+	idpEntity = "https://idp.univ-ex.example/idp/shibboleth"
+	// RFC 2606 .example, never registrable, and exactly as long as the
+	// univ-example.fr it replaces: TestES256AccessTokens measures a token
+	// against OpenSSH's 1023-character limit, and a longer placeholder would
+	// measure a different case.
+	idpScope = "univ-ex.example"
 )
 
 type party struct {
@@ -259,7 +263,7 @@ func (f *fixture) federationMetadata() string {
 	other := newParty(f.t, f.dir, "other-idp")
 	return `<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:shibmd="urn:mace:shibboleth:metadata:1.0" xmlns:mdui="urn:oasis:names:tc:SAML:metadata:ui" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" ID="_fed" validUntil="` +
 		time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339) + `">` + fmt.Sprintf(sigTemplate, "_fed") +
-		idp(idpEntity, idpScope, f.idp) + idp("https://idp.other-univ.fr/idp", "other-univ.fr", other) +
+		idp(idpEntity, idpScope, f.idp) + idp("https://idp.other-univ.example/idp", "other-univ.example", other) +
 		`</md:EntitiesDescriptor>`
 }
 

@@ -155,7 +155,7 @@ func TestNFSCertificate(t *testing.T) {
 	f, caFile := x509Fixture(t)
 	someone := assertionOpts{
 		eppn:        "alice@" + idpScope,
-		entitlement: []string{"urn:geant:univ-example.fr:group:physique#login.example.org", "urn:mace:univ-example.fr:fileshare:photos"},
+		entitlement: []string{"urn:geant:univ-ex.example:group:physique#login.example.org", "urn:mace:univ-ex.example:fileshare:photos"},
 	}
 	tok := f.deviceTokenAs("nfs", someone, "openid", "nfs")
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

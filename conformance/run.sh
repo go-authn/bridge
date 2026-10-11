@@ -126,7 +126,7 @@ cat > $W/ssf.json <<JSON
   "client": { "client_id": "ssf-receiver", "client_secret": "$c3", "scope": "ssf" },
   "ssf": {
     "subjects": {
-      "valid":   { "format": "email", "email": "alice@univ-example.fr" },
+      "valid":   { "format": "email", "email": "alice@univ-example.example" },
       "invalid": { "format": "email", "email": "nobody@nowhere.invalid" }
     },
     "transmitter": { "issuer": "https://bridge:8443", "metadata_suffix": "" }
@@ -172,7 +172,7 @@ echo
 echo "== openid-ssf-transmitter-caep-test-plan (poll)"
 $W/driver -config $W/ssf.json -expected expected-ssf.txt \
   -plan openid-ssf-transmitter-caep-test-plan \
-  -trigger "docker compose run --rm -T admin -plaintext -d '{\"username\":\"alice@univ-example.fr\"}' unix:///data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
+  -trigger "docker compose run --rm -T admin -plaintext -d '{\"username\":\"alice@univ-example.example\"}' unix:///data/admin.sock bridge.admin.v1.AdminService/RevokePerson" \
   -variant '{"ssf_delivery_mode":"poll","client_registration":"static_client","server_metadata":"discovery","client_auth_type":"client_secret_basic","ssf_server_metadata":"discovery","ssf_auth_mode":"dynamic"}' || status=1
 echo
 echo "== oidcc-config-certification-test-plan"

@@ -78,7 +78,7 @@ func TestAdminStatusAndLists(t *testing.T) {
 		t.Fatalf("refresh: %v %+v", err, st.GetFederation())
 	}
 	idps, err := c.ListIdPs(ctx, &adminv1.ListIdPsRequest{Query: "other"})
-	if err != nil || idps.Total != 1 || idps.Idps[0].EntityId != "https://idp.other-univ.fr/idp" {
+	if err != nil || idps.Total != 1 || idps.Idps[0].EntityId != "https://idp.other-univ.example/idp" {
 		t.Errorf("ListIdPs: %v %+v", err, idps)
 	}
 	if all, _ := c.ListIdPs(ctx, &adminv1.ListIdPsRequest{Limit: 1}); all.Total != 2 || len(all.Idps) != 1 {

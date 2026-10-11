@@ -270,7 +270,7 @@ func TestAdminDisableIdP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sq.Close()
-	for _, l := range []string{"carol@" + idpScope, "dave@other-univ.fr"} {
+	for _, l := range []string{"carol@" + idpScope, "dave@other-univ.example"} {
 		if _, err := sq.Exec(`INSERT INTO app_passwords (login, nt_hash, expires) VALUES (?, ?, ?)`, l, strings.Repeat("0", 32), time.Now().Add(time.Hour).Unix()); err != nil {
 			t.Fatal(err)
 		}
@@ -287,7 +287,7 @@ func TestAdminDisableIdP(t *testing.T) {
 		t.Error("tokens from a disabled IdP still work")
 	}
 	left := people(t, db)
-	for l, want := range map[string]bool{"alice@" + idpScope: false, "carol@" + idpScope: false, "dave@other-univ.fr": true} {
+	for l, want := range map[string]bool{"alice@" + idpScope: false, "carol@" + idpScope: false, "dave@other-univ.example": true} {
 		if _, ok := left[l]; ok != want {
 			t.Errorf("%s's application password: present %v, want %v", l, ok, want)
 		}
@@ -423,8 +423,8 @@ func TestAdminDisableFileUnwritable(t *testing.T) {
 // "alice" tomorrow names one person.
 func TestNormUsername(t *testing.T) {
 	for _, c := range []struct{ attr, in, want string }{
-		{"subject_id", "Alice@Univ-Example.FR", "alice@univ-example.fr"},
-		{"eppn", "Alice@univ-example.fr", "alice@univ-example.fr"},
+		{"subject_id", "Alice@Univ-Ex.Example", "alice@univ-ex.example"},
+		{"eppn", "Alice@univ-ex.example", "alice@univ-ex.example"},
 	} {
 		s := &server{cfg: &config{Claims: &claimsBlock{Username: c.attr}}}
 		if got := s.normUsername(c.in); got != c.want {

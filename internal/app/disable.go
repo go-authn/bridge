@@ -350,8 +350,8 @@ func (s *server) enableIdP(entityID, by string) (bool, error) {
 // normUsername is a username as disabling compares it: without case. Every
 // attribute a username comes from compares so -- subject-id (SAML V2.0
 // Subject Identifier Attributes 3.3.1), and eduPersonPrincipalName, uid and
-// mail, whose schemas declare caseIgnoreMatch -- so "Alice@univ.fr" is the
-// person disabled as "alice@univ.fr", whatever case her IdP sends today.
+// mail, whose schemas declare caseIgnoreMatch -- so "Alice@univ.example" is the
+// person disabled as "alice@univ.example", whatever case their IdP sends today.
 func (s *server) normUsername(u string) string { return strings.ToLower(u) }
 
 // subjectsOf are the stable identities of the people known here by name:

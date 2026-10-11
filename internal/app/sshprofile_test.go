@@ -237,7 +237,12 @@ func certStructure(t *testing.T, c *ssh.Certificate) string {
 // defaultCertStructure is certStructure of alice's certificate from the
 // default client (validity 8h), MEASURED on origin/main at 97f8361, before
 // any profile existed, with this same function: not written by hand.
-const defaultCertStructure = "6957b3f80121aaf9d7867457a300aab671b50ec011012ef74c934000273b7c7b"
+//
+// Re-measured when the fixtures' placeholder domains became RFC 2606 names
+// (univ-example.fr -> univ-ex.example): origin/main at 074adc7 with ONLY the
+// test files of that change copied in -- no product code changed -- gives
+// this value, and the same tree with the old fixtures gives the old one.
+const defaultCertStructure = "5ecbf1b5e47441739de47548e78661e2771f0f2f49faf439f216a5e8eaf56b63"
 
 // An EFP-profile client beside the default one leaves the default one's
 // certificate as it was before profiles existed, byte for byte apart from

@@ -42,7 +42,7 @@ func main() {
 	fedKey := flag.String("fed-key", "", "the federation's metadata signing key (PEM)")
 	fedCert := flag.String("fed-cert", "", "the federation's certificate (PEM)")
 	spMetadata := flag.String("sp-metadata", "https://bridge:8443/saml/metadata", "where the bridge publishes its SP metadata")
-	scope := flag.String("scope", "univ-example.fr", "the shibmd scope the federation grants")
+	scope := flag.String("scope", "univ-example.example", "the shibmd scope the federation grants")
 	tlsCert := flag.String("tls-cert", "", "TLS certificate to serve with (PEM): the bridge reads metadata over https only")
 	tlsKey := flag.String("tls-key", "", "its key (PEM)")
 	flag.Parse()

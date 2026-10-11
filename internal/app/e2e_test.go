@@ -73,7 +73,7 @@ func (f *fixture) login(b *browser, authURL string, o assertionOpts) *url.URL {
 var alice = assertionOpts{
 	eppn:        "alice@" + idpScope,
 	subjectID:   "A1B2C3@" + idpScope,
-	entitlement: []string{"urn:mace:univ-example.fr:fileshare:photos"},
+	entitlement: []string{"urn:mace:univ-ex.example:fileshare:photos"},
 }
 
 func TestLoginEndToEnd(t *testing.T) {
@@ -423,7 +423,7 @@ func TestNoIdentifier(t *testing.T) {
 func TestForeignScope(t *testing.T) {
 	f := newFixture(t, "")
 	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect, "profile")
-	back := f.login(newBrowser(t), r.authURL(), assertionOpts{eppn: "president@other-univ.fr", subjectID: "P@other-univ.fr"})
+	back := f.login(newBrowser(t), r.authURL(), assertionOpts{eppn: "president@other-univ.example", subjectID: "P@other-univ.example"})
 	// Neither identifier survives, so there is nobody to log in.
 	if back.Query().Get("error") != "access_denied" {
 		t.Fatalf("an identifier from another university's scope was accepted: %s", back)

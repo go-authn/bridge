@@ -14,7 +14,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const otherIdP = "https://idp.other-univ.fr/idp"
+const otherIdP = "https://idp.other-univ.example/idp"
 
 // loginVia is f.login through an IdP of the caller's choosing.
 func (f *fixture) loginVia(b *browser, authURL, entity string, o assertionOpts) *url.URL {
@@ -62,29 +62,29 @@ func strs(v any) []string {
 // ⛔ The federation has hundreds of IdPs, and groups decide what a person
 // may do: in the access token every resource server reads, in the SSH and
 // X.509 certificates. Another university's IdP asserting a group in
-// univ-example.fr's namespace must not grant it -- measured before this
-// fix, mallory@other-univ.fr came out with univ-example.fr's photo share.
+// univ-ex.example's namespace must not grant it -- measured before this
+// fix, mallory@other-univ.example came out with univ-ex.example's photo share.
 // Its own namespace it keeps.
 func TestAGroupIsKeptOnlyFromTheIdPThatOwnsIt(t *testing.T) {
 	f := newFixture(t, "")
 	other := &party{keyFile: filepath.Join(f.dir, "other-idp.key"), certFile: filepath.Join(f.dir, "other-idp.crt")}
 	mallory := assertionOpts{
-		eppn:   "mallory@other-univ.fr",
+		eppn:   "mallory@other-univ.example",
 		issuer: otherIdP, signer: other,
 		entitlement: []string{
-			"urn:mace:univ-example.fr:fileshare:photos",         // not its own
-			"urn:geant:univ-example.fr:group:staff",             // not its own
-			"urn:geant:other-univ.fr:group:x#login.example.org", // its own namespace; the authority is not one
-			"https://univ-example.fr/groups/admins",             // not its own
-			"urn:oid:1.2.3",                                     // no namespace at all
-			"urn:mace:other-univ.fr:wiki:editors",               // its own
-			"https://wiki.other-univ.fr/editors",                // under its own
+			"urn:mace:univ-ex.example:fileshare:photos",              // not its own
+			"urn:geant:univ-ex.example:group:staff",                  // not its own
+			"urn:geant:other-univ.example:group:x#login.example.org", // its own namespace; the authority is not one
+			"https://univ-ex.example/groups/admins",                  // not its own
+			"urn:oid:1.2.3",                                          // no namespace at all
+			"urn:mace:other-univ.example:wiki:editors",               // its own
+			"https://wiki.other-univ.example/editors",                // under its own
 		},
 	}
 	c := f.accessClaims(t, otherIdP, mallory)
-	want := []string{"https://wiki.other-univ.fr/editors", "urn:geant:other-univ.fr:group:x#login.example.org", "urn:mace:other-univ.fr:wiki:editors"}
+	want := []string{"https://wiki.other-univ.example/editors", "urn:geant:other-univ.example:group:x#login.example.org", "urn:mace:other-univ.example:wiki:editors"}
 	if got := strs(c["groups"]); !slices.Equal(got, want) {
-		t.Errorf("groups from other-univ.fr's IdP: %q, want %q", got, want)
+		t.Errorf("groups from other-univ.example's IdP: %q, want %q", got, want)
 	}
 	if got := strs(c["entitlements"]); len(got) != 0 && !slices.Equal(got, want) {
 		t.Errorf("entitlements carry another IdP's namespace: %q", got)
@@ -95,7 +95,7 @@ func TestAGroupIsKeptOnlyFromTheIdPThatOwnsIt(t *testing.T) {
 
 	// The university's own IdP keeps its own values.
 	a := alice
-	a.entitlement = []string{"urn:mace:univ-example.fr:fileshare:photos"}
+	a.entitlement = []string{"urn:mace:univ-ex.example:fileshare:photos"}
 	if got := strs(f.accessClaims(t, idpEntity, a)["groups"]); !slices.Equal(got, a.entitlement) {
 		t.Errorf("the owning IdP's group was dropped: %q", got)
 	}
@@ -142,7 +142,7 @@ func TestUnscopedAffiliationNeedsOneIdP(t *testing.T) {
 	if _, err := c.load(t, cfg); err == nil || !strings.Contains(err.Error(), "affiliation") {
 		t.Errorf("affiliation with any IdP: %v", err)
 	}
-	one := strings.Replace(cfg, "saml {", "saml {\n  idps = [\"https://idp.univ-example.fr/idp\"]", 1)
+	one := strings.Replace(cfg, "saml {", "saml {\n  idps = [\"https://idp.univ-ex.example/idp\"]", 1)
 	if _, err := c.load(t, one); err != nil {
 		t.Errorf("affiliation with one IdP: %v", err)
 	}

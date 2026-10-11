@@ -14,7 +14,7 @@ import (
 
 // A person is disabled as who they ARE, not as how their IdP spells them
 // today. Measured before this fix: alice disabled, her IdP sent
-// "Alice@univ-example.fr" -- eppn compares without case (caseIgnoreMatch)
+// "Alice@univ-ex.example" -- eppn compares without case (caseIgnoreMatch)
 // -- and she got new tokens with the same sub, and an SSH certificate.
 func TestADisabledPersonStaysDisabledUnderAnotherSpelling(t *testing.T) {
 	f, _ := sshFixture(t)
@@ -31,7 +31,7 @@ func TestADisabledPersonStaysDisabledUnderAnotherSpelling(t *testing.T) {
 	for _, who := range []*person{
 		{username: "Alice@" + idpScope, idp: idpEntity, subject: subject},     // another case
 		{username: "a.martin@" + idpScope, idp: idpEntity, subject: subject},  // renamed
-		{username: "ALICE@UNIV-EXAMPLE.FR", idp: idpEntity, subject: "other"}, // the name alone
+		{username: "ALICE@UNIV-EX.EXAMPLE", idp: idpEntity, subject: "other"}, // the name alone
 	} {
 		if f.s.refused(who) == "" {
 			t.Errorf("%s (%s) was not refused", who.username, who.subject)
@@ -93,8 +93,8 @@ func TestAnOldDisabledFileIsFoldedOnLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "disabled.json")
 	later := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	os.WriteFile(path, []byte(`{"people":{
-		"Alice@u.fr":{"since":"2026-01-01T00:00:00Z","until":"`+later.Format(time.RFC3339)+`","subjects":["idp!a1"]},
-		"alice@u.fr":{"since":"2026-01-01T00:00:00Z","subjects":["idp!a2"]}
+		"Alice@u.test":{"since":"2026-01-01T00:00:00Z","until":"`+later.Format(time.RFC3339)+`","subjects":["idp!a1"]},
+		"alice@u.test":{"since":"2026-01-01T00:00:00Z","subjects":["idp!a2"]}
 	}}`), 0o600)
 	d, err := loadDisabled(path)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestAnOldDisabledFileIsFoldedOnLoad(t *testing.T) {
 	if len(d.People) != 1 {
 		t.Fatalf("%d entries, want 1: %v", len(d.People), d.People)
 	}
-	e := d.People["alice@u.fr"]
+	e := d.People["alice@u.test"]
 	if !e.Until.IsZero() {
 		t.Errorf("until %v: one of the two never ended", e.Until)
 	}

@@ -49,9 +49,9 @@ func TestES256AccessTokens(t *testing.T) {
 	someone := assertionOpts{
 		eppn: "jean-baptiste.delaplace@" + idpScope,
 		entitlement: []string{
-			"urn:mace:univ-example.fr:fileshare:photos",
-			"urn:geant:univ-example.fr:group:physique:calcul#login.example.org",
-			"urn:geant:univ-example.fr:group:physique:calcul:admins#login.example.org",
+			"urn:mace:univ-ex.example:fileshare:photos",
+			"urn:geant:univ-ex.example:group:physique:calcul#login.example.org",
+			"urn:geant:univ-ex.example:group:physique:calcul:admins#login.example.org",
 		},
 	}
 	tok := f.deviceTokenAs("rclone", someone, "openid")
@@ -60,7 +60,7 @@ func TestES256AccessTokens(t *testing.T) {
 	}
 	// The fixture's issuer is http://127.0.0.1:port; a real one is longer.
 	// Measured with the difference counted in.
-	real := len(tok.AccessToken) + base64Len(len("https://login.univ-example.fr")) - base64Len(len(f.s.cfg.Issuer))
+	real := len(tok.AccessToken) + base64Len(len("https://login.univ-ex.example")) - base64Len(len(f.s.cfg.Issuer))
 	t.Logf("ES256 access token: %d characters (%d with a real issuer)", len(tok.AccessToken), real)
 	if real > 1023 {
 		t.Errorf("%d characters: over what OpenSSH reads as an answer", real)
