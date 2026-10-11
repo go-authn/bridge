@@ -43,7 +43,13 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.Form
 	for k, v := range q {
-		if len(v) > 1 {
+		// ⛔ resource is the one exception. RFC 8707 2: "Multiple resource
+		// parameters MAY be used to indicate that the requested token is
+		// intended to be used at multiple resources", and the loop below that
+		// checks and de-duplicates them was written for exactly that. This
+		// rule ran first, so it never saw two: a grant could not be bounded to
+		// two servers out of three, which the README said it could.
+		if len(v) > 1 && k != "resource" {
 			// RFC 6749 3.1: parameters MUST NOT be included more than once.
 			s.page(w, http.StatusBadRequest, "The parameter "+k+" appears more than once.")
 			return

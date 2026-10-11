@@ -245,3 +245,67 @@ func TestResourceWithAProviderScope(t *testing.T) {
 		t.Fatalf("without resource, with ssh: %v %v", aud, err)
 	}
 }
+
+// RFC 8707 2: "Multiple resource parameters MAY be used". A grant bounded to
+// two servers gives a token for both, then for either at a refresh. Before
+// v0.22.1 the rule against repeated parameters ran first and refused this
+// request with a 400 page, so the de-duplicating loop below it never saw two.
+func TestResourceRepeatedAtTheAuthorizationEndpoint(t *testing.T) {
+	f := portalFixture(t, false)
+	r := newRP(t, f, "portal", "a-secret-long-enough-to-pass", "http://127.0.0.1:9/portal")
+	u := r.authURL() + "&resource=" + url.QueryEscape(fsA) + "&resource=" + url.QueryEscape(fsB) + "&resource=" + url.QueryEscape(fsA)
+	back := f.login(newBrowser(t), u, alice)
+	if e := back.Query().Get("error"); e != "" {
+		t.Fatalf("two resources at authorize: %s: %s", e, back.Query().Get("error_description"))
+	}
+	tok, err := r.cfg.Exchange(t.Context(), back.Query().Get("code"), oauth2.VerifierOption(r.verifier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	aud, _ := audOf(t, tok.AccessToken).([]any)
+	if len(aud) != 2 || aud[0] != fsA || aud[1] != fsB {
+		t.Fatalf("aud = %v, want both servers once each", audOf(t, tok.AccessToken))
+	}
+	// Refresh tokens rotate: each refresh hands the next one.
+	rt := tok.RefreshToken
+	for _, one := range []string{fsA, fsB} {
+		st, m := refreshFor(t, f, rt, one)
+		if st != http.StatusOK || audOf(t, m["access_token"].(string)) != one {
+			t.Fatalf("a refresh for %s within a two-server grant: %d %v", one, st, m)
+		}
+		rt = m["refresh_token"].(string)
+	}
+	// Every value is still checked: one bad among good ones refuses the lot.
+	bad := r.authURL() + "&resource=" + url.QueryEscape(fsA) + "&resource=" + url.QueryEscape("https://evil.example/")
+	if loc := location(t, newBrowser(t).get(bad)); loc.Query().Get("error") != "invalid_target" {
+		t.Errorf("a bad resource beside a good one: sent to %s", loc)
+	}
+	// And another parameter repeated is still refused (RFC 6749 3.1).
+	twice := r.authURL() + "&state=again"
+	if res := newBrowser(t).get(twice); res.StatusCode != http.StatusBadRequest {
+		t.Errorf("a repeated state: %d", res.StatusCode)
+	}
+}
+
+// The device authorization request refuses resource rather than ignore it:
+// before v0.22.1 it did not read it, and a device that asked for a token for
+// one server was handed one for the client's whole audience.
+func TestResourceRefusedAtTheDeviceAuthorizationEndpoint(t *testing.T) {
+	f := newFixture(t, deviceClients)
+	res, err := http.PostForm(f.s.cfg.Issuer+"/device_authorization", url.Values{"client_id": {"rclone"}, "resource": {"https://fs-a.example.org/"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var m map[string]any
+	json.NewDecoder(res.Body).Decode(&m)
+	if res.StatusCode != http.StatusBadRequest || m["error"] != "invalid_target" {
+		t.Errorf("resource at device_authorization: %d %v", res.StatusCode, m)
+	}
+	// Without it, as before.
+	ok, _ := http.PostForm(f.s.cfg.Issuer+"/device_authorization", url.Values{"client_id": {"rclone"}})
+	if ok.StatusCode != http.StatusOK {
+		t.Errorf("device_authorization without resource: %d", ok.StatusCode)
+	}
+	ok.Body.Close()
+}
