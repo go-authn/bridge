@@ -62,6 +62,15 @@ func (s *server) deviceAuthorization(w http.ResponseWriter, r *http.Request) {
 		tokenError(w, http.StatusBadRequest, "unauthorized_client", "this client may not use the device grant")
 		return
 	}
+	// ⛔ Refused, not ignored, as at the token endpoint. This request did not
+	// read resource at all, so a device that asked for a token for ONE server
+	// was handed one for every server in the client's audience -- what the
+	// README says must not happen ("a client that asked for a token for one
+	// server must not be handed one for another").
+	if _, asked := r.PostForm["resource"]; asked {
+		tokenError(w, http.StatusBadRequest, "invalid_target", "resource indicators are taken with the authorization_code and refresh_token grants")
+		return
+	}
 	scopes := strings.Fields(r.PostForm.Get("scope"))
 	if len(scopes) == 0 {
 		scopes = []string{"openid"}
