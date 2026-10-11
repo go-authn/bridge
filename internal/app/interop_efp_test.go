@@ -50,7 +50,7 @@ client "efp-wildcard" {
   ssh_certificates    = true
   ssh_principal_claim = "voperson_id"
   ssh_source_address  = ["127.0.0.0/8"]
-  ssh_domain_grants   = ["login.example.eu", "*.example.org"]
+  ssh_domain_grants   = ["login.example.net", "*.example.org"]
 }
 client "efp-other-host" {
   device              = true

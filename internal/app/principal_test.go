@@ -14,7 +14,7 @@ import (
 // A username that would not stay one name in a certificate is not
 // certified: sshd splits principals="..." and AuthorizedPrincipalsFile
 // entries at commas and spaces. Measured before this fix: eppn
-// "root,x@univ-example.fr" became that very principal.
+// "root,x@univ-ex.example" became that very principal.
 func TestAUsernameThatSplitsIsNotCertified(t *testing.T) {
 	f, _ := sshFixture(t)
 	evil := alice
@@ -37,17 +37,17 @@ func TestCertifiableName(t *testing.T) {
 		u  string
 		ok bool
 	}{
-		{"alice@univ-example.fr", true},
-		{"jean-paul.o'neil@univ-example.fr", true},
-		{"élodie@univ-example.fr", true},
-		{"root,x@univ-example.fr", false},
-		{"root x@univ-example.fr", false},
-		{"root\tx@u.fr", false},
-		{"root\nx@u.fr", false},
-		{"a\"b@u.fr", false},
-		{"a\\b@u.fr", false},
-		{"a b@u.fr", false}, // a line separator, not a control character
-		{"a\x00b@u.fr", false},
+		{"alice@univ-ex.example", true},
+		{"jean-paul.o'neil@univ-ex.example", true},
+		{"élodie@univ-ex.example", true},
+		{"root,x@univ-ex.example", false},
+		{"root x@univ-ex.example", false},
+		{"root\tx@u.test", false},
+		{"root\nx@u.test", false},
+		{"a\"b@u.test", false},
+		{"a\\b@u.test", false},
+		{"a b@u.test", false}, // a line separator, not a control character
+		{"a\x00b@u.test", false},
 	} {
 		if err := certifiableName(c.u); (err == nil) != c.ok {
 			t.Errorf("%q: %v", c.u, err)

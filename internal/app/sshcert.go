@@ -22,7 +22,7 @@ import (
 // is where ssh and sftp look for one without being told.
 //
 //	authn-bridge ssh-cert --issuer https://login.example.org --client sftp
-//	sftp alice@univ-example.fr@files.example.org
+//	sftp alice@univ-example.example@files.example.org
 func newSSHCertCmd(out io.Writer) *cobra.Command {
 	var issuer, clientID, keyFile, cacheDir string
 	var scopes []string

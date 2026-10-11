@@ -46,7 +46,7 @@ func TestSSFAnswersAsTheSpecSays(t *testing.T) {
 		b, _ := io.ReadAll(res.Body)
 		return res.StatusCode, string(b)
 	}
-	subject, _ := json.Marshal(map[string]any{"subject": map[string]string{"format": "email", "email": "alice@univ-example.fr"}})
+	subject, _ := json.Marshal(map[string]any{"subject": map[string]string{"format": "email", "email": "alice@univ-ex.example"}})
 	for name, c := range map[string]struct{ endpoint, body string }{
 		"verification":   {cfg.VerificationEndpoint, `{"state":"s1"}`},
 		"remove subject": {cfg.RemoveSubjectEndpoint, string(subject)},
@@ -99,7 +99,7 @@ func TestSSFTakesTheStreamFromTheBody(t *testing.T) {
 		rb, _ := io.ReadAll(res.Body)
 		return res.StatusCode, string(rb)
 	}
-	subject := map[string]string{"format": "email", "email": "alice@univ-example.fr"}
+	subject := map[string]string{"format": "email", "email": "alice@univ-ex.example"}
 	for _, c := range []struct {
 		name     string
 		endpoint string

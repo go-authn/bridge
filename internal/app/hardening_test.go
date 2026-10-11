@@ -187,7 +187,7 @@ func TestUnscopedUsernameNeedsOneIdP(t *testing.T) {
 		if _, err := c.load(t, cfg); err == nil || !strings.Contains(err.Error(), "scopes") {
 			t.Errorf("%s with any IdP: %v", u, err)
 		}
-		one := strings.Replace(cfg, "saml {", "saml {\n  idps = [\"https://idp.univ-example.fr/idp\"]", 1)
+		one := strings.Replace(cfg, "saml {", "saml {\n  idps = [\"https://idp.univ-ex.example/idp\"]", 1)
 		if _, err := c.load(t, one); err != nil {
 			t.Errorf("%s with one IdP: %v", u, err)
 		}
@@ -220,7 +220,7 @@ func TestServerIsBounded(t *testing.T) {
 func TestLogLinesCannotBeForged(t *testing.T) {
 	var b bytes.Buffer
 	s := &server{log: &b}
-	s.logf("acs: said no: %v", "denied\nlogin: alice@univ-example.fr via idp for web")
+	s.logf("acs: said no: %v", "denied\nlogin: alice@univ-ex.example via idp for web")
 	if lines := strings.Count(b.String(), "\n"); lines != 1 {
 		t.Errorf("%d lines: %q", lines, b.String())
 	}

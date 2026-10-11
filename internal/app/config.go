@@ -555,7 +555,7 @@ func (c *config) check() error {
 	// ⛔ uid and mail are not held to the IdP's scopes (only eppn and
 	// subject-id are, by go-authn/saml): with two IdPs, one names the
 	// other's people -- measured, another university's IdP got a token
-	// for alice@univ-example.fr, and with it her SSH certificate and her
+	// for alice@univ-example.example, and with it their SSH certificate and their
 	// application password. So only with exactly one IdP.
 	if !scopedUsername[c.Claims.Username] && len(c.SAML.IdPs) != 1 {
 		return fmt.Errorf("claims: username = %q is not held to an IdP's scopes, so any IdP of the federation could name anybody: it needs saml { idps } to list exactly one IdP; with more, use eppn or subject_id", c.Claims.Username)
