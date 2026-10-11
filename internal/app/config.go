@@ -333,6 +333,16 @@ type clientBlock struct {
 	// is how NFS over TLS (RFC 9289) names a federated person.
 	X509Certificates bool `hcl:"x509_certificates,optional"`
 
+	// AccessTokenGroups, false, leaves the person's groups out of this
+	// client's access tokens. For a client whose token is pasted as an SSH
+	// keyboard-interactive answer -- ssh-oidc's oidc-agent and mccli --
+	// where OpenSSH reads 1023 characters and every group adds its whole
+	// URN, so that nothing bounds the token's length; motley-cue reads the
+	// groups at /userinfo anyway (scope groups or eduperson). A resource
+	// server that decides from the token alone, go-fileshare among them,
+	// needs them in it: true by default, so nil is true (tokenGroups).
+	AccessTokenGroups *bool `hcl:"access_token_groups,optional"`
+
 	// IDTokenClaims puts the claims the scopes release (profile, email,
 	// eduperson) in the ID token as well as at /userinfo: for a client whose
 	// ID token is itself the credential, such as opkssh, matching people by
@@ -705,6 +715,16 @@ func (c *config) check() error {
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
 		}
+		// ⛔ Refused rather than quietly obeyed: the SSH and X.509
+		// certificates take the person's groups FROM the access token
+		// (sshca.go, x509ca.go), so without them a certificate would carry
+		// none, and a server authorizing by groups would refuse the person
+		// with nothing anywhere saying why.
+		if !cl.tokenGroups() && (cl.SSHCertificates || cl.X509Certificates) {
+			return fmt.Errorf("client %q: access_token_groups = false with ssh_certificates or x509_certificates: "+
+				"the certificates take the groups from the access token, and would carry none -- "+
+				"use one client for the certificates and another for tokens pasted into ssh", cl.ID)
+		}
 		if (cl.WireGuardKeys || len(cl.WireGuardPeers) > 0) && c.WireGuard == nil {
 			return fmt.Errorf("client %q: wireguard_keys and wireguard_peers need a wireguard block", cl.ID)
 		}
@@ -807,4 +827,10 @@ func (c *config) close() error {
 		err = errors.Join(err, c.State.db.Close())
 	}
 	return err
+}
+
+// tokenGroups is whether this client's access tokens carry the person's
+// groups: unless access_token_groups = false says otherwise.
+func (cl *clientBlock) tokenGroups() bool {
+	return cl.AccessTokenGroups == nil || *cl.AccessTokenGroups
 }

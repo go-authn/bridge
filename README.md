@@ -71,7 +71,7 @@ on its metadata page; the one above is the 2026 certificate's.
 |---|---|
 | **flow** | authorization code, with **PKCE S256 required for every client** |
 | **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash`, and **nothing about the person**: what the scopes release is at `/userinfo` (OIDC Core §5.4, since an access token is always issued). A client whose ID token is itself the credential, such as opkssh, sets `id_token_claims = true` to have them copied in |
-| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, or the one resource it asked for ([RFC 8707](#several-resource-servers-a-token-for-one-at-a-time)), with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody. A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
+| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, or the one resource it asked for ([RFC 8707](#several-resource-servers-a-token-for-one-at-a-time)), with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody -- `groups` unless the client sets `access_token_groups = false` ([ssh-oidc](#ssh-oidc-kit-oidc-agent-mccli-motley-cue-pam-ssh-oidc)). A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
@@ -621,6 +621,7 @@ client "oidc-agent" {
   device           = true
   refresh_lifetime = "720h"   # oidc-agent refuses a provider that gives no refresh token
   audience         = ["ssh"]  # what motley-cue's audience says
+  access_token_groups = false  # motley-cue reads the groups at /userinfo
 }
 ```
 
@@ -663,7 +664,13 @@ What to know, read in their sources (not yet run end to end):
   Before v0.22.0 the same token was 1014 / 1074 / 1121 / 1221: over from the
   95th percentile on. What still does not fit is the longest scopes and, above
   all, many groups: every entitlement adds its whole URN, and nothing bounds how
-  many an IdP sends. Past 1023, mccli asks motley-cue for a one-time password
+  many an IdP sends. **`access_token_groups = false`** on the ssh-oidc client
+  (v0.23.0) leaves the groups out of its access tokens: motley-cue reads them at
+  `/userinfo` anyway, which still serves all of them. Measured with fifty groups
+  and the longest scope: 732 characters. The client cannot also have
+  `ssh_certificates` or `x509_certificates`: certificates take the groups from
+  the access token, so configuration refuses the pair rather than issue
+  certificates that silently carry none. Past 1023, mccli asks motley-cue for a one-time password
   instead, which motley-cue allows by default; a token pasted into plain `ssh`
   has to fit.
   go-authn/oidc (go-fileshare), coreos/go-oidc and flaat (motley-cue) all

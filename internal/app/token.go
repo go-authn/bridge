@@ -214,7 +214,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 	if who.username != "" {
 		at["preferred_username"] = who.username
 	}
-	if len(who.groups) > 0 {
+	if len(who.groups) > 0 && client.tokenGroups() {
 		at["groups"] = who.groups
 	}
 	// When the IdP said its session ends, the token carries it, so that what
