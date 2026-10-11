@@ -648,9 +648,24 @@ What to know, read in their sources (not yet run end to end):
   access_token_key_file = "/var/lib/authn-bridge/access-token.key"   # authn-bridge keygen --access-token-key
   ```
 
-  and one with a long eppn and three AARC entitlements is 953 (measured). Past
-  that, mccli asks motley-cue for a one-time password instead, which
-  motley-cue allows by default; a token pasted into plain `ssh` has to fit.
+  and the access token leaves out `auth_time` and `acr`, which nothing reads
+  from it (they are in the ID token). Measured by `TestES256AccessTokens` for a
+  long eppn and three AARC entitlements, against the `shibmd:Scope` lengths of
+  RENATER's metadata (743 scopes):
+
+  | scope length | | characters |
+  |---|---|---|
+  | 13 | median | 885 |
+  | 22 | 95th percentile | 945 |
+  | 29 | 99th percentile | 992 |
+  | 44 | the longest | **1092: over** |
+
+  Before v0.22.0 the same token was 1014 / 1074 / 1121 / 1221: over from the
+  95th percentile on. What still does not fit is the longest scopes and, above
+  all, many groups: every entitlement adds its whole URN, and nothing bounds how
+  many an IdP sends. Past 1023, mccli asks motley-cue for a one-time password
+  instead, which motley-cue allows by default; a token pasted into plain `ssh`
+  has to fit.
   go-authn/oidc (go-fileshare), coreos/go-oidc and flaat (motley-cue) all
   verify ES256.
 - **`/userinfo` is how motley-cue checks every token.** Give the provider a
