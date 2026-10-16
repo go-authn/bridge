@@ -12,7 +12,7 @@ require (
 	github.com/go-authn/servercert v0.5.1
 	github.com/go-authn/sshcert v0.1.6
 	github.com/go-authn/wireguard v0.1.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/grpc-transports/control v0.1.1
