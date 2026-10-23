@@ -34,8 +34,8 @@ github.com/go-authn/directory v0.14.1 h1:ZN3BUSJoQXpp5mCk1JbyxWcsoKhpfylmggMgaCg
 github.com/go-authn/directory v0.14.1/go.mod h1:wKkjpPF7MbH4K1Ocu0EkbMQ2sjOQN8k45Ah0i12FfA8=
 github.com/go-authn/krl v0.6.1 h1:m3DrENpuM3F8IjTFGxeVy0H6O0/wz3F45kCzIVI6PVA=
 github.com/go-authn/krl v0.6.1/go.mod h1:BfhDfQ7cQa+ls3SylzE/xbI/7Mu2AOXIJfeIw9XTbM0=
-github.com/go-authn/oidc v0.4.1 h1:G1tjLAswrPUvOraciHrb+vOYSSHdMuCKBryrHrLTWHo=
-github.com/go-authn/oidc v0.4.1/go.mod h1:d46Qe8EHpNA5hadeFlUUYMHCDkYzwwNAP6AYu9KdxYk=
+github.com/go-authn/oidc v0.4.2 h1:sTcoLgpH4jaNhkQ5MwkmTRLI1Iwi1cGPyGunkMnZqiQ=
+github.com/go-authn/oidc v0.4.2/go.mod h1:d46Qe8EHpNA5hadeFlUUYMHCDkYzwwNAP6AYu9KdxYk=
 github.com/go-authn/revocation v0.6.4 h1:663bqqC7sZ5ImERbVSjjU8J00FMJjcnL/F84elmb+sU=
 github.com/go-authn/revocation v0.6.4/go.mod h1:p7rmPm8tgRWWtZl14s+RdWxbUNCt0QKfpCr+O+Nyl2g=
 github.com/go-authn/saml v0.4.1 h1:AhY17oLT0f9baB8SOQjwgxeAym4ctN3KRO28/pCKX9A=
@@ -44,8 +44,8 @@ github.com/go-authn/servercert v0.5.2 h1:aCCo3FpHPWCwdhvjfDhP3ufVxdA8qW4nLhWKmws
 github.com/go-authn/servercert v0.5.2/go.mod h1:dX1m3PrNVvj62i/nXZz/Wm2mYoYhsFkUGHBqkTSfpng=
 github.com/go-authn/sshcert v0.1.7 h1:1EFb71iMKqZWxtSyVcTWZ0aopvJ4GJGcrhHOFupfP5g=
 github.com/go-authn/sshcert v0.1.7/go.mod h1:F8KRVpx2IkusWuv/mV+zfja5vyZV29WTRhRJRVV0lWQ=
-github.com/go-authn/wireguard v0.1.1 h1:DW/CCq3WsgU1dijkow4jlh23jOxeOK36XcniE/1ueyQ=
-github.com/go-authn/wireguard v0.1.1/go.mod h1:HPv2SJ4/nq82lKzlB1mJ3bfIDfUPYKYugkrXbWbia3k=
+github.com/go-authn/wireguard v0.1.2 h1:Lnm8iCSpcQc8ilV0jux0USj5E7ioiAaeDNOIPw2Hs/s=
+github.com/go-authn/wireguard v0.1.2/go.mod h1:/fGMUz4eISQ2l37E/FGzh6X9syBVjmEZ9VyDP/Mrb40=
 github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=
 github.com/go-chi/chi/v5 v5.0.12/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
 github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=
