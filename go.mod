@@ -21,7 +21,7 @@ require (
 	github.com/hstern/go-subjectid v0.2.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/openpubkey/openpubkey v0.29.0
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/common v0.72.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.58.0
