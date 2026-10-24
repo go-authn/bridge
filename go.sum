@@ -141,8 +141,8 @@ github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL
 github.com/ncruces/go-strftime v1.1.0/go.mod h1:yVaq7iwCN09vHRrKBrrflXT0M9tTMG2KmZ9Fj7xeG/g=
 github.com/openpubkey/openpubkey v0.29.0 h1:Jl2FB2FO/C/BMkQC6GFKZFlFdBJM/aSil1+myGjCdEU=
 github.com/openpubkey/openpubkey v0.29.0/go.mod h1:/SLxs4nJnN16u/yY+zD+L3J3GtTbVT9M/ANPxCsMmL0=
-github.com/pkg/sftp v1.13.11 h1:0N92SLTB8JqASJB14ZLHHzFnBV8mG9zw4K7jghEFWuE=
-github.com/pkg/sftp v1.13.11/go.mod h1:uNkH9roSXglNJqM+glJJi+TQXQUm0fXFWqCFmT8hsN0=
+github.com/pkg/sftp v1.13.12 h1:Myhzy/ZzLPnCtE2F2WtDHsgs8RfgMnH2gfbHuCJhkMU=
+github.com/pkg/sftp v1.13.12/go.mod h1:uNkH9roSXglNJqM+glJJi+TQXQUm0fXFWqCFmT8hsN0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_model v0.6.3 h1:O0jaTVAYNxTHYInEPFJt5I3+sN8zqBtVMPTB1qyxiEo=
 github.com/prometheus/client_model v0.6.3/go.mod h1:gpN5P9S7Rr6Yr92PiQ+Ixvhf6JZEkF1dnxsYL2aPBEM=
