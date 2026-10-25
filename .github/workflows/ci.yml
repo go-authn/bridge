@@ -218,19 +218,41 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version: stable, check-latest: true, cache: true }
       - run: GOARCH=${{ matrix.goarch }} go build ./...
-      - name: Install qemu-user-static
-        if: matrix.goarch != 'amd64' && matrix.goarch != 'arm64' && matrix.goarch != '386'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static
+      # ⛔ `qemu-user-static` is a VIRTUAL package on Ubuntu 26.04, which
+      # `ubuntu-latest` became on 2026-10-19, and apt refuses to choose between its
+      # two providers:
+      #
+      #   E: Package 'qemu-user-static' has no installation candidate
+      #
+      # ⚠ Installing a provider is NOT the fix: `qemu-user-binfmt` registers binfmt
+      # handlers, it does not ship the `qemu-<arch>-static` binaries this lane
+      # invokes. `qemu-user` ships the dynamic `qemu-<arch>`, which is all that
+      # `go test -exec` needs, so both are installed and BOTH NAMES are accepted
+      # below. go-tex/engine#645 has the full account.
+      - name: install qemu user-mode emulators
+        timeout-minutes: 10
+        run: sudo apt-get update && sudo apt-get install -y qemu-user qemu-user-binfmt
       - name: Test
         run: |
+          # ⛔ Resolve the emulator, accept EITHER binary name, and FAIL when neither
+          # is there -- a lane that reports success for an architecture it never ran is
+          # the one outcome this matrix exists to rule out. qemu-user ships the dynamic
+          # qemu-<arch>; qemu-user-static, now a virtual package, shipped the static one.
+          qemu_for() {
+            for cand in "qemu-$1-static" "qemu-$1"; do
+              command -v "$cand" >/dev/null 2>&1 && { printf '%s\n' "$cand"; return 0; }
+            done
+            echo "::error::no qemu user emulator for $1 (looked for qemu-$1-static and qemu-$1)" >&2
+            return 1
+          }
           case "${{ matrix.goarch }}" in
             amd64|arm64) go test -count=1 ./... ;;
-            riscv64)  GOARCH=riscv64 go test -count=1 -exec=qemu-riscv64-static ./... ;;
-            loong64)  GOARCH=loong64 go test -count=1 -exec=qemu-loongarch64-static ./... ;;
-            ppc64le)  GOARCH=ppc64le go test -count=1 -exec=qemu-ppc64le-static ./... ;;
-            s390x)    GOARCH=s390x   go test -count=1 -exec=qemu-s390x-static ./... ;;
+            riscv64) e="$(qemu_for riscv64)" || exit 1; echo "running riscv64 under $e"; GOARCH=riscv64 go test -count=1 -exec="$e" ./... ;;
+            loong64) e="$(qemu_for loongarch64)" || exit 1; echo "running loong64 under $e"; GOARCH=loong64 go test -count=1 -exec="$e" ./... ;;
+            ppc64le) e="$(qemu_for ppc64le)" || exit 1; echo "running ppc64le under $e"; GOARCH=ppc64le go test -count=1 -exec="$e" ./... ;;
+            s390x) e="$(qemu_for s390x)" || exit 1; echo "running s390x under $e"; GOARCH=s390x   go test -count=1 -exec="$e" ./... ;;
             # 32-bit: 386 runs natively on the amd64 runner (qemu-i386 loses float
             # state across preemption); arm under qemu.
             386)      GOARCH=386     go test -count=1 ./... ;;
-            arm)      GOARCH=arm     go test -count=1 -exec=qemu-arm-static ./... ;;
+            arm) e="$(qemu_for arm)" || exit 1; echo "running arm under $e"; GOARCH=arm     go test -count=1 -exec="$e" ./... ;;
           esac
