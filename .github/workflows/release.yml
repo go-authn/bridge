@@ -72,7 +72,7 @@ jobs:
             out="authn-bridge-${os}-${arch}"; [ "$os" = windows ] && out="${out}.exe"
             echo "building $out"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags="-s -w" -o "$dist/${out}" ./cmd/authn-bridge
+              go build -trimpath -ldflags="-w" -o "$dist/${out}" ./cmd/authn-bridge
           done
           cd "$dist" && sha256sum authn-bridge-* > SHA256SUMS && cat SHA256SUMS
 
