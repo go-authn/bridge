@@ -679,6 +679,73 @@ What to know, read in their sources (not yet run end to end):
   `state` block (below) so that a restart does not refuse every token handed
   out before it.
 
+## Rotating the token signing key
+
+Every relying party verifies tokens with the keys published at `/jwks`. A key
+changed in place invalidates every token they hold, and one used before they
+have fetched it is refused. `retired_signing_key_files` makes both safe: a key
+listed there is **published and never signs**. Rotating takes two restarts
+(the provider does not reload its configuration, and a SIGHUP is ignored; see
+[docs/install.md](docs/install.md)):
+
+1. **Make the next key**, beside the current one:
+
+   ```sh
+   authn-bridge keygen --key /var/lib/authn-bridge/oidc-2026-10.key   # refuses to overwrite a file
+   ```
+
+2. **Publish it before it signs.** Add it to `retired_signing_key_files`, leave
+   `signing_key_file` alone, run `authn-bridge check`, and restart:
+
+   ```hcl
+   signing_key_file          = "/var/lib/authn-bridge/oidc-2026-04.key"   # still signing
+   retired_signing_key_files = ["/var/lib/authn-bridge/oidc-2026-10.key"] # published only
+   ```
+
+   `/jwks` now lists **both** `kid`s, and new tokens still carry the old one.
+   Wait at least as long as the longest a relying party caches the key set.
+   One that fetches again on an unknown `kid` (go-authn/oidc does, at most
+   once per its `MinRefresh`) needs no wait. One that caches for a fixed time needs that time.
+
+3. **Swap.** Make the new key `signing_key_file` and move the old one to
+   `retired_signing_key_files`. Then `authn-bridge check` and restart:
+
+   ```hcl
+   signing_key_file          = "/var/lib/authn-bridge/oidc-2026-10.key"
+   retired_signing_key_files = ["/var/lib/authn-bridge/oidc-2026-04.key"]
+   ```
+
+   `/jwks` still lists both `kid`s, and new tokens carry the new one. Tokens
+   signed with the old key keep verifying.
+
+4. **Retire the old key** once no token it signed can still be presented:
+   after at least the longest of `token_lifetime` (1 h by default) and
+   `id_token_lifetime` (5 min), plus the relying parties' clock skew and
+   their key-set cache. For opkssh, wait the PK Token lifetime instead (a day
+   by default, up to a week; see [OpenPubkey and opkssh](#openpubkey-and-opkssh)).
+   Then remove it from the list and restart. `/jwks` then lists one `kid`.
+
+Check at each step:
+
+```sh
+curl -s https://login.example.org/jwks          # the kids published
+# the kid of a fresh token: the first segment of any access or ID token, base64url-decoded
+```
+
+An `access_token_key_file` (ES256) rotates the same way. Write the next one with
+`authn-bridge keygen --access-token-key`, and a retired one goes in
+`retired_signing_key_files` like any other. Without a `state` block, each
+restart logs everybody out: refresh tokens and `/userinfo` live in memory. The
+access tokens already issued still verify at the resource servers.
+
+Verified end to end with llmflow-gateway as the relying party, in
+[go-llmflow/bench](https://github.com/go-llmflow/bench)
+(`e2e/oidc`, `TestBridge/c/key-rotation`):
+- after step 2, `/jwks` lists both kids while tokens still carry the old one;
+- after step 3, a token signed before the swap and one signed after are both
+  accepted, with a single key-set fetch;
+- an SSO login right after the swap works.
+
 ## State: what a restart must not forget
 
 ```hcl
