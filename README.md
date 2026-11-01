@@ -126,6 +126,23 @@ With exactly one IdP, that IdP is trusted for every value, as before.
 | a **username with a comma, a space, a quote or a control character**, for an SSH or X.509 certificate | sshd reads `principals="a,b"` and AuthorizedPrincipalsFile entries as lists: one such name is two |
 | everything [go-authn/saml](https://github.com/go-authn/saml#what-it-refuses) refuses | unsigned or SHA-1 assertions, several assertions, replay, foreign scopes, unauthenticated CBC... |
 
+These are tested end to end, through the ACS, with crafted responses
+(`internal/app/attack_test.go`): the signature-wrapping layouts XSW1 to XSW8
+of Somorovsky et al. ("On Breaking SAML", 2012) and their same-ID variants, a
+comment inserted into a signed value (CVE-2017-11427), a DOCTYPE (entity
+expansion, external entities), and assertions signed for another SP, another
+ACS, another request or another Destination. Fuzzers hold the same property
+on arbitrary input: a response, the federation's metadata, an access token or
+a login cookie is accepted only as exactly what was signed or sealed
+(`internal/app/fuzz_test.go`). The clocks may differ by three minutes either
+way; an hour is refused.
+
+When the federation's metadata server is slow, down, or serves something that
+does not verify, logins go on with the last good copy until its `validUntil`.
+A refresh is never scheduled past half of what remains of that validity, and
+with no valid metadata left, it is retried within a minute, backing off to an
+hour.
+
 And at configuration time: an issuer that is not https, a salt under 32 bytes,
 an RSA key under 2048 bits, a code lifetime over ten minutes, a client secret
 somebody can guess, a redirect over cleartext http, a restricted IdP list

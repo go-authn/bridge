@@ -232,7 +232,11 @@ func (t *ttl[V]) forget(k string) {
 // hashToken is what a refresh token is kept under: its SHA-256.
 func hashToken(tok string) string {
 	sum := sha256.Sum256([]byte(tok))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
+	// Into a buffer on the stack: one allocation, the string, where
+	// EncodeToString made two (BenchmarkReplayUse).
+	var b [43]byte // base64.RawURLEncoding.EncodedLen(sha256.Size)
+	base64.RawURLEncoding.Encode(b[:], sum[:])
+	return string(b[:])
 }
 
 // The codecs. person and refreshGrant keep their fields unexported; these
@@ -354,6 +358,11 @@ func jsonDec[V any](b []byte) (V, error) {
 // through to the state database like the rest.
 type ttlReplay struct{ t *ttl[bool] }
 
+// Use keeps the assertion under the SHA-256 of what go-authn/saml names it
+// by -- the IdP's entity ID and the assertion's ID, both the IdP's to choose
+// and together longer than the state table's 128-character key allows: a
+// row PostgreSQL or MySQL refuses stays unwritten and stops every later
+// flush, revocations included (TestReplayKeyFitsTheStateTable).
 func (r ttlReplay) Use(id string, expires time.Time) bool {
-	return r.t.putNew(id, true, expires) == nil
+	return r.t.putNew(hashToken(id), true, expires) == nil
 }

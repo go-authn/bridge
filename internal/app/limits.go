@@ -64,7 +64,7 @@ func (l *rateLimiter) allow(addr string) bool {
 	now := l.now()
 	// A full bucket is the same as no bucket: forget those every minute,
 	// or the map keeps every address that ever asked.
-	if now.Sub(l.swept) >= time.Minute {
+	if d := now.Sub(l.swept); d >= time.Minute || d < 0 {
 		for a, b := range l.m {
 			if b.tokens+now.Sub(b.at).Seconds()*b.rate >= b.size {
 				delete(l.m, a)
@@ -92,7 +92,12 @@ func (l *rateLimiter) refill(key string, size float64, now time.Time) bucket {
 	if !ok {
 		b = bucket{tokens: size, at: now, size: size, rate: size / 60}
 	}
-	b.tokens = min(b.size, b.tokens+now.Sub(b.at).Seconds()*b.rate)
+	// ⛔ A clock that goes back is no time elapsed, not negative time: the
+	// bucket would be drained by the size of the step -- an hour back, and
+	// every address that had asked recently was locked out for an hour
+	// (chaos, 2026-11). time.Now's monotonic reading does not step, so this
+	// is defence for any other clock the server is given.
+	b.tokens = min(b.size, b.tokens+max(0, now.Sub(b.at).Seconds())*b.rate)
 	b.at = now
 	return b
 }

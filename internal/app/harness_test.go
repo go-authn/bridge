@@ -347,6 +347,9 @@ type assertionOpts struct {
 	eptid string
 	// nameID, when set, replaces the transient NameID of the Subject.
 	nameID string
+	// audience and recipient, when set, replace this SP's entity ID and
+	// ACS in an assertion built by assertionXML (attack_test.go).
+	audience, recipient string
 }
 
 // respond has the IdP (xmlsec1) answer a request: the assertion encrypted
