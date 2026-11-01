@@ -36,6 +36,24 @@ func TestReplayKeyFitsTheStateTable(t *testing.T) {
 	})
 }
 
+// The same, against the database itself: on the PostgreSQL lane
+// (BRIDGE_TEST_POSTGRES) a key over 128 characters was refused, and the
+// provider was not ready again.
+func TestStateTakesALongReplayKey(t *testing.T) {
+	f, _ := stateFixture(t)
+	long := "https://" + strings.Repeat("idp.", 250) + "example/idp/shibboleth _" + strings.Repeat("f", 64)
+	if !f.s.sp.Replay.Use(long, time.Now().Add(time.Minute)) {
+		t.Fatal("a first use was refused")
+	}
+	if !f.s.state.healthy() {
+		t.Fatal("the database did not take the replay entry: not ready")
+	}
+	f.restart(t)
+	if f.s.sp.Replay.Use(long, time.Now().Add(time.Minute)) {
+		t.Fatal("after a restart, the same assertion was accepted again")
+	}
+}
+
 // What a login's replay check costs, in allocations (exact, unlike time).
 func BenchmarkReplayUse(b *testing.B) {
 	now := time.Now()
