@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-authn/saml"
 )
 
 // What an operator asks of a running provider, whichever way they ask it --
@@ -48,12 +50,10 @@ func (s *server) refreshMetadata(ctx context.Context) error {
 // between five minutes and twelve hours -- go-authn/saml's Federation.Run,
 // done here so that each attempt is recorded.
 func (s *server) refreshLoop(ctx context.Context) {
+	retry := time.Minute
 	for {
-		wait := 12 * time.Hour
-		if md := s.fed.Metadata(); md != nil && md.CacheDuration > 0 {
-			wait = md.CacheDuration * 3 / 4
-		}
-		wait = min(max(wait, 5*time.Minute), 12*time.Hour)
+		var wait time.Duration
+		wait, retry = nextRefresh(s.fed.Metadata(), s.now(), retry)
 		select {
 		case <-ctx.Done():
 			return
@@ -63,6 +63,28 @@ func (s *server) refreshLoop(ctx context.Context) {
 			s.logf("metadata refresh: %v", err)
 		}
 	}
+}
+
+// nextRefresh is how long refreshLoop waits before its next attempt, and the
+// retry delay to use after that one. It is go-authn/saml's Federation.Run
+// schedule (federation.go, Run): three quarters of cacheDuration, never past
+// half of what remains of validUntil, between five minutes and twelve hours;
+// with no valid metadata, retry, doubling from a minute to an hour.
+//
+// ⛔ Without the validUntil bound the loop slept twelve hours whatever was
+// left, so one failed refresh near expiry -- the federation server down for a
+// minute -- let the metadata lapse, and with none left it slept twelve hours
+// more: every IdP gone long after the server was back.
+func nextRefresh(md *saml.Metadata, now time.Time, retry time.Duration) (wait, next time.Duration) {
+	if md == nil {
+		return retry, min(retry*2, time.Hour)
+	}
+	wait = 12 * time.Hour
+	if md.CacheDuration > 0 {
+		wait = md.CacheDuration * 3 / 4
+	}
+	wait = min(wait, md.ValidUntil.Sub(now)/2)
+	return min(max(wait, 5*time.Minute), 12*time.Hour), time.Minute
 }
 
 // ready says whether the provider can log anybody in: it has federation
