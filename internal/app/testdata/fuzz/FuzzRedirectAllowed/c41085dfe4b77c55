@@ -1,0 +1,2 @@
+go test fuzz v1
+string("//:\xcf\xc7\xcf\xcf\xcf0\xf3\xe9ǳ")
