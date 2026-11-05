@@ -888,6 +888,12 @@ with `grpc.health.v1` beside it:
 | `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
 | `ListDisabled` | who is disabled, why, by whom, until when |
 
+Removing an IdP from `saml { idps }` ends what it vouched for, the way
+`DisableIdP` does: a new login is refused, and so is every grant of someone who
+came through it -- a refresh token (even across a restart), an application
+password, an SSH certificate request -- at the next use, with `institution not
+configured`. Put the IdP back and they work again; nothing needs revoking.
+
 A person is disabled as who they are: usernames compare without case (eppn,
 uid, mail and subject-id all compare so), the entry records the stable
 identity of everybody known under that name, so another spelling from their

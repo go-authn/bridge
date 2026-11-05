@@ -266,6 +266,12 @@ func (s *server) refused(who *person) string {
 	switch {
 	case s.disabled.idp(who.idp, now):
 		return "institution disabled"
+	case !configuredIdP(s.cfg, who.idp):
+		// Grants outlive a restart and a configuration change: a refresh
+		// token, an app password or an SSH certificate bought through an IdP
+		// that was since removed from saml { idps } is held to the
+		// configuration now, as a new login is (acs.go).
+		return "institution not configured"
 	case s.disabled.person(who.username, who.subject, now):
 		return "person disabled"
 	case s.disabledBySub(who, now):
