@@ -34,8 +34,8 @@ github.com/go-authn/directory v0.17.0 h1:Y8rk7wzT45Hc7oDDfwK53YH+bG+i4U83ZDxMRf4
 github.com/go-authn/directory v0.17.0/go.mod h1:+aKPTcGBp/0X+1JFX6EGd9wa/b4t+D9DbZ6X0jltbh4=
 github.com/go-authn/krl v0.6.1 h1:m3DrENpuM3F8IjTFGxeVy0H6O0/wz3F45kCzIVI6PVA=
 github.com/go-authn/krl v0.6.1/go.mod h1:BfhDfQ7cQa+ls3SylzE/xbI/7Mu2AOXIJfeIw9XTbM0=
-github.com/go-authn/oidc v0.4.3 h1:H2L1YtpwGQCMoc65vhH5wLPM+09Wygh/32hjtYI052k=
-github.com/go-authn/oidc v0.4.3/go.mod h1:H/Hodeu9kh/Xz3y51XfYu6MZdMJaNfXClyVH0GTUebE=
+github.com/go-authn/oidc v0.7.0 h1:PrEjnAj/QEeNMzPg2Y8DSSQX9fJwsblKpWWZHmetjMA=
+github.com/go-authn/oidc v0.7.0/go.mod h1:H/Hodeu9kh/Xz3y51XfYu6MZdMJaNfXClyVH0GTUebE=
 github.com/go-authn/revocation v0.6.7 h1:WjBYhVT4PTzzPWRCvB+KVb6pt8+d0W7YiiIg2N8vgsc=
 github.com/go-authn/revocation v0.6.7/go.mod h1:gBs7IVNSNuZKE8RZ3eVjUSYK62d7qWggyDKwKXB+1dw=
 github.com/go-authn/saml v0.5.1 h1:GI/OWubrPxr/ohXOhHg3W3DX2HjXEbNCCVP0W9F6wtA=

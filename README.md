@@ -895,7 +895,9 @@ password, an SSH certificate request -- at the next use, with `institution not
 configured`. Put the IdP back and they work again; nothing needs revoking.
 
 A person is disabled as who they are: usernames compare without case (eppn,
-uid, mail and subject-id all compare so), the entry records the stable
+uid, mail and subject-id all compare so; ASCII letters only, with go-authn/oidc's
+`ASCIILower`, so a Kelvin sign U+212A is not a "k" and `kate` and `Kate` with one
+are two people, two disable entries and two certificate principals), the entry records the stable
 identity of everybody known under that name, so another spelling from their
 IdP does not let them back in, and a person whose IdP releases no username
 is disabled by the `sub` a relying party knows them by -- public or pairwise,

@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-authn/oidc"
 	"github.com/go-authn/saml"
 )
 
@@ -122,14 +122,14 @@ func (s *server) revokePerson(username string, subjects ...string) (revoked, err
 	}
 	s.broadcast(s.personSubjects(username, subjects), s.now(), "", nil)
 	r := s.revokeMatching(func(u, _, subject string) bool {
-		return (username != "" && strings.EqualFold(u, username)) || (subject != "" && slices.Contains(subjects, subject))
+		return (username != "" && oidc.EqualASCIIFold(u, username)) || (subject != "" && slices.Contains(subjects, subject))
 	})
 	// Every step is tried, whatever an earlier one did.
 	var errs []error
 	// A certificate by the username it was issued to, or by the stable
 	// identity one naming another claim recorded (ssh_principal_claim).
 	if n, err := s.certs.revokeWhere(func(c issuedCert) bool {
-		return (username != "" && strings.EqualFold(c.Principal, username)) ||
+		return (username != "" && oidc.EqualASCIIFold(c.Principal, username)) ||
 			(c.Subject != "" && slices.Contains(subjects, c.Subject))
 	}, s.now()); err != nil {
 		errs = append(errs, fmt.Errorf("revoking certificates: %w", err))
