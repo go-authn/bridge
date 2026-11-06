@@ -10,9 +10,10 @@ import (
 	"math/big"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-authn/oidc"
 )
 
 // The certificates this provider issued, SSH and X.509, and which of them
@@ -209,7 +210,7 @@ var (
 // sameOwner is whether two records are one person's: the name as the IdP
 // spelled it, compared without case as disabling compares it, and the IdP.
 func sameOwner(a, b issuedCert) bool {
-	return strings.EqualFold(a.Principal, b.Principal) && a.IdP == b.IdP
+	return oidc.EqualASCIIFold(a.Principal, b.Principal) && a.IdP == b.IdP
 }
 
 // registerKey records a WireGuard key for a person, or renews it when it is

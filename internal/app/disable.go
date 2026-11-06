@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-authn/oidc"
 )
 
 // Disabling: the people and the institutions this provider refuses.
@@ -97,7 +99,7 @@ func loadDisabled(path string) (*disabledList, error) {
 	// that kept them as typed.
 	people := map[string]disabledEntry{}
 	for k, e := range s.People {
-		k = strings.ToLower(k)
+		k = oidc.ASCIILower(k)
 		if o, ok := people[k]; ok {
 			// One person twice: never-ending wins, else the later end.
 			e.Subjects = append(e.Subjects, o.Subjects...)
@@ -209,7 +211,7 @@ func (s *disabledList) person(username, subject string, now time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if username != "" {
-		if e, ok := s.People[strings.ToLower(username)]; ok && e.inForce(now) {
+		if e, ok := s.People[oidc.ASCIILower(username)]; ok && e.inForce(now) {
 			return true
 		}
 	}
@@ -358,7 +360,10 @@ func (s *server) enableIdP(entityID, by string) (bool, error) {
 // Subject Identifier Attributes 3.3.1), and eduPersonPrincipalName, uid and
 // mail, whose schemas declare caseIgnoreMatch -- so "Alice@univ.example" is the
 // person disabled as "alice@univ.example", whatever case their IdP sends today.
-func (s *server) normUsername(u string) string { return strings.ToLower(u) }
+// normUsername is the one fold of a username: ASCII only, as go-authn/oidc
+// returns scoped names (a Kelvin sign U+212A is not a "k": strings.ToLower
+// would merge two accounts of an IdP).
+func (s *server) normUsername(u string) string { return oidc.ASCIILower(u) }
 
 // subjectsOf are the stable identities of the people known here by name:
 // their username, without case, or the sub a relying party knows them by
@@ -373,7 +378,7 @@ func (s *server) subjectsOf(name string) []string {
 		if g.who.subject == "" || seen[g.who.subject] {
 			return
 		}
-		if g.who.username != "" && strings.EqualFold(g.who.username, name) {
+		if g.who.username != "" && oidc.EqualASCIIFold(g.who.username, name) {
 			seen[g.who.subject] = true
 			return
 		}
@@ -390,7 +395,7 @@ func (s *server) subjectsOf(name string) []string {
 		if it.subject == "" {
 			return
 		}
-		if (it.username != "" && strings.EqualFold(it.username, name)) || it.info["sub"] == name {
+		if (it.username != "" && oidc.EqualASCIIFold(it.username, name)) || it.info["sub"] == name {
 			seen[it.subject] = true
 		}
 	})

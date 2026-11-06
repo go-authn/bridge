@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-authn/oidc"
 	ssf "github.com/hstern/go-ssf"
 	"github.com/hstern/go-ssf/transmitter"
 )
@@ -729,7 +730,7 @@ func (s *server) spellingsOf(username string) []string {
 	}
 	seen := map[string]bool{username: true}
 	add := func(u string) {
-		if u != "" && strings.EqualFold(u, username) {
+		if u != "" && oidc.EqualASCIIFold(u, username) {
 			seen[u] = true
 		}
 	}

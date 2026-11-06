@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-authn/oidc"
 	"github.com/go-authn/saml"
 )
 
@@ -80,7 +81,7 @@ func newPerson(a *saml.Assertion, c *claimsBlock) (*person, error) {
 	}
 	p.username = a.First(usernameAttributes[c.Username])
 	if c.Username == "subject_id" {
-		p.username = strings.ToLower(p.username)
+		p.username = oidc.ASCIILower(p.username)
 	}
 	for _, g := range c.Groups {
 		for _, v := range a.Attributes[groupAttributes[g]] {
@@ -135,7 +136,7 @@ func newPerson(a *saml.Assertion, c *claimsBlock) (*person, error) {
 	set(p.edu, "eduperson_orcid", saml.EduPersonOrcid)
 	set(p.edu, "schac_home_organization", saml.SchacHomeOrganization)
 	if v := a.First(saml.SubjectID); v != "" {
-		p.edu["voperson_id"] = strings.ToLower(v)
+		p.edu["voperson_id"] = oidc.ASCIILower(v)
 	}
 	return p, nil
 }
