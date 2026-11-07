@@ -332,6 +332,7 @@ func authnRequest(t *testing.T, u *url.URL) (id, relayState string) {
 type assertionOpts struct {
 	eppn        string
 	subjectID   string
+	schac       string // schacHomeOrganization
 	entitlement []string
 	status      string // raw StatusCode, Success when empty
 	acr         string
@@ -396,6 +397,7 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 			`<saml:AttributeStatement>` +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.6", o.eppn) +
 			attr("urn:oasis:names:tc:SAML:attribute:subject-id", o.subjectID) +
+			attr("urn:oid:1.3.6.1.4.1.25178.1.2.9", o.schac) +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.7", o.entitlement...) +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.10", o.eptid) +
 			attr("urn:oid:2.16.840.1.113730.3.1.241", "Alice Martin") +

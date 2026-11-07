@@ -75,6 +75,13 @@ on its metadata page; the one above is the 2026 certificate's.
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
+`schac_home_organization` is released only when it is one of the asserting IdP's
+`shibmd:Scope` values (exact, case-sensitive; go-authn/saml v0.6.0, bridge
+v0.23.9): an IdP of one institution cannot state another's, which a relying
+party that filters on the claim (the gateway's `accept`) would take for that
+institution. **Upgrade:** an IdP whose metadata publishes no Scope for its domain
+no longer has the claim released; ask its federation to publish it.
+
 The identifier behind `sub` is chosen in RENATER's order of preference:
 `subject-id`, then `pairwise-id`, then `eduPersonPrincipalName`, then the
 deprecated `eduPersonTargetedID`, then a persistent NameID. **Mail is never an
