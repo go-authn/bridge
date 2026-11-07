@@ -4,15 +4,15 @@ go 1.27.3
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-authn/directory v0.17.0
+	github.com/go-authn/directory v0.19.0
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.7.0
 	github.com/go-authn/revocation v0.6.7
 	github.com/go-authn/saml v0.5.1
-	github.com/go-authn/servercert v0.5.3
+	github.com/go-authn/servercert v0.6.0
 	github.com/go-authn/sshcert v0.1.10
-	github.com/go-authn/wireguard v0.1.3
-	github.com/go-jose/go-jose/v4 v4.1.8
+	github.com/go-authn/wireguard v0.1.4
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/grpc-transports/control v0.1.1
