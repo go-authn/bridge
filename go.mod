@@ -8,7 +8,7 @@ require (
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.7.0
 	github.com/go-authn/revocation v0.6.7
-	github.com/go-authn/saml v0.5.1
+	github.com/go-authn/saml v0.6.0
 	github.com/go-authn/servercert v0.5.3
 	github.com/go-authn/sshcert v0.1.10
 	github.com/go-authn/wireguard v0.1.3
