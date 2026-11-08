@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.23.10
+
+Fixed:
+
+- **An `AuthnInstant` in the future counted as a fresh authentication under
+  `max_age`.** The elapsed time came out negative, so it was never past
+  `max_age`. An instant later than now plus the clock skew (three minutes,
+  go-authn/saml's `ClockSkew`) is now treated as unknown elapsed time (OIDC
+  Core 3.1.2.1): the person is sent back to the IdP with `ForceAuthn`, as for
+  a stale one. Within the skew nothing changes. (#85)
+
 ## v0.23.6
 
 Fixed:
