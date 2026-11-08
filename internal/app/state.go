@@ -86,13 +86,25 @@ type persister struct {
 	logf func(string, ...any)
 	// count adds one to a counter (the server's).
 	count func(metric, label string)
+	// now is the clock of the retry budget (time.Now when nil), and fail an
+	// error to inject before a write, for tests (nil in production).
+	now  func() time.Time
+	fail func(kind, k string) error
 
-	mu      sync.Mutex
+	mu sync.Mutex
+	// failing is, per unwritten row, how often it failed in a flush where
+	// the database took something else, and since when (see flushLocked).
+	failing map[[2]string]rowFailures
 	pending map[[2]string]bool // deletes the database has not taken yet
 	// unwritten are writes the database has not taken yet. An SSF event
 	// among them is a revocation no receiver hears of after a restart, so
 	// they are retried like deletes, and the provider is not ready meanwhile.
 	unwritten map[[2]string]pendingWrite
+}
+
+type rowFailures struct {
+	n     int
+	since time.Time
 }
 
 type pendingWrite struct {
@@ -101,6 +113,11 @@ type pendingWrite struct {
 }
 
 func (p *persister) put(kind, k string, v []byte, expires time.Time) error {
+	if p.fail != nil {
+		if err := p.fail(kind, k); err != nil {
+			return err
+		}
+	}
 	tx, err := p.b.db.Begin()
 	if err != nil {
 		return err
@@ -129,34 +146,99 @@ func (p *persister) del(kind, k string) {
 }
 
 // flushLocked retries what the database has not taken. ⛔ The deletes are
-// revocations, so a failed write never stops them: the writes stop at the
-// first error that may be the database being away (retrying every row
-// against a down database would cost a timeout each), then the deletes get
-// their turn. A row refused for good is given up (reject), so it cannot sit
+// revocations, so a failed write never stops them: the writes go on past a
+// failed row, and stop after three failures in a row while nothing has
+// succeeded (retrying every row against a down database would cost a timeout
+// each), then the deletes get their turn. A row refused for good is given up (reject), so it cannot sit
 // at the front of every later flush. A DELETE has no value to refuse, so a
 // delete that fails is always retried.
+//
+// ⛔ A row refused with an error the classifier does not know is bounded
+// too, so that the behaviour does not depend on the classifier (#94): a row
+// that fails in rowRetries flushes spread over at least rowRetryWindow, in
+// each of which the database took something else (a write, a delete, or the
+// no-op probe), is the row's fault and not the database's, and is given up
+// like a classified one. A flush where nothing succeeds -- the database is
+// away -- counts against no row: an outage gives nothing up, however long.
 func (p *persister) flushLocked() {
+	var failed [][2]string
+	var errs []error
+	ok, run := false, 0
 	for key, w := range p.unwritten {
 		err := p.put(key[0], key[1], w.v, w.expires)
 		if err == nil {
 			delete(p.unwritten, key)
+			delete(p.failing, key)
+			ok, run = true, 0
 			continue
 		}
 		if permanentDBError(err) {
 			delete(p.unwritten, key)
+			delete(p.failing, key)
 			p.reject("write", key[0], key[1], err)
 			continue
 		}
 		p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
-		break
+		failed, errs = append(failed, key), append(errs, err)
+		// Against a database that takes nothing, each row would cost a
+		// timeout: stop after a few, while nothing has succeeded.
+		if run++; !ok && run >= 3 {
+			break
+		}
 	}
 	for key := range p.pending {
 		if _, err := p.b.db.Exec(`DELETE FROM bridge_state WHERE kind = `+p.b.arg(1)+` AND k = `+p.b.arg(2), key[0], key[1]); err != nil {
 			p.logf("state: removing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
-			return
+			break
 		}
 		delete(p.pending, key)
+		ok = true
 	}
+	if len(failed) == 0 {
+		return
+	}
+	// Is the database taking anything? A delete of a row that is not there.
+	if !ok {
+		_, err := p.b.db.Exec(`DELETE FROM bridge_state WHERE kind = `+p.b.arg(1)+` AND k = `+p.b.arg(2), "probe", "probe")
+		ok = err == nil
+	}
+	if !ok {
+		return
+	}
+	now := p.clock()
+	for i, key := range failed {
+		f, seen := p.failing[key]
+		if !seen {
+			f.since = now
+		}
+		f.n++
+		if f.n < rowRetries || now.Sub(f.since) < rowRetryWindow {
+			if p.failing == nil {
+				p.failing = map[[2]string]rowFailures{}
+			}
+			p.failing[key] = f
+			continue
+		}
+		delete(p.unwritten, key)
+		delete(p.failing, key)
+		p.reject("write", key[0], key[1], fmt.Errorf("%w; failed %d flushes over %s while the database took other writes", errs[i], f.n, now.Sub(f.since).Round(time.Second)))
+	}
+}
+
+// rowRetries and rowRetryWindow bound the retries of one row (flushLocked).
+// A flush happens at every write, so the count is attempts, not time; the
+// window keeps a burst of writes from giving up a row that failed for a
+// moment (a lock timeout, a deadlock): thirty seconds covers both.
+const (
+	rowRetries     = 5
+	rowRetryWindow = 30 * time.Second
+)
+
+func (p *persister) clock() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
 }
 
 // permanentDBError says whether the database refused a row for good: the same
@@ -202,7 +284,7 @@ func permanentDBError(err error) bool {
 // honouring it until a restart; what is lost is only its persistence, and
 // that is said.
 func (p *persister) reject(op, kind, k string, err error) {
-	p.logf("state: the database refuses %s %s for good (%v); giving it up -- it will not survive a restart (bridge_state_rows_rejected_total{kind=%q})", kind, k, err, op)
+	p.logf("state: the database refuses %s %s for good, or keeps refusing it while taking the rest (%v); giving it up -- it will not survive a restart (bridge_state_rows_rejected_total{kind=%q})", kind, k, err, op)
 	p.count("bridge_state_rows_rejected_total", op)
 }
 
