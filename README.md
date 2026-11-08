@@ -807,7 +807,13 @@ meanwhile is not honoured.
   for the same reason). Access tokens are kept by their `jti`, not a secret.
 - A revocation the database did not take would come back at the next start: a
   delete that fails is retried at every later write, and until it succeeds
-  the provider is **not ready** (`/readyz`, the gRPC health).
+  the provider is **not ready** (`/readyz`, the gRPC health). A write the
+  database is merely away from does not hold the deletes back, and a row it
+  refuses **for good** (PostgreSQL SQLSTATE class 22 or 23, MySQL data too
+  long / out of range / bad value / key errors, SQLite constraint errors) is
+  logged once, counted in `bridge_state_rows_rejected_total{kind}`, and given
+  up: it works until a restart but is not persisted, and the provider stays
+  ready. Any other error is retried.
 - Tested across restarts on SQLite and PostgreSQL: tokens still work, revoked
   ones stay revoked, a retired refresh token used again still revokes its
   family; with no `state` block the same restart forgets, which is the control.
