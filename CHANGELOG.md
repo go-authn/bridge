@@ -3,6 +3,20 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.23.12
+
+Fixed:
+
+- **A state row refused with an error no classifier knows still kept the
+  provider not ready** (#94, left over from #84). Retries of one row are now
+  bounded: after five flushes over at least thirty seconds in which the
+  database took something else (a write, a delete, or a no-op probe) while
+  the row kept failing, it is given up like a classified permanent error
+  (logged once, counted in `bridge_state_rows_rejected_total{kind}`). A
+  flush where nothing succeeds, the database being away, counts against no
+  row, so an outage gives nothing up. The behaviour no longer depends on the
+  list of driver error classes.
+
 ## v0.23.11
 
 Fixed:

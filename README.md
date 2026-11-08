@@ -813,7 +813,10 @@ meanwhile is not honoured.
   long / out of range / bad value / key errors, SQLite constraint errors) is
   logged once, counted in `bridge_state_rows_rejected_total{kind}`, and given
   up: it works until a restart but is not persisted, and the provider stays
-  ready. Any other error is retried.
+  ready. Any other error is retried, within a bound: a row that keeps failing
+  (five flushes over at least thirty seconds) while the database takes other
+  writes or deletes is given up the same way. A database that is away takes
+  nothing, so an outage gives no row up.
 - Tested across restarts on SQLite and PostgreSQL: tokens still work, revoked
   ones stay revoked, a retired refresh token used again still revokes its
   family; with no `state` block the same restart forgets, which is the control.
