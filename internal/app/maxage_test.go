@@ -24,6 +24,45 @@ func forceAuthn(t *testing.T, u *url.URL) bool {
 	return strings.Contains(string(raw), `ForceAuthn="true"`)
 }
 
+// An AuthnInstant that has not happened yet says nothing about the elapsed
+// time (OIDC Core 3.1.2.1 compares it with max_age): beyond the clock skew
+// the IdP's clock is wrong or the value is, so the person is asked again with
+// ForceAuthn instead of counting as fresh. Within the skew it is just a
+// clock a little ahead, and the login goes through.
+func TestMaxAgeFutureAuthnInstant(t *testing.T) {
+	f := newFixture(t, "")
+	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect)
+	start := func() (*browser, *url.URL) {
+		b := newBrowser(t)
+		next := location(t, b.get(r.authURL(oauth2.SetAuthURLParam("max_age", "60"))))
+		if strings.HasSuffix(next.Path, "/saml/choose") {
+			next = location(t, b.get(f.s.cfg.Issuer+"/saml/disco?entityID="+url.QueryEscape(idpEntity)))
+		}
+		return b, next
+	}
+	answer := func(b *browser, req *url.URL, o assertionOpts) *url.URL {
+		id, relay := authnRequest(t, req)
+		return location(t, b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{"SAMLResponse": {f.respond(id, o)}, "RelayState": {relay}}))
+	}
+
+	// An hour ahead: not fresh. Back to the IdP with ForceAuthn, no code.
+	b, req := start()
+	future := alice
+	future.authnAt = time.Now().Add(time.Hour)
+	again := answer(b, req, future)
+	if again.Query().Get("code") != "" || again.Host != idpScope || !forceAuthn(t, again) {
+		t.Fatalf("an AuthnInstant an hour ahead, max_age=60, was accepted as fresh: %s", again)
+	}
+
+	// A minute ahead, within the skew: fresh.
+	b, req = start()
+	near := alice
+	near.authnAt = time.Now().Add(time.Minute)
+	if back := answer(b, req, near); back.Query().Get("code") == "" {
+		t.Errorf("an AuthnInstant a minute ahead, within the skew: %s", back)
+	}
+}
+
 // max_age asks for a new authentication only "if the elapsed time is
 // greater than this value" (OIDC Core 3.1.2.1). Before, any max_age sent
 // ForceAuthn, so an IdP authenticated the person again every time, and the

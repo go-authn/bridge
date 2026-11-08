@@ -70,9 +70,14 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.page(w, http.StatusBadRequest, "This login has already been answered; start again from the application.")
 		return
 	}
-	if l.maxAge > 0 && !l.options.ForceAuthn && s.now().Sub(a.AuthnInstant) > time.Duration(l.maxAge)*time.Second {
-		s.reauthenticate(w, r, l, a.IdP.EntityID, s.now().Sub(a.AuthnInstant))
-		return
+	if l.maxAge > 0 && !l.options.ForceAuthn {
+		age := s.now().Sub(a.AuthnInstant)
+		// An instant later than now + skew has not happened: the elapsed
+		// time is unknown, not negative, so it is not fresh.
+		if age > time.Duration(l.maxAge)*time.Second || -age > s.clockSkew() {
+			s.reauthenticate(w, r, l, a.IdP.EntityID, age)
+			return
+		}
 	}
 	who, err := newPerson(a, s.cfg.Claims)
 	if err != nil {
@@ -133,13 +138,22 @@ func orUnnamed(s string) string {
 	return s
 }
 
+// clockSkew is how far an IdP's clock may be ahead of this one: the SP's own
+// allowance (go-authn/saml's default, three minutes, once it has run).
+func (s *server) clockSkew() time.Duration {
+	if s.sp.ClockSkew > 0 {
+		return s.sp.ClockSkew
+	}
+	return 3 * time.Minute
+}
+
 // reauthenticate sends the person back to the IdP that just answered, with
 // ForceAuthn, because its authentication is older than the client's
 // max_age: OIDC Core 3.1.2.1 has the provider "actively re-authenticate"
 // then, and only then. A new login, under a new handle: the one answered is
 // spent.
 func (s *server) reauthenticate(w http.ResponseWriter, r *http.Request, l *login, entityID string, age time.Duration) {
-	s.logf("acs: %s authenticated the person %s ago, past max_age=%ds: asking again, with ForceAuthn", entityID, age.Round(time.Second), l.maxAge)
+	s.logf("acs: %s authenticated the person %s ago (negative: in the future), past max_age=%ds or unknown: asking again, with ForceAuthn", entityID, age.Round(time.Second), l.maxAge)
 	l.options.ForceAuthn = true
 	l.started = false
 	l.expires = s.now().Add(loginLifetime)

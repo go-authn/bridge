@@ -93,7 +93,10 @@ it.
 `login_required`. `prompt=login` and `max_age=0` become `ForceAuthn`; any other
 `max_age` goes without it, and when the IdP's `AuthnInstant` is older than
 `max_age` the person is sent back to it with `ForceAuthn` (OIDC Core 3.1.2.1:
-re-authenticate only "if the elapsed time is greater").
+re-authenticate only "if the elapsed time is greater"). An `AuthnInstant` in
+the future beyond the clock skew (three minutes) tells nothing about the
+elapsed time, so it is treated like a stale one: the person is sent back with
+`ForceAuthn`.
 `acr_values` becomes `RequestedAuthnContext` -- and an IdP that ignores the
 request (they may) is **refused**, so a client that asked for REFEDS MFA is
 never told it got a second factor when it did not.
