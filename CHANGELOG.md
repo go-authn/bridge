@@ -3,6 +3,22 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.23.11
+
+Fixed:
+
+- **One row the database refuses for good stopped every later flush,
+  revocations included.** `flushLocked` returned at the first error, so the
+  pending deletes (refresh families, access tokens) queued behind a refused
+  write never reached the database, and the provider stayed not ready until a
+  restart reloaded what should have been revoked. A failed write no longer
+  holds the deletes back, and a row refused for good (PostgreSQL SQLSTATE
+  class 22/23, MySQL 1048/1062/1264/1265/1292/1366/1406/1452, SQLite
+  constraint/mismatch/too-big) is logged once, counted in the new
+  `bridge_state_rows_rejected_total{kind}`, and given up: it keeps working in
+  memory but does not survive a restart. Other errors are retried as before.
+  (#84)
+
 ## v0.23.10
 
 Fixed:

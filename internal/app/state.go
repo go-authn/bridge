@@ -13,6 +13,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
+	"modernc.org/sqlite"
 )
 
 // What outlives a restart, with a state block: the refresh token families,
@@ -80,6 +84,8 @@ func (b *stateBlock) arg(n int) string {
 type persister struct {
 	b    *stateBlock
 	logf func(string, ...any)
+	// count adds one to a counter (the server's).
+	count func(metric, label string)
 
 	mu      sync.Mutex
 	pending map[[2]string]bool // deletes the database has not taken yet
@@ -122,13 +128,27 @@ func (p *persister) del(kind, k string) {
 	p.flushLocked()
 }
 
+// flushLocked retries what the database has not taken. ⛔ The deletes are
+// revocations, so a failed write never stops them: the writes stop at the
+// first error that may be the database being away (retrying every row
+// against a down database would cost a timeout each), then the deletes get
+// their turn. A row refused for good is given up (reject), so it cannot sit
+// at the front of every later flush. A DELETE has no value to refuse, so a
+// delete that fails is always retried.
 func (p *persister) flushLocked() {
 	for key, w := range p.unwritten {
-		if err := p.put(key[0], key[1], w.v, w.expires); err != nil {
-			p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
-			return
+		err := p.put(key[0], key[1], w.v, w.expires)
+		if err == nil {
+			delete(p.unwritten, key)
+			continue
 		}
-		delete(p.unwritten, key)
+		if permanentDBError(err) {
+			delete(p.unwritten, key)
+			p.reject("write", key[0], key[1], err)
+			continue
+		}
+		p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", key[0], key[1], err)
+		break
 	}
 	for key := range p.pending {
 		if _, err := p.b.db.Exec(`DELETE FROM bridge_state WHERE kind = `+p.b.arg(1)+` AND k = `+p.b.arg(2), key[0], key[1]); err != nil {
@@ -137,6 +157,53 @@ func (p *persister) flushLocked() {
 		}
 		delete(p.pending, key)
 	}
+}
+
+// permanentDBError says whether the database refused a row for good: the same
+// statement would be refused again, whatever the connection. PostgreSQL
+// SQLSTATE class 22 (data exception: a value too long, out of range) and 23
+// (integrity constraint); MySQL's data-too-long, out-of-range, bad-value, null
+// and key errors; SQLite's SQLITE_CONSTRAINT, SQLITE_MISMATCH and
+// SQLITE_TOOBIG. Anything else -- a connection lost, a deadlock, a
+// serialization failure, an error from a driver this does not know -- is
+// retried: giving a row up is for errors known to be final.
+func permanentDBError(err error) bool {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) {
+		return strings.HasPrefix(pg.Code, "22") || strings.HasPrefix(pg.Code, "23")
+	}
+	var my *mysql.MySQLError
+	if errors.As(err, &my) {
+		switch my.Number {
+		case 1048, // column cannot be null
+			1062, // duplicate entry
+			1264, // out of range
+			1265, // data truncated
+			1292, // truncated incorrect value
+			1366, // incorrect value for column
+			1406, // data too long
+			1452: // foreign key
+			return true
+		}
+		return false
+	}
+	var sq *sqlite.Error
+	if errors.As(err, &sq) {
+		switch sq.Code() & 0xff {
+		case 18, 19, 20: // TOOBIG, CONSTRAINT, MISMATCH
+			return true
+		}
+	}
+	return false
+}
+
+// reject gives a row up that the database refuses for good: logged once,
+// counted, and not retried. The value stays in memory, so the provider keeps
+// honouring it until a restart; what is lost is only its persistence, and
+// that is said.
+func (p *persister) reject(op, kind, k string, err error) {
+	p.logf("state: the database refuses %s %s for good (%v); giving it up -- it will not survive a restart (bridge_state_rows_rejected_total{kind=%q})", kind, k, err, op)
+	p.count("bridge_state_rows_rejected_total", op)
 }
 
 // healthy is false while a revocation has not reached the database.
@@ -211,6 +278,12 @@ func (t *ttl[V]) write(k string, v V, expires time.Time) {
 	p := t.store.p
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if permanentDBError(err) {
+		p.reject("write", t.store.kind, k, err)
+		delete(p.unwritten, [2]string{t.store.kind, k})
+		p.flushLocked()
+		return
+	}
 	if err != nil {
 		p.logf("state: writing %s %s: %v; retried at the next write, and not ready until then", t.store.kind, k, err)
 		if p.unwritten == nil {
@@ -297,7 +370,7 @@ func (s *server) persistStores() error {
 	if b == nil {
 		return nil
 	}
-	s.state = &persister{b: b, logf: s.logf}
+	s.state = &persister{b: b, logf: s.logf, count: s.counters.inc}
 	if err := s.refresh.persist(s.state, "refresh",
 		func(g *refreshGrant) ([]byte, error) {
 			return json.Marshal(storedRefresh{g.client.ID, storePerson(g.who), g.scopes, g.family, g.until, g.resources})
