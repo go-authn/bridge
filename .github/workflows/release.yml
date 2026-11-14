@@ -47,12 +47,12 @@ jobs:
       # The whole history and the tags: Go stamps the module version from the
       # tag the checkout sits on (debug.ReadBuildInfo), which is what
       # authn-bridge --version prints.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
@@ -109,7 +109,7 @@ jobs:
           done
           exit $bad
 
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: ${{ runner.temp }}/dist/authn-bridge-*
 
