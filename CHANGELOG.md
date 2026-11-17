@@ -3,6 +3,19 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## Unreleased
+
+Added:
+
+- **Local accounts**: a `local { accounts_file, scope }` block, a login form
+  served by the provider, and `authn-bridge local-account add|passwd|remove`.
+  One more configured identity source under the entity ID `<issuer>/local`,
+  held by `refused()` like an IdP: removing the block, or the account, refuses
+  what it bought. argon2id, a dummy hash for unknown logins, per-login and
+  per-host throttles, CSRF, no open redirect, groups held to the scope. See the
+  README. `saml` stays required.
+- Pages now send `base-uri 'none'` and `X-Content-Type-Options: nosniff`.
+
 ## v0.23.12
 
 Fixed:

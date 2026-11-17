@@ -292,17 +292,17 @@ func (st *localStore) current() *localAccounts {
 	defer st.mu.Unlock()
 	if now := st.now(); now.Sub(st.checked) >= time.Second || now.Before(st.checked) {
 		st.checked = now
-		if fi, err := os.Stat(st.path); err == nil && (!fi.ModTime().Equal(st.mod) || fi.Size() != st.size) {
-			b, fi, err := readAccountsFile(st.path)
+		if seen, err := os.Stat(st.path); err == nil && (!seen.ModTime().Equal(st.mod) || seen.Size() != st.size) {
+			b, _, err := readAccountsFile(st.path)
 			if err == nil {
 				var next *localAccounts
 				if next, err = parseAccounts(b, st.path, st.scope, st.trusted); err == nil {
-					st.cur, st.mod, st.size = next, fi.ModTime(), fi.Size()
+					st.cur = next
 				}
 			}
 			if err != nil {
 				// Not again until it changes: one line, not one a second.
-				st.mod, st.size = fi.ModTime(), fi.Size()
+				st.mod, st.size = seen.ModTime(), seen.Size()
 				st.logf("local: %s changed and was refused, the accounts read before stay in force: %v", st.path, err)
 			}
 		}

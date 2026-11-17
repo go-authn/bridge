@@ -163,6 +163,38 @@ runuser -u authn-bridge -- authn-bridge check    --config /etc/authn-bridge
 runuser -u authn-bridge -- authn-bridge metadata --config /etc/authn-bridge > sp.xml
 ```
 
+### Local accounts (optional): the first account
+
+Until the federation has registered this provider, or for people it does not
+know, the provider can hold accounts itself (README, "Local accounts"). Create
+the file empty, owned by root and readable by the service's group, name it in
+the configuration, then add the first account:
+
+```sh
+install -m 0640 -o root -g authn-bridge /dev/null /etc/authn-bridge/accounts.hcl
+cat >> /etc/authn-bridge/bridge.hcl <<'HCL'
+
+local {
+  accounts_file = "/etc/authn-bridge/accounts.hcl"
+  scope         = "login.example.org"     # your domain: groups must live under it
+}
+HCL
+
+# the password is asked twice, with no echo; it is never an argument
+authn-bridge local-account add --config /etc/authn-bridge --name "Alice Martin" \
+    --group urn:geant:example.org:hpc:users alice
+chown root:authn-bridge /etc/authn-bridge/accounts.hcl   # if root's group changed it
+chmod 0640 /etc/authn-bridge/accounts.hcl
+runuser -u authn-bridge -- authn-bridge check --config /etc/authn-bridge   # "local ...: 1 accounts"
+```
+
+`--group` takes a value under `scope` (`urn:geant:<scope>:...`,
+`urn:mace:<scope>:...` or `https://<host under scope>/...`); another is
+refused. Run `local-account` as root: it replaces the file next to itself and
+keeps its owner and group. The running provider reads the new file within a
+second, so adding, changing a password and removing need no restart (the
+`local` block itself does).
+
 ## 5. Start it, and check it
 
 ```sh
