@@ -11,7 +11,7 @@ require (
 	github.com/go-authn/saml v0.6.0
 	github.com/go-authn/servercert v0.5.3
 	github.com/go-authn/sshcert v0.1.10
-	github.com/go-authn/webauthn v0.0.0
+	github.com/go-authn/webauthn v0.1.0
 	github.com/go-authn/wireguard v0.1.3
 	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/go-net-health/endpoint v0.1.0
@@ -101,5 +101,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace github.com/go-authn/webauthn => ../go-authn-webauthn
