@@ -319,12 +319,27 @@ func (st *localStore) get(login string) (*directory.Identity, bool) {
 
 // The cost of a new hash: RFC 9106 5.4's second recommendation, 64 MiB and
 // three passes, on two lanes.
+//
+// Variables, so that the test binary can make hashes at the cheapest cost
+// parsePHC accepts: an emulated architecture (riscv64 under qemu) runs the
+// suite near its time limit, and a test of the form needs A hash, not a
+// strong one. Nothing else assigns them, and TestLocalHashCostIsRFC9106s
+// holds the values a provider runs with.
+var (
+	argonMemory  uint32 = defaultArgonMemory
+	argonTime    uint32 = defaultArgonTime
+	argonThreads uint8  = defaultArgonThreads
+)
+
 const (
-	argonMemory  = 64 * 1024
-	argonTime    = 3
-	argonThreads = 2
-	argonSalt    = 16
-	argonKey     = 32
+	defaultArgonMemory  = 64 * 1024
+	defaultArgonTime    = 3
+	defaultArgonThreads = 2
+)
+
+const (
+	argonSalt = 16
+	argonKey  = 32
 )
 
 // phcHash is a parsed $argon2id$ string.

@@ -265,10 +265,10 @@ func TestLocalWrongAndUnknownAreIndistinguishable(t *testing.T) {
 		t.Errorf("the pages differ between a wrong password and an unknown login:\n%s\n---\n%s", b1, b2)
 	}
 	// An unknown login must cost an argon2id as a known one does: with no
-	// hashing it answers in well under a millisecond. 10 ms is far below one
-	// hash and far above a map lookup, so a loaded machine makes this pass, not
-	// fail.
-	if d2 < 10*time.Millisecond || d3 < 10*time.Millisecond {
+	// hashing it answers in well under a millisecond. The test hash is the
+	// cheapest allowed (19 MiB, two passes: about 10 ms), so the floor is 2 ms,
+	// above a map lookup and a page; a loaded machine makes this pass, not fail.
+	if d2 < 2*time.Millisecond || d3 < 2*time.Millisecond {
 		t.Errorf("an unknown login answered in %v and %v (a known one's wrong password in %v): the dummy hash was not run", d2, d3, d1)
 	}
 	// And no code was issued for any of them.
@@ -460,7 +460,9 @@ func TestLocalThrottleWindowAndBounds(t *testing.T) {
 	th = newLocalThrottle(func() time.Time { return now })
 	th.perHost = 1 << 30
 	for i := range localTracked {
-		th.failed("192.0.2.1", fmt.Sprintf("u%d", i))
+		// A host of its own each time: one host's list grows with every
+		// failure, and a quadratic test is not what is under test.
+		th.failed(fmt.Sprintf("10.%d.%d.%d", i>>16&255, i>>8&255, i&255), fmt.Sprintf("u%d", i))
 	}
 	if len(th.logins) != localTracked {
 		t.Fatalf("%d logins tracked", len(th.logins))
