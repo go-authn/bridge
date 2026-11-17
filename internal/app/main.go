@@ -113,6 +113,9 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			fmt.Fprintf(out, "issuer        %s\n", cfg.Issuer)
 			fmt.Fprintf(out, "SAML entity   %s\n", cfg.SAML.EntityID)
 			fmt.Fprintf(out, "tls           %s\n", tlsLine)
+			if l := cfg.Local; l != nil {
+				fmt.Fprintf(out, "local         %s: %d accounts from %s, scope %s\n", cfg.localEntityID(), l.store.current().len(), l.AccountsFile, l.Scope)
+			}
 			fmt.Fprintf(out, "federation    %d IdPs, %d usable here, valid until %s\n", len(md.IdPs), usable, md.ValidUntil.Format(time.RFC3339))
 			for _, id := range cfg.SAML.IdPs {
 				if _, ok := md.IdPs[id]; !ok {
@@ -205,6 +208,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 	root.AddCommand(newSSHCertCmd(out))
 	root.AddCommand(newNFSCertCmd(out))
 	root.AddCommand(newAppPasswordCmd(out))
+	root.AddCommand(newLocalAccountCmd(func() []string { return files }))
 	return root
 }
 

@@ -24,9 +24,11 @@ require (
 	github.com/pkg/sftp v1.13.12
 	github.com/prometheus/common v0.73.1
 	github.com/spf13/cobra v1.10.2
+	github.com/zclconf/go-cty v1.19.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
+	golang.org/x/term v0.47.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.61.1
@@ -81,7 +83,6 @@ require (
 	github.com/valyala/fastjson v1.6.10 // indirect
 	github.com/yeqown/go-qrcode/v2 v2.2.5 // indirect
 	github.com/yeqown/reedsolomon v1.0.0 // indirect
-	github.com/zclconf/go-cty v1.19.0 // indirect
 	github.com/zitadel/oidc/v3 v3.51.8 // indirect
 	github.com/zitadel/schema v1.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

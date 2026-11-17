@@ -234,6 +234,16 @@ func (s *server) startLogin(w http.ResponseWriter, r *http.Request, l *login) {
 	id := token()
 	l.expires = s.now().Add(loginLifetime)
 	s.logins.add(s.now(), 1, 0)
+	// With local accounts, people choose between them and the federation. Not
+	// for prompt=none: there is no session of a local account to find, and the
+	// federation path is the one that can answer it.
+	if s.cfg.Local != nil && !l.options.IsPassive {
+		if !s.setLoginCookie(w, id, l) {
+			return
+		}
+		http.Redirect(w, r, s.cfg.Issuer+"/login", http.StatusFound)
+		return
+	}
 	if len(s.cfg.SAML.IdPs) == 1 {
 		s.toIdP(w, r, id, l, s.cfg.SAML.IdPs[0])
 		return
@@ -305,14 +315,27 @@ func (s *server) setLoginCookie(w http.ResponseWriter, id string, l *login) bool
 	return true
 }
 
-// allowedIdP says whether people can log in through idp: the configuration
-// lets them, and it is not disabled.
+// allowedIdP says whether people can log in through a SAML IdP: the
+// configuration lets them, and it is not disabled. The local accounts' entity
+// ID is never one: it is not a federation's IdP, and an IdP of the federation
+// that wrote it as its own would otherwise be, with an empty `idps`, the local
+// accounts' namesake.
 func (s *server) allowedIdP(entityID string) bool {
-	return !s.disabled.idp(entityID, s.now()) && configuredIdP(s.cfg, entityID)
+	return entityID != s.cfg.localEntityID() && !s.disabled.idp(entityID, s.now()) && configuredIdP(s.cfg, entityID)
 }
 
-// configuredIdP says whether the configuration lists the IdP, or lists none.
+// configuredIdP says whether the configuration still has the identity source
+// that vouched for somebody: the local accounts, when the entity ID is theirs
+// (and only if the `local` block is there), or else a SAML IdP -- listed in
+// saml { idps }, or any of the federation's when that lists none.
+//
+// ⛔ The local entity ID is answered BEFORE the SAML rule: with `idps` empty
+// that rule is true of every string, and a grant bought through local
+// accounts would survive the removal of the block.
 func configuredIdP(cfg *config, entityID string) bool {
+	if entityID == cfg.localEntityID() {
+		return cfg.Local != nil
+	}
 	return len(cfg.SAML.IdPs) == 0 || slices.Contains(cfg.SAML.IdPs, entityID)
 }
 

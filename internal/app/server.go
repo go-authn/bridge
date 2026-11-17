@@ -74,6 +74,12 @@ type server struct {
 	rotated  *ttl[string]
 	families *ttl[[]string]
 
+	// localLimit counts the wrong passwords of the local login, and localHash
+	// bounds the argon2id checks running at once (local.go). Both are nil,
+	// and unused, without a local block.
+	localLimit *localThrottle
+	localHash  chan struct{}
+
 	logMu sync.Mutex
 
 	fedState fedState
@@ -166,6 +172,14 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.families = newTTL[[]string](now)
 	s.ssfStreams = newTTL[storedStream](now).capped(1000)
 	s.ssfEvents = newTTL[string](now)
+	if cfg.Local != nil {
+		s.localLimit = newLocalThrottle(now)
+		s.localHash = make(chan struct{}, localHashers)
+		cfg.Local.store.logf = s.logf
+		// The cost of a login that names nobody is paid once, now, and not by
+		// the first anonymous request to find out.
+		dummyHash()
+	}
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
 		return nil, fmt.Errorf("disabled_file: %w", err)
 	}
@@ -203,6 +217,10 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /token", s.token)
 	mux.HandleFunc("/userinfo", s.userinfo)
 	mux.HandleFunc("GET /saml/metadata", s.samlMetadata)
+	if s.cfg.Local != nil {
+		mux.HandleFunc("GET /login", s.loginMethod)
+		mux.HandleFunc("/local/login", s.limited(s.localLogin))
+	}
 	mux.HandleFunc("GET /saml/choose", s.choose)
 	mux.HandleFunc("GET /saml/disco", s.disco)
 	mux.HandleFunc("POST /saml/acs", s.limited(s.acs))

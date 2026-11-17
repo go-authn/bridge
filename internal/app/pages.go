@@ -88,10 +88,16 @@ func (s *server) spMetadata() ([]byte, error) {
 }
 
 // headers make a page unframeable and keep its URL out of Referer headers.
-func headers(w http.ResponseWriter) {
+func headers(w http.ResponseWriter) { pageHeaders(w, "'self'") }
+
+// pageHeaders is headers with the form-action sources a page needs. No script
+// anywhere, no base URI, nothing loaded: the policy is the strictest there is
+// that still lets a form post.
+func pageHeaders(w http.ResponseWriter, formAction string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")
@@ -109,6 +115,17 @@ button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
 <form method="get" action="choose"><input name="q" value="{{.Q}}" placeholder="Nom ou domaine / name or domain" autofocus></form>
 <ul>{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}">{{.Name "fr" "en"}}</a></li>{{else}}<li>Aucun établissement ne correspond.</li>{{end}}</ul>
 {{if .More}}<p>{{.More}} autres : précisez la recherche.</p>{{end}}</body></html>{{end}}
+{{define "method"}}{{template "head" "Se connecter"}}
+<h1>Se connecter</h1><p lang="en">Sign in.</p>
+<ul><li><a href="{{.Federation}}">Avec mon établissement (fédération) / With my institution (federation)</a></li>
+<li><a href="local/login">Avec un compte local / With a local account</a></li></ul></body></html>{{end}}
+{{define "locallogin"}}{{template "head" "Compte local"}}
+<h1>Compte local</h1><p lang="en">Local account.</p>
+{{if .Error}}<p role="alert"><strong>{{.Error}}</strong></p>{{end}}
+<form method="post" action="login"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<p><label>Identifiant / login<input name="login" value="{{.Login}}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" required autofocus></label></p>
+<p><label>Mot de passe / password<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label></p>
+<p><button>Se connecter / Sign in</button></p></form></body></html>{{end}}
 {{define "device"}}{{template "head" "Connecter un appareil"}}
 <h1>Connecter un appareil</h1><p lang="en">Connect a device.</p>
 {{if .Error}}<p><strong>{{.Error}}</strong></p>{{end}}
