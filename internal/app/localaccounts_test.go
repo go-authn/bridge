@@ -11,63 +11,9 @@ import (
 	"testing"
 )
 
-func TestLocalPHC(t *testing.T) {
-	h, err := parsePHC(localPWHash())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !h.verify([]byte(localPW)) || h.verify([]byte(localPW+"x")) || h.verify(nil) {
-		t.Error("verify: the right password, a wrong one, none")
-	}
-	salt := "AAAAAAAAAAAAAAAAAAAAAA" // 16 bytes
-	key := "AAAAAAAAAAAAAAAAAAAAAA"
-	for name, s := range map[string]string{
-		"empty":           "",
-		"bcrypt":          "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
-		"argon2i":         "$argon2i$v=19$m=65536,t=3,p=2$" + salt + "$" + key,
-		"old version":     "$argon2id$v=16$m=65536,t=3,p=2$" + salt + "$" + key,
-		"too weak m":      "$argon2id$v=19$m=1024,t=3,p=2$" + salt + "$" + key,
-		"too weak t":      "$argon2id$v=19$m=65536,t=1,p=2$" + salt + "$" + key,
-		"memory bomb":     "$argon2id$v=19$m=4194304,t=3,p=2$" + salt + "$" + key,
-		"time bomb":       "$argon2id$v=19$m=65536,t=4000000000,p=2$" + salt + "$" + key,
-		"lanes bomb":      "$argon2id$v=19$m=65536,t=3,p=255$" + salt + "$" + key,
-		"zero lanes":      "$argon2id$v=19$m=65536,t=3,p=0$" + salt + "$" + key,
-		"signed":          "$argon2id$v=19$m=+65536,t=3,p=2$" + salt + "$" + key,
-		"wrong order":     "$argon2id$v=19$t=3,m=65536,p=2$" + salt + "$" + key,
-		"padded base64":   "$argon2id$v=19$m=65536,t=3,p=2$" + salt + "==$" + key,
-		"short salt":      "$argon2id$v=19$m=65536,t=3,p=2$AAAA$" + key,
-		"short hash":      "$argon2id$v=19$m=65536,t=3,p=2$" + salt + "$AAAA",
-		"extra field":     "$argon2id$v=19$m=65536,t=3,p=2$" + salt + "$" + key + "$x",
-		"no leading $":    "argon2id$v=19$m=65536,t=3,p=2$" + salt + "$" + key,
-		"not base64":      "$argon2id$v=19$m=65536,t=3,p=2$!!!!!!!!!!!!!!!!!!!!!!$" + key,
-		"plaintext":       "hunter2hunter2",
-		"giant parameter": "$argon2id$v=19$m=99999999999999999999,t=3,p=2$" + salt + "$" + key,
-	} {
-		if _, err := parsePHC(s); err == nil {
-			t.Errorf("%s: %q was accepted", name, s)
-		}
-	}
-	if _, err := parsePHC("$argon2id$v=19$m=65536,t=3,p=2$" + salt + "$" + key); err != nil {
-		t.Errorf("a well-formed hash: %v", err)
-	}
-}
-
-func TestLocalNewPasswordPolicy(t *testing.T) {
-	for pw, ok := range map[string]bool{
-		"": false, "short": false, "elevenchars": false, "twelvechars!": true,
-		strings.Repeat("x", maxPasswordLen): true, strings.Repeat("x", maxPasswordLen+1): false,
-		"has\x00nul-and-is-long": false, "bad\xffutf8-and-is-long": false,
-	} {
-		if err := checkNewPassword(pw); (err == nil) != ok {
-			t.Errorf("%q: %v", pw, err)
-		}
-	}
-}
-
 func TestParseLocalAccounts(t *testing.T) {
-	h := localPWHash()
 	acct := func(body string) string {
-		return fmt.Sprintf("account \"alice\" {\n  password_hash = %q\n  name = \"Alice\"\n%s}\n", h, body)
+		return fmt.Sprintf("account \"alice\" {\n  name = \"Alice\"\n%s}\n", body)
 	}
 	good, err := parseAccounts([]byte(localAccountsText()), "f", localScope, nil)
 	if err != nil {
@@ -77,36 +23,43 @@ func TestParseLocalAccounts(t *testing.T) {
 		t.Errorf("%d accounts", good.len())
 	}
 	id := good.ids["alice"]
-	if id.Verify(localPW) != nil || id.Verify("nope") == nil {
-		t.Error("the identity does not verify through the directory model")
-	}
 	if g := id.Groups(); len(g) != 1 || g[0] != localGroup {
 		t.Errorf("groups %v", g)
 	}
 
 	for name, src := range map[string]string{
-		"not HCL":            "account {{{",
-		"no hash":            "account \"a\" {\n name = \"A\"\n}\n",
-		"no name":            fmt.Sprintf("account \"a\" {\n password_hash = %q\n}\n", h),
-		"unknown attribute":  acct("  shell = \"/bin/sh\"\n"),
-		"password in clear":  acct("  password = \"hunter2hunter2\"\n"),
-		"an @ in the login":  strings.Replace(acct(""), `"alice"`, `"alice@univ.example"`, 1),
-		"an upper-case one":  strings.Replace(acct(""), `"alice"`, `"Alice"`, 1),
-		"an empty login":     strings.Replace(acct(""), `"alice"`, `""`, 1),
-		"a long login":       strings.Replace(acct(""), `"alice"`, `"`+strings.Repeat("a", 65)+`"`, 1),
-		"a login with a dot": strings.Replace(acct(""), `"alice"`, `".alice"`, 1),
-		"a duplicate":        acct("") + acct(""),
-		"a control in name":  strings.Replace(acct(""), `"Alice"`, `"Al\nice"`, 1),
-		"a bad mail":         acct("  mail = \"not an address\"\n"),
-		"a group elsewhere":  acct("  groups = [\"urn:geant:univ-ex.example:hpc:users\"]\n"),
-		"a bare group":       acct("  groups = [\"admins\"]\n"),
-		"a lookalike group":  acct("  groups = [\"urn:geant:evil-mesocentre.example:x\"]\n"),
-		"a bad hash":         strings.Replace(acct(""), h, "plaintext-password", 1),
-		"too many":           strings.Repeat(strings.Replace(acct(""), `"alice"`, `"a"`, 1), 3),
+		"not HCL":             "account {{{",
+		"no name":             "account \"a\" {\n}\n",
+		"unknown attribute":   acct("  shell = \"/bin/sh\"\n"),
+		"a nested block":      acct("  key {\n  }\n"),
+		"an @ in the login":   strings.Replace(acct(""), `"alice"`, `"alice@univ.example"`, 1),
+		"an upper-case one":   strings.Replace(acct(""), `"alice"`, `"Alice"`, 1),
+		"an empty login":      strings.Replace(acct(""), `"alice"`, `""`, 1),
+		"a long login":        strings.Replace(acct(""), `"alice"`, `"`+strings.Repeat("a", 65)+`"`, 1),
+		"a login with a dot":  strings.Replace(acct(""), `"alice"`, `".alice"`, 1),
+		"a duplicate":         acct("") + acct(""),
+		"a control in name":   strings.Replace(acct(""), `"Alice"`, `"Al\nice"`, 1),
+		"a bad mail":          acct("  mail = \"not an address\"\n"),
+		"a group elsewhere":   acct("  groups = [\"urn:geant:univ-ex.example:hpc:users\"]\n"),
+		"a bare group":        acct("  groups = [\"admins\"]\n"),
+		"a lookalike group":   acct("  groups = [\"urn:geant:evil-mesocentre.example:x\"]\n"),
+		"too many":            strings.Repeat(strings.Replace(acct(""), `"alice"`, `"a"`, 1), 3),
+		"a password":          acct("  password = \"hunter2hunter2\"\n"),
+		"a password_hash":     acct("  password_hash = \"$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAA\"\n"),
+		"an empty hash field": acct("  password_hash = \"\"\n"),
 	} {
 		if _, err := parseAccounts([]byte(src), "f", localScope, nil); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+	// A password_hash is refused with a message that says what changed, not
+	// "an unexpected argument".
+	_, err = parseAccounts([]byte(acct("  password_hash = \"x\"\n")), "accounts.hcl", localScope, nil)
+	if err == nil || !strings.Contains(err.Error(), "password_hash is not accepted") || !strings.Contains(err.Error(), "passkey-only") || !strings.Contains(err.Error(), `account "alice"`) {
+		t.Errorf("the refusal of a password_hash: %v", err)
+	}
+	if _, err = parseAccounts([]byte(acct("  shell = \"x\"\n")), "f", localScope, nil); err == nil || !strings.Contains(err.Error(), `"shell"`) {
+		t.Errorf("an unknown argument: %v", err)
 	}
 	// A subdomain of the scope, a https group of a host under it, and a
 	// trusted prefix are kept.
@@ -121,20 +74,17 @@ func TestParseLocalAccounts(t *testing.T) {
 	if _, err := parseAccounts([]byte(strings.Repeat("#", maxAccountsFile+1)), "f", localScope, nil); err == nil {
 		t.Error("a file past the bound")
 	}
-	// Names that are neither the hash nor the groups are not in an error.
-	_, err = parseAccounts([]byte(strings.Replace(acct(""), h, "$argon2id$v=19$m=1,t=1,p=1$x$y", 1)), "f", localScope, nil)
-	if err != nil && strings.Contains(err.Error(), h) {
-		t.Error("an error repeats the hash")
-	}
 }
 
 func TestLocalAccountsMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("no Unix permission bits")
 	}
+	// The file holds no secret now: it is read by anybody, and written by its
+	// owner alone.
 	for mode, ok := range map[os.FileMode]bool{
-		0o640: true, 0o600: true, 0o440: true, 0o400: true,
-		0o644: false, 0o604: false, 0o660: false, 0o664: false, 0o666: false, 0o602: false, 0o641: false,
+		0o640: true, 0o600: true, 0o440: true, 0o400: true, 0o644: true, 0o604: true,
+		0o660: false, 0o664: false, 0o666: false, 0o602: false, 0o620: false,
 	} {
 		p := filepath.Join(t.TempDir(), "accounts.hcl")
 		if err := os.WriteFile(p, []byte(localAccountsText()), 0o600); err != nil {
@@ -159,6 +109,7 @@ func TestLocalConfigRefusals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	state := stateExtra(t)
 	try := func(extra string) error {
 		p := filepath.Join(t.TempDir(), "bridge.hcl")
 		os.WriteFile(p, append(base, []byte(extra)...), 0o644)
@@ -171,41 +122,55 @@ func TestLocalConfigRefusals(t *testing.T) {
 	block := func(file, scope string) string {
 		return fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n}\n", filepath.ToSlash(file), scope)
 	}
-	if err := try(block(good, localScope)); err != nil {
+	if err := try(block(good, localScope) + state); err != nil {
 		t.Fatalf("a good local block: %v", err)
 	}
 	for name, extra := range map[string]string{
-		"a missing file":    block(filepath.Join(t.TempDir(), "none.hcl"), localScope),
-		"a relative path":   block("accounts.hcl", localScope),
-		"an upper scope":    block(good, "Mesocentre.Example"),
-		"an empty scope":    block(good, ""),
-		"a scope with a /":  block(good, "a/b"),
-		"no scope":          fmt.Sprintf("local {\n accounts_file = %q\n}\n", good),
-		"no file":           fmt.Sprintf("local {\n scope = %q\n}\n", localScope),
-		"two local blocks":  block(good, localScope) + block(good, localScope),
-		"an unknown option": fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n entity_id = \"x\"\n}\n", good, localScope),
+		"a missing file":    block(filepath.Join(t.TempDir(), "none.hcl"), localScope) + state,
+		"a relative path":   block("accounts.hcl", localScope) + state,
+		"an upper scope":    block(good, "Mesocentre.Example") + state,
+		"an empty scope":    block(good, "") + state,
+		"a scope with a /":  block(good, "a/b") + state,
+		"no scope":          fmt.Sprintf("local {\n accounts_file = %q\n}\n", good) + state,
+		"no file":           fmt.Sprintf("local {\n scope = %q\n}\n", localScope) + state,
+		"two local blocks":  block(good, localScope) + block(good, localScope) + state,
+		"an unknown option": fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n entity_id = \"x\"\n}\n", good, localScope) + state,
+		// ⛔ There is no switch that brings passwords back.
+		"allow_passwords":   fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n allow_passwords = true\n}\n", good, localScope) + state,
+		"allow_passwords 2": fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n allow_passwords = false\n}\n", good, localScope) + state,
+		"a password_hash":   fmt.Sprintf("local {\n accounts_file = %q\n scope = %q\n password_hash = \"x\"\n}\n", good, localScope) + state,
+		// The credentials need somewhere to live.
+		"no state block": block(good, localScope),
 	} {
 		if err := try(extra); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
+	if err := try(block(good, localScope)); err == nil || !strings.Contains(err.Error(), "state") {
+		t.Errorf("a local block with no state: %v", err)
+	}
+	// An accounts file that still has a password_hash is a refusal that says why.
+	old := writeAccountsFile(t, "account \"alice\" {\n  password_hash = \"x\"\n  name = \"Alice\"\n}\n")
+	if err := try(block(old, localScope) + state); err == nil || !strings.Contains(err.Error(), "passkey-only") {
+		t.Errorf("an accounts file with a password_hash: %v", err)
+	}
 	if runtime.GOOS != "windows" {
 		open := writeAccountsFile(t, localAccountsText())
-		os.Chmod(open, 0o644)
-		err := try(block(open, localScope))
-		if err == nil || !strings.Contains(err.Error(), "0644") {
-			t.Errorf("a world-readable accounts file: %v", err)
+		os.Chmod(open, 0o666)
+		err := try(block(open, localScope) + state)
+		if err == nil || !strings.Contains(err.Error(), "0666") {
+			t.Errorf("a world-writable accounts file: %v", err)
 		}
 	}
 	// uid and mail are not scoped, and two kinds of person now share names.
 	cfg := strings.Replace(string(base), `username = "eppn"`, `username = "uid"`, 1)
 	p := filepath.Join(t.TempDir(), "bridge.hcl")
-	os.WriteFile(p, []byte(cfg+block(good, localScope)), 0o644)
+	os.WriteFile(p, []byte(cfg+block(good, localScope)+state), 0o644)
 	if _, err := loadConfig([]string{p}); err == nil || !strings.Contains(err.Error(), "local") {
 		t.Errorf("username = uid with a local block: %v", err)
 	}
 	cfg = strings.Replace(string(base), `groups   = ["entitlement"]`, `groups   = ["affiliation"]`, 1)
-	os.WriteFile(p, []byte(cfg+block(good, localScope)), 0o644)
+	os.WriteFile(p, []byte(cfg+block(good, localScope)+state), 0o644)
 	if _, err := loadConfig([]string{p}); err == nil {
 		t.Error("groups = affiliation with a local block was accepted")
 	}
@@ -214,5 +179,30 @@ func TestLocalConfigRefusals(t *testing.T) {
 	c, err := loadConfig([]string{p})
 	if err == nil {
 		c.close()
+	}
+}
+
+// The code that checked a password is gone, not switched off: nothing in this
+// package imports an argon2 or reads a password.
+func TestNoPasswordCodeRemains(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") || e.Name() == "apppass.go" || e.Name() == "apppasscmd.go" {
+			continue
+		}
+		src, _ := os.ReadFile(e.Name())
+		for _, bad := range []string{"argon2", "ReadPassword", "hashPassword", "dummyHash", "PostForm.Get(\"password\")", "FormValue(\"password\")", "allow_passwords", "PasswordProtectedTransport"} {
+			if strings.Contains(string(src), bad) {
+				// A comment saying what was removed is the one allowed mention.
+				for _, line := range strings.Split(string(src), "\n") {
+					if strings.Contains(line, bad) && !strings.HasPrefix(strings.TrimSpace(line), "//") {
+						t.Errorf("%s: %q: %s", e.Name(), bad, strings.TrimSpace(line))
+					}
+				}
+			}
+		}
 	}
 }

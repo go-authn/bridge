@@ -122,10 +122,22 @@ button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
 {{define "locallogin"}}{{template "head" "Compte local"}}
 <h1>Compte local</h1><p lang="en">Local account.</p>
 {{if .Error}}<p role="alert"><strong>{{.Error}}</strong></p>{{end}}
-<form method="post" action="login"><input type="hidden" name="csrf" value="{{.CSRF}}">
-<p><label>Identifiant / login<input name="login" value="{{.Login}}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="64" required autofocus></label></p>
-<p><label>Mot de passe / password<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label></p>
-<p><button>Se connecter / Sign in</button></p></form></body></html>{{end}}
+<form id="passkey-login" method="post" action="login/finish" data-csrf="{{.CSRF}}">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<input type="hidden" name="handle"><input type="hidden" name="id"><input type="hidden" name="clientDataJSON">
+<input type="hidden" name="authenticatorData"><input type="hidden" name="signature"><input type="hidden" name="userHandle">
+<p><button id="passkey-button" type="button" disabled>Se connecter avec une clé d'accès / Sign in with a passkey</button></p>
+<p id="passkey-status" role="status"></p></form>
+<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
+<script src="passkey.js"></script></body></html>{{end}}
+{{define "localenroll"}}{{template "head" "Enregistrer une clé d'accès"}}
+<h1>Enregistrer une clé d'accès</h1><p lang="en">Register a passkey.</p>
+<p>Vous avez reçu une invitation d'un administrateur. Votre appareil va vous demander de créer une clé d'accès et de la déverrouiller (empreinte, visage ou code).</p>
+<p lang="en">An administrator invited you. Your device will ask you to create a passkey and unlock it (fingerprint, face or PIN).</p>
+<p><button id="passkey-button" type="button" data-mode="enroll" disabled>Créer ma clé d'accès / Create my passkey</button></p>
+<p id="passkey-status" role="status"></p>
+<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
+<script src="passkey.js"></script></body></html>{{end}}
 {{define "device"}}{{template "head" "Connecter un appareil"}}
 <h1>Connecter un appareil</h1><p lang="en">Connect a device.</p>
 {{if .Error}}<p><strong>{{.Error}}</strong></p>{{end}}

@@ -3,9 +3,6 @@
 package app
 
 import (
-	"crypto/rand"
-	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -13,16 +10,15 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/go-authn/directory"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
-	"golang.org/x/crypto/argon2"
 )
 
 // Local accounts: people this provider knows itself, for a deployment that
@@ -31,21 +27,28 @@ import (
 // (<issuer>/local), and every grant they buy is held to it by refused() --
 // remove the `local` block and every local grant is refused (disable.go).
 //
-// The accounts live in a file the operator writes with `authn-bridge
-// local-account`, which never sees a password on a command line:
+// ⛔ Local accounts are PASSKEY-ONLY. There is no password, no password form
+// and no password check anywhere in this provider, and no switch that brings
+// them back: a password is a secret both sides know, phishable and guessable,
+// and a provider that holds none has none to lose. An account is made by an
+// administrator's one-time invitation (`authn-bridge local-account invite`)
+// and proves itself with a WebAuthn credential (passkeys.go).
+//
+// The accounts file says WHO exists, and nothing secret:
 //
 //	account "alice" {
-//	  password_hash = "$argon2id$v=19$m=65536,t=3,p=2$...$..."
-//	  name          = "Alice Martin"
-//	  mail          = "alice@example.org"                       # optional
-//	  groups        = ["urn:geant:example.org:hpc:users"]       # optional
+//	  name   = "Alice Martin"
+//	  mail   = "alice@example.org"                       # optional
+//	  groups = ["urn:geant:example.org:hpc:users"]       # optional
 //	}
+//
+// The credentials are in the provider's state database, not in this file:
+// their signature counters change at every login.
 
 // localBlock is the `local` block of the configuration.
 type localBlock struct {
-	// AccountsFile is the file above. It is root:authn-bridge 0640, and is
-	// refused when anybody else can read it or anybody but its owner can
-	// write it: a hash is an offline guessing target.
+	// AccountsFile is the file above. It is refused when anybody but its owner
+	// can write it: it decides who is in which group.
 	AccountsFile string `hcl:"accounts_file"`
 
 	// Scope is the domain these accounts are in, as an institution's scope is
@@ -65,18 +68,24 @@ type localBlock struct {
 // block still knows which grants WERE local and refuses them.
 func (c *config) localEntityID() string { return c.Issuer + "/local" }
 
-// localACR says how a local account authenticated: a password, over TLS, and
-// nothing else -- no second factor. It is the SAML class every password IdP
-// of a federation names the same thing by.
-const localACR = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+// localACR says how a local account authenticated: with a WebAuthn credential
+// the person unlocked by a PIN or a biometric (user verification is required,
+// so it is always set), bound to this provider's origin, so a look-alike site
+// gets nothing to replay.
+//
+// It is REFEDS MFA (https://refeds.org/profile/mfa), the value a federation's
+// relying parties already ask for: two factors of different kinds -- the
+// authenticator the person holds, and the PIN or biometric that unlocks it --
+// and resistance to phishing and replay, which a signature over this origin
+// and a fresh challenge provide. The SAML class urn:oasis:names:tc:SAML:2.0:
+// ac:classes:PasswordProtectedTransport it replaces said the opposite.
+const localACR = "https://refeds.org/profile/mfa"
 
 // What one account file may hold.
 const (
 	maxAccountsFile = 1 << 20
 	maxAccounts     = 10000
 	maxLoginLen     = 64
-	maxPasswordLen  = 1024
-	minPasswordLen  = 12
 )
 
 var (
@@ -90,16 +99,19 @@ type accountsFile struct {
 }
 
 type accountBlock struct {
-	// Login is what the person types, and what preferred_username says.
+	// Login is what the person is called, and what preferred_username says.
 	// Lowercase ASCII, and never an "@": a federated person's names -- eppn,
 	// subject-id -- all contain one, so no local login can be mistaken for
 	// one of theirs by a relying party that matches on preferred_username
 	// (go-fileshare, an SSH principal).
-	Login        string   `hcl:"login,label"`
-	PasswordHash string   `hcl:"password_hash"`
-	Name         string   `hcl:"name"`
-	Mail         string   `hcl:"mail,optional"`
-	Groups       []string `hcl:"groups,optional"`
+	Login  string   `hcl:"login,label"`
+	Name   string   `hcl:"name"`
+	Mail   string   `hcl:"mail,optional"`
+	Groups []string `hcl:"groups,optional"`
+	// Remain catches every other attribute, so that a refusal can say what it
+	// is: a password_hash is not "an unexpected argument", it is a file written
+	// for a version of this provider that had passwords.
+	Remain hcl.Body `hcl:",remain"`
 }
 
 // localAccounts is a parsed accounts file, as the directory model holds it.
@@ -109,6 +121,9 @@ type localAccounts struct {
 }
 
 func (a *localAccounts) len() int { return len(a.ids) }
+
+// errPasswordHash is what a file that still carries a password says.
+const errPasswordHash = "password_hash is not accepted: local accounts are passkey-only, and no password is stored, read or checked by this provider. Remove the line and run `authn-bridge local-account invite` to enrol a passkey"
 
 // parseAccounts reads an accounts file. Anything it cannot vouch for is an
 // error naming the account, never a silently dropped one: an account that
@@ -137,9 +152,15 @@ func parseAccounts(src []byte, name, scope string, trusted []string) (*localAcco
 		if _, dup := out.ids[a.Login]; dup {
 			return nil, fmt.Errorf("%s: account %q is declared twice", name, a.Login)
 		}
-		h, err := parsePHC(a.PasswordHash)
-		if err != nil {
-			return nil, fmt.Errorf("%s: account %q: password_hash: %w", name, a.Login, err)
+		extra, d := a.Remain.JustAttributes()
+		if d.HasErrors() {
+			return nil, fmt.Errorf("%s: account %q: unexpected block (an account has name, mail and groups)", name, a.Login)
+		}
+		for _, k := range sortedKeys(extra) {
+			if k == "password_hash" || k == "password" {
+				return nil, fmt.Errorf("%s: account %q: %s", name, a.Login, errPasswordHash)
+			}
+			return nil, fmt.Errorf("%s: account %q: unexpected argument %q (an account has name, mail and groups)", name, a.Login, k)
 		}
 		if err := plainText(a.Name, 200); err != nil || a.Name == "" {
 			return nil, fmt.Errorf("%s: account %q: name: a display name of at most 200 characters, no control characters", name, a.Login)
@@ -167,18 +188,21 @@ func parseAccounts(src []byte, name, scope string, trusted []string) (*localAcco
 		slices.Sort(groups)
 		id := directory.NewIdentity(a.Login,
 			directory.From(name),
-			directory.WithVerifier(func(pw string) error {
-				if h.verify([]byte(pw)) {
-					return nil
-				}
-				return directory.ErrWrongPassword
-			}),
 			directory.WithGroups(slices.Compact(groups)...),
 			directory.WithAttributes(at))
 		out.ids[a.Login] = id
 		out.src.People = append(out.src.People, id)
 	}
 	return out, nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // plainText says whether s is at most n bytes of valid text with no control
@@ -217,8 +241,8 @@ func localGroupAllowed(scope string, trusted []string, v string) bool {
 	return true
 }
 
-// checkAccountsMode refuses a file anybody but root and the service's group
-// can read, or anybody but its owner can write.
+// checkAccountsMode refuses a file anybody but its owner can write: it says
+// who is in which group. It holds no secret, so it may be read.
 func checkAccountsMode(fi os.FileInfo, name string) error {
 	if !fi.Mode().IsRegular() {
 		return fmt.Errorf("%s is not a regular file", name)
@@ -226,8 +250,8 @@ func checkAccountsMode(fi os.FileInfo, name string) error {
 	if runtime.GOOS == "windows" {
 		return nil // Unix permission bits mean nothing there
 	}
-	if p := fi.Mode().Perm(); p&0o007 != 0 || p&0o020 != 0 {
-		return fmt.Errorf("%s has mode %04o: a file of password hashes is readable by its owner and group at most, and written by its owner alone (chmod 0640)", name, p)
+	if p := fi.Mode().Perm(); p&0o022 != 0 {
+		return fmt.Errorf("%s has mode %04o: the accounts decide who is in which group, so it is written by its owner alone (chmod 0640)", name, p)
 	}
 	return nil
 }
@@ -313,134 +337,4 @@ func (st *localStore) current() *localAccounts {
 func (st *localStore) get(login string) (*directory.Identity, bool) {
 	id, ok := st.current().ids[login]
 	return id, ok
-}
-
-// ---- argon2id, as a PHC string ----
-
-// The cost of a new hash: RFC 9106 5.4's second recommendation, 64 MiB and
-// three passes, on two lanes.
-//
-// Variables, so that the test binary can make hashes at the cheapest cost
-// parsePHC accepts: an emulated architecture (riscv64 under qemu) runs the
-// suite near its time limit, and a test of the form needs A hash, not a
-// strong one. Nothing else assigns them, and TestLocalHashCostIsRFC9106s
-// holds the values a provider runs with.
-var (
-	argonMemory  uint32 = defaultArgonMemory
-	argonTime    uint32 = defaultArgonTime
-	argonThreads uint8  = defaultArgonThreads
-)
-
-const (
-	defaultArgonMemory  = 64 * 1024
-	defaultArgonTime    = 3
-	defaultArgonThreads = 2
-)
-
-const (
-	argonSalt = 16
-	argonKey  = 32
-)
-
-// phcHash is a parsed $argon2id$ string.
-type phcHash struct {
-	m, t    uint32
-	p       uint8
-	salt, k []byte
-}
-
-// parsePHC reads $argon2id$v=19$m=..,t=..,p=..$salt$hash, strictly, and
-// refuses what is too weak to be worth checking against or so costly that a
-// file could be used to exhaust the host: a hash is an input the operator
-// wrote, and a login runs it.
-func parsePHC(s string) (*phcHash, error) {
-	parts := strings.Split(s, "$")
-	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" {
-		return nil, errors.New("not an argon2id PHC string ($argon2id$v=19$m=...,t=...,p=...$salt$hash)")
-	}
-	if parts[2] != "v=19" {
-		return nil, fmt.Errorf("argon2 version %q: only v=19 (0x13) exists", parts[2])
-	}
-	params := strings.Split(parts[3], ",")
-	if len(params) != 3 {
-		return nil, errors.New("parameters are m=..,t=..,p=.. in that order")
-	}
-	num := func(prefix, v string, lo, hi uint64) (uint64, error) {
-		raw, ok := strings.CutPrefix(v, prefix)
-		if !ok || raw == "" || len(raw) > 9 {
-			return 0, fmt.Errorf("parameter %q is not %s<number>", v, prefix)
-		}
-		n, err := strconv.ParseUint(raw, 10, 32)
-		if err != nil || n < lo || n > hi {
-			return 0, fmt.Errorf("%s%d is outside what is accepted here (%d to %d)", prefix, n, lo, hi)
-		}
-		return n, nil
-	}
-	m, err := num("m=", params[0], 19456, 1<<18) // 19 MiB (OWASP's floor) to 256 MiB
-	if err != nil {
-		return nil, err
-	}
-	t, err := num("t=", params[1], 2, 10)
-	if err != nil {
-		return nil, err
-	}
-	p, err := num("p=", params[2], 1, 16)
-	if err != nil {
-		return nil, err
-	}
-	enc := base64.RawStdEncoding.Strict()
-	salt, err := enc.DecodeString(parts[4])
-	if err != nil || len(salt) < 16 || len(salt) > 64 {
-		return nil, errors.New("the salt is 16 to 64 bytes of unpadded base64")
-	}
-	k, err := enc.DecodeString(parts[5])
-	if err != nil || len(k) < 16 || len(k) > 64 {
-		return nil, errors.New("the hash is 16 to 64 bytes of unpadded base64")
-	}
-	return &phcHash{m: uint32(m), t: uint32(t), p: uint8(p), salt: salt, k: k}, nil
-}
-
-// verify is a constant-time comparison of the argon2id of pw with the hash.
-func (h *phcHash) verify(pw []byte) bool {
-	got := argon2.IDKey(pw, h.salt, h.t, h.m, h.p, uint32(len(h.k)))
-	return subtle.ConstantTimeCompare(got, h.k) == 1
-}
-
-// hashPassword is pw as a new PHC string, with a salt of its own.
-func hashPassword(pw string) (string, error) {
-	salt := make([]byte, argonSalt)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	k := argon2.IDKey([]byte(pw), salt, argonTime, argonMemory, argonThreads, argonKey)
-	enc := base64.RawStdEncoding
-	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s", argonMemory, argonTime, argonThreads, enc.EncodeToString(salt), enc.EncodeToString(k)), nil
-}
-
-// dummyHash is what an unknown login is checked against, so that a login that
-// does not exist costs what one that does. It is made once, with the cost new
-// hashes have.
-var dummyHash = sync.OnceValue(func() *phcHash {
-	s, err := hashPassword(token())
-	if err != nil {
-		panic(err)
-	}
-	h, err := parsePHC(s)
-	if err != nil {
-		panic(err)
-	}
-	return h
-})
-
-// checkPassword says whether a password is acceptable for a NEW hash.
-func checkNewPassword(pw string) error {
-	switch {
-	case len(pw) < minPasswordLen:
-		return fmt.Errorf("a password of %d characters is one somebody can guess: at least %d", len(pw), minPasswordLen)
-	case len(pw) > maxPasswordLen:
-		return fmt.Errorf("a password of at most %d bytes", maxPasswordLen)
-	case !utf8.ValidString(pw) || strings.ContainsRune(pw, 0):
-		return errors.New("a password is UTF-8 text without NUL")
-	}
-	return nil
 }

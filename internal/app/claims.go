@@ -42,6 +42,11 @@ type person struct {
 	username string
 	groups   []string
 
+	// credential is, for a local account, the passkey that signed in (its row
+	// key, passkeyKey): what the grants bought are held to, so that removing
+	// the passkey refuses them (localAccountGone). Empty for a federated person.
+	credential string
+
 	authTime time.Time
 	acr      string
 	// sessionEnd is when the IdP's session ends, if it said.

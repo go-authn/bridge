@@ -7,13 +7,25 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 Added:
 
-- **Local accounts**: a `local { accounts_file, scope }` block, a login form
-  served by the provider, and `authn-bridge local-account add|passwd|remove`.
-  One more configured identity source under the entity ID `<issuer>/local`,
-  held by `refused()` like an IdP: removing the block, or the account, refuses
-  what it bought. argon2id, a dummy hash for unknown logins, per-login and
-  per-host throttles, CSRF, no open redirect, groups held to the scope. See the
-  README. `saml` stays required.
+- **Local accounts, passkey-only**: a `local { accounts_file, scope }` block
+  (with a `state` block, which it requires), a login page served by the
+  provider, and `authn-bridge local-account invite|revoke-invite|passkeys|
+  remove-passkey|remove`. **There is no password**: no password field, no route
+  that reads one, no hash, no setting that brings them back, and no
+  `passwd` command. A person signs in with a passkey (WebAuthn, discoverable
+  credentials, user verification required) and is enrolled by a one-time,
+  admin-issued invitation, `<issuer>/local/enroll#<token>`: the token is in the
+  fragment (in no log), stored only as a hash, single-use, expiring (24 hours,
+  72 at most) and revocable. The credentials and invitations are in the state
+  database. One more configured identity source under the entity ID
+  `<issuer>/local`, held by `refused()` like an IdP: removing the block, the
+  account or the passkey a grant was bought with refuses it. Verification is
+  [go-authn/webauthn](https://github.com/go-authn/webauthn) (ES256, EdDSA,
+  RS256; attestation `none`). `acr` is `https://refeds.org/profile/mfa`. CSRF,
+  same-origin checks, per-host throttling, no open redirect, groups held to the
+  scope. A `password_hash` in an accounts file is refused with a message that
+  says so. No released version ever had local accounts with passwords. See
+  the README. `saml` stays required.
 - Pages now send `base-uri 'none'` and `X-Content-Type-Options: nosniff`.
 
 ## v0.23.12

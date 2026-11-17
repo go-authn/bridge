@@ -166,34 +166,65 @@ runuser -u authn-bridge -- authn-bridge metadata --config /etc/authn-bridge > sp
 ### Local accounts (optional): the first account
 
 Until the federation has registered this provider, or for people it does not
-know, the provider can hold accounts itself (README, "Local accounts"). Create
-the file empty, owned by root and readable by the service's group, name it in
-the configuration, then add the first account:
+know, the provider can hold accounts itself (README, "Local accounts"). They
+are **passkey-only**: there is no password anywhere. A person gets in by an
+invitation you issue from this host, and signs in with a passkey (a WebAuthn
+credential on their phone, laptop or security key, unlocked by a PIN or a
+biometric). Local accounts need a `state` block: the passkeys, their signature
+counters and the invitations are kept there.
+
+Create the accounts file empty, owned by root and readable by the service's
+group, name it in the configuration together with the state database, then
+invite the first account:
 
 ```sh
 install -m 0640 -o root -g authn-bridge /dev/null /etc/authn-bridge/accounts.hcl
+install -m 0600 -o authn-bridge -g authn-bridge /dev/null /etc/authn-bridge/state.dsn
+echo 'file:/var/lib/authn-bridge/state.db?_pragma=busy_timeout(5000)' > /etc/authn-bridge/state.dsn
+install -d -m 0750 -o authn-bridge -g authn-bridge /var/lib/authn-bridge
 cat >> /etc/authn-bridge/bridge.hcl <<'HCL'
 
 local {
   accounts_file = "/etc/authn-bridge/accounts.hcl"
   scope         = "login.example.org"     # your domain: groups must live under it
 }
+
+state {
+  driver   = "sqlite"
+  dsn_file = "/etc/authn-bridge/state.dsn"
+}
 HCL
 
-# the password is asked twice, with no echo; it is never an argument
-authn-bridge local-account add --config /etc/authn-bridge --name "Alice Martin" \
-    --group urn:geant:example.org:hpc:users alice
+# the first administrator: an invitation like any other, with the group the
+# resource servers treat as administrators. The URL is printed alone.
+authn-bridge local-account invite --config /etc/authn-bridge --name "Alice Martin" \
+    --group urn:geant:example.org:hpc:admins alice
+# https://login.example.org/local/enroll#Qk3f...
+
 chown root:authn-bridge /etc/authn-bridge/accounts.hcl   # if root's group changed it
 chmod 0640 /etc/authn-bridge/accounts.hcl
 runuser -u authn-bridge -- authn-bridge check --config /etc/authn-bridge   # "local ...: 1 accounts"
 ```
 
+Send the URL to Alice over a channel only she reads (it is a one-time key to
+her account); she opens it on the device that will hold her passkey and
+follows the browser's prompt. The part after `#` never reaches a log or a
+`Referer`; it works once, expires in 24 hours (`--ttl`, 72 at most), and is
+stored only as a hash. `local-account invite alice` again adds a key (a second
+device); `revoke-invite` cancels one not yet used; `passkeys alice` lists the
+keys (ID, created, last used, backup-eligible) and `remove-passkey alice <id>`
+removes one -- and with it the tokens and codes that key bought.
+
 `--group` takes a value under `scope` (`urn:geant:<scope>:...`,
 `urn:mace:<scope>:...` or `https://<host under scope>/...`); another is
-refused. Run `local-account` as root: it replaces the file next to itself and
-keeps its owner and group. The running provider reads the new file within a
-second, so adding, changing a password and removing need no restart (the
-`local` block itself does).
+refused. Run `local-account` as root (or as the service's user, for the
+passkey commands): it replaces the accounts file next to itself and keeps its
+owner and group. The running provider reads the file within a second, and the
+invitations and passkeys from the database at every use, so inviting, removing
+a passkey and removing an account need no restart (the `local` block itself
+does). A `password_hash` in an accounts file is refused: delete the line.
+The RP ID is the issuer's host, so the issuer URL must be the one people use in
+their browser, over HTTPS.
 
 ## 5. Start it, and check it
 
