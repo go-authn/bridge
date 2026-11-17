@@ -101,7 +101,13 @@ type config struct {
 	// which are revoked (certstore.go). Required with ssh_ca or x509_ca.
 	CertificatesFile string `hcl:"certificates_file,optional"`
 
-	SAML    *samlBlock    `hcl:"saml,block"`
+	SAML *samlBlock `hcl:"saml,block"`
+
+	// Local is the accounts this provider holds itself, as one more place
+	// people can log in (local.go). Optional, and beside saml, not instead of
+	// it: saml is still required.
+	Local *localBlock `hcl:"local,block"`
+
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`
 
@@ -567,6 +573,14 @@ func (c *config) check() error {
 	// other's people -- measured, another university's IdP got a token
 	// for alice@univ-example.example, and with it their SSH certificate and their
 	// application password. So only with exactly one IdP.
+	// ⛔ With local accounts there are two kinds of person, and uid and mail
+	// are not scoped: the IdP's uid "alice" and the local login "alice" would
+	// be one name for two people, at every relying party that matches on
+	// preferred_username. eppn and subject_id always contain an "@", which a
+	// local login never does (loginSyntax).
+	if c.Local != nil && !scopedUsername[c.Claims.Username] {
+		return fmt.Errorf("claims: username = %q with a local block: a uid or a mail is not scoped, so an IdP's person could carry a local account's name; use eppn or subject_id", c.Claims.Username)
+	}
 	if !scopedUsername[c.Claims.Username] && len(c.SAML.IdPs) != 1 {
 		return fmt.Errorf("claims: username = %q is not held to an IdP's scopes, so any IdP of the federation could name anybody: it needs saml { idps } to list exactly one IdP; with more, use eppn or subject_id", c.Claims.Username)
 	}
@@ -583,9 +597,22 @@ func (c *config) check() error {
 	// kept only if the IdP that asserted it owns its namespace (groupAllowed).
 	// affiliation has no namespace at all -- "staff" from one university is
 	// "staff" from any -- so, like uid and mail, only with exactly one IdP.
-	c.Claims.oneIdP = len(c.SAML.IdPs) == 1
+	//
+	// ⛔ Not with local accounts: then the one IdP is one of two sources, and
+	// a federated value in the local accounts' namespace would be
+	// indistinguishable from a local group. Its groups are held to its scopes.
+	c.Claims.oneIdP = len(c.SAML.IdPs) == 1 && c.Local == nil
+	if c.Local != nil && slices.Contains(c.Claims.Groups, "affiliation") {
+		return errors.New("claims: groups = \"affiliation\" carries no institution, so with a local block an IdP could grant any value a local account has: use scoped_affiliation")
+	}
 	if !c.Claims.oneIdP && slices.Contains(c.Claims.Groups, "affiliation") {
 		return fmt.Errorf("claims: groups = \"affiliation\" carries no institution, so any IdP of the federation could grant any of its values: it needs saml { idps } to list exactly one IdP; with more, use scoped_affiliation")
+	}
+
+	if c.Local != nil {
+		if err := c.Local.check(c); err != nil {
+			return fmt.Errorf("local: %w", err)
+		}
 	}
 
 	if c.SSHCA != nil && c.CertificatesFile == "" {

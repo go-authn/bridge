@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("# comment\naccount \"alice\" {\n  password_hash = \"$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAA\"\n  name = \"Alice\"\n  mail = \"alice@mesocentre.example\"\n  groups = [\"urn:geant:mesocentre.example:hpc:users\"]\n}\naccount \"bob\" {\n  password_hash = \"$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAA\"\n  name = \"Bob\"\n}\n")

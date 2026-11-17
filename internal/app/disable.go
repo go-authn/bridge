@@ -274,6 +274,10 @@ func (s *server) refused(who *person) string {
 		// that was since removed from saml { idps } is held to the
 		// configuration now, as a new login is (acs.go).
 		return "institution not configured"
+	case s.localAccountGone(who):
+		// A local account is held to the file as a federated person is to the
+		// configuration: delete it there and what it bought stops with it.
+		return "account removed"
 	case s.disabled.person(who.username, who.subject, now):
 		return "person disabled"
 	case s.disabledBySub(who, now):

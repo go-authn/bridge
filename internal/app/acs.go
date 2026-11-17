@@ -86,8 +86,15 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.finishError(w, r, l, "access_denied", "your institution did not say who you are")
 		return
 	}
+	s.finishLogin(w, r, l, who)
+}
+
+// finishLogin ends a login that an identity source has vouched for -- an IdP
+// at the ACS, a local account at its form: held to the same refusals, then a
+// code for the client, or the device's answer.
+func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, l *login, who *person) {
 	if why := s.refused(who); why != "" {
-		s.logf("acs: %s via %s refused: %s", orUnnamed(who.username), who.idp, why)
+		s.logf("login: %s via %s refused: %s", orUnnamed(who.username), who.idp, why)
 		s.counters.inc("bridge_logins_total", "disabled")
 		s.finishError(w, r, l, "access_denied", "your access to this service has been disabled")
 		return
