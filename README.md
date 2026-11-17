@@ -127,59 +127,106 @@ For a deployment that is not (yet) registered with a federation, or that has a
 few people no federation knows -- a computing centre's own staff -- the
 provider can also hold accounts itself. They are **one more configured identity
 source**, beside `saml`, not a built-in test IdP: every account is a person,
-with a login and a password of their own.
+with one or more **passkeys**.
+
+**Local accounts are passkey-only.** There is no password: no password field,
+no route that reads one, no hash, no switch that brings them back. A password
+is a secret both sides know, which can be phished and guessed; a provider that
+holds none has none to lose. A person proves themselves with a WebAuthn
+credential, unlocked on their device by a PIN or a biometric, and an account
+exists only because an administrator invited it.
 
 ```hcl
 local {
   accounts_file = "/etc/authn-bridge/accounts.hcl"   # root:authn-bridge 0640
   scope         = "mesocentre.example"               # the accounts' domain
 }
+
+state {                                              # required: the passkeys live here
+  driver   = "sqlite"
+  dsn_file = "/etc/authn-bridge/state.dsn"
+}
 ```
 
 `saml` stays required: local accounts are added to the federation login, they
 do not replace it (a provider with no federation at all is not what this is
-for, yet). The file, written by `authn-bridge local-account`, never by hand:
+for, yet). `state` is required with `local`: the passkeys, their signature
+counters (which change at every login) and the invitations are in the state
+database, never in the accounts file. The accounts file says who exists, and
+holds nothing secret; `authn-bridge local-account` writes it:
 
 ```hcl
 account "alice" {
-  password_hash = "$argon2id$v=19$m=65536,t=3,p=2$...$..."   # PHC string, never the password
-  name          = "Alice Martin"                              # required
-  mail          = "alice@mesocentre.example"                  # optional
-  groups        = ["urn:geant:mesocentre.example:hpc:users"]  # optional
+  name   = "Alice Martin"                              # required
+  mail   = "alice@mesocentre.example"                  # optional
+  groups = ["urn:geant:mesocentre.example:hpc:users"]  # optional
 }
 ```
 
+A `password_hash` (or `password`) in the file is **refused** when it is read,
+with a message that says local accounts are passkey-only: the file was written
+for a version that never shipped with them.
+
+**Adding a person, and the first administrator.** An administrator with access
+to the host (root, or the service's user) issues a one-time invitation:
+
 ```sh
-authn-bridge local-account add    --config /etc/authn-bridge --name "Alice Martin" \
-                                  --mail alice@mesocentre.example --group urn:geant:mesocentre.example:hpc:users alice
-authn-bridge local-account passwd --config /etc/authn-bridge alice
-authn-bridge local-account remove --config /etc/authn-bridge alice
+authn-bridge local-account invite --config /etc/authn-bridge --name "Alice Martin" \
+          --mail alice@mesocentre.example --group urn:geant:mesocentre.example:hpc:users alice
+# https://login.example.org/local/enroll#Qk3f...        (standard output: the URL, alone)
+
+authn-bridge local-account invite        --config /etc/authn-bridge alice   # another key for alice
+authn-bridge local-account revoke-invite --config /etc/authn-bridge alice
+authn-bridge local-account passkeys      --config /etc/authn-bridge alice   # ID, created, last used, backup-eligible
+authn-bridge local-account remove-passkey --config /etc/authn-bridge alice <id>
+authn-bridge local-account remove        --config /etc/authn-bridge alice
 ```
 
-The password is **never** an argument or in the environment: it is read from the
-terminal with no echo (asked twice), or, when standard input is not a terminal,
-from its first line. At least 12 characters. The command reads only the `local`
-block of the configuration, checks what it is about to write with the
-provider's own parser, keeps the comments and the order of the file, and
-replaces it atomically. The provider re-reads the file when it changes: no
+`invite` with `--name` creates the account (and its file); on an existing one it
+adds a key. The token is in the URL's **fragment**, which a browser never sends,
+so it is in no access log and no `Referer`; it is stored only as its SHA-256,
+works **once**, expires (`--ttl`, 24 hours by default and 72 at most), and a new
+invitation for a login replaces the pending one. There is no first-administrator
+special case: the first account is an invitation like any other, issued from the
+host, and "administrator" is a group in the `groups` the resource servers know
+(`--group urn:geant:<scope>:hpc:admins`). Give the URL to the person over a
+channel only they read. The commands read only the `local` and `state` blocks,
+check what they write with the provider's own parser, keep the comments and the
+order of the accounts file, and replace it atomically. The invitations and
+passkeys are read from the database at every use, so none of this needs a
 restart.
+
+**Enrolment.** `<issuer>/local/enroll` is a static page whose script reads the
+token from the fragment (and removes it from the address bar), posts it, and
+calls `navigator.credentials.create` with the RP ID the **issuer's host**,
+`residentKey: "required"` (a discoverable credential), `userVerification:
+"required"`, `attestation: "none"`, the algorithms ES256, EdDSA and RS256, and
+the account's existing keys in `excludeCredentials`. The server verifies the
+registration with [go-authn/webauthn](https://github.com/go-authn/webauthn)
+(origin, rpIdHash, challenge, user presence and verification, COSE key on its
+curve, a credential ID of at most 1023 bytes, strict CBOR), refuses a credential
+already registered, **burns the invitation** (only the request whose delete
+found it goes on), and stores the credential. At most ten per account.
 
 **What a login is.** When `local` is configured, an authorization request goes
 to a page offering the federation or a local account (`prompt=none` keeps going
 to the federation: there is no session of a local account to find). The local
-form is served by the provider: no script, `default-src 'none'`, `base-uri
-'none'`, a CSRF token bound to the login (an HMAC of its handle under a key
-derived from the subject salt), a refused `Sec-Fetch-Site: cross-site` and
-foreign `Origin`, and a destination taken only from the redirect URI the
-request registered (no open redirect). Passwords are argon2id (RFC 9106's
-second recommendation: 64 MiB, three passes, two lanes), checked in constant
-time, and **an unknown login runs the same hash against a dummy** so that the
-answer does not tell whether the account exists, by content or by time. At
-most four checks run at once (each costs 64 MiB). Wrong passwords are
-throttled **before any hashing**, counting unknown logins too: the sixth for one
-login in fifteen minutes, and the eleventh from one host (an IPv6 /64; its
-network gets ten times as many), are refused with 429 -- the right password
-included. These counters are per process, in memory.
+page offers "Se connecter avec une clé d'accès / Sign in with a passkey", with
+**discoverable credentials**: `allowCredentials` is empty, `userVerification` is
+required, and the user handle the authenticator returns -- an HMAC of the login
+under a key derived from the subject salt, which says nothing about the login --
+must be the credential's account. The page is served by the provider: one
+script from this origin (`script-src 'self'`, nothing inline),
+`default-src 'none'`, `base-uri 'none'`, a CSRF token bound to the login (an HMAC
+of its handle under a key derived from the subject salt), a refused
+`Sec-Fetch-Site: cross-site` and foreign `Origin`, and a destination taken only
+from the redirect URI the request registered (no open redirect). A challenge is
+single use, bound to its login and good for five minutes. The signature counter
+is checked as WebAuthn says (refused when both are non-zero and it did not
+advance; a synced passkey reports zero and is not refused). Refusals are
+throttled **before any verification**: the eleventh from one host (an IPv6 /64;
+its network gets ten times as many) in fifteen minutes is refused with 429, the
+right key included. These counters are per process, in memory.
 
 **The claims.**
 
@@ -191,15 +238,19 @@ included. These counters are per process, in memory.
 | `name`, `email` | from the file; no `email_verified` |
 | `eduperson_principal_name` | `<login>@<scope>` |
 | `groups` | from the file, **held to `scope`** as an IdP's are held to its shibmd scopes: a group is accepted only if its namespace -- `urn:mace:<domain>:...`, `urn:geant:<domain>:...`, `https://<host>/...` -- is the scope or under it, or begins with a `claims { trusted_groups }` prefix listed for `<issuer>/local`. A group outside is **refused when the file is read**, not dropped |
-| `acr` (ID token) | `urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport`: a password over TLS, no second factor |
+| `acr` (ID token) | `https://refeds.org/profile/mfa`: REFEDS MFA. A passkey with user verification is two factors of different kinds (the authenticator the person holds, the PIN or biometric that unlocks it) and a signature over this origin and a fresh challenge, so it resists phishing and replay; user verification is **required** here, so it is always set |
 | `auth_time` | the time of the login |
 
 **Held to the configuration, like every grant.** Local accounts go through
 `refused()` and `configuredIdP` as an IdP does: authorization codes, refresh
 tokens, device grants, application passwords and SSH certificates bought with a
 local account are refused as soon as the `local` block leaves the
-configuration -- and as soon as the account leaves the file ("account
-removed"). Disabling the person through the admin API works by login. The local
+configuration -- as soon as the account leaves the file -- and as soon as the
+**passkey** it was bought with is removed ("account removed"): a token carries
+the passkey that signed in, so removing one key ends what that key bought and
+nothing else. What the certificate and application-password stores keep is the
+login, not the key, so those are held to the account having at least one
+passkey. Disabling the person through the admin API works by login. The local
 entity ID is never accepted as a SAML IdP. With a `local` block, `claims {
 username }` must be `eppn` or `subject_id` (a `uid` or a `mail` is not scoped,
 and an IdP's `alice` would be the local `alice`), `groups = ["affiliation"]` is
@@ -207,11 +258,15 @@ refused, and the single IdP of `saml { idps }` is no longer trusted for every
 group value: its groups are held to its shibmd scopes, since it is one of two
 sources.
 
-The file is refused unless it is a regular file readable by its owner and group
-at most and written by its owner alone, and it is read at most 1 MiB, 10 000
-accounts, hashes of at most 256 MiB, 10 passes, 16 lanes: a file of hashes is
-an offline guessing target, and one cost is the operator's to choose, not a
-bomb.
+The accounts file is refused unless it is a regular file written by its owner
+alone (it decides who is in which group), and it is read at most 1 MiB, 10 000
+accounts. It holds no secret.
+
+A browser end-to-end test (Chrome's virtual authenticator over the DevTools
+protocol) is not run here: none of bridge, oidc, fido or rp has a headless-browser lane.
+The tests drive the same HTTP routes the page's script does, with
+`webauthntest`'s software authenticator, whose output is checked against an
+independent verifier in go-authn/webauthn's judge.
 
 ## What it refuses
 

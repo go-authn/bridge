@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("account \"alice@x\" {\n  name = \"n\"\n}\n")

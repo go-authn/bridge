@@ -6,8 +6,8 @@ import (
 	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,45 +20,42 @@ import (
 	"github.com/go-authn/saml"
 )
 
-// The local login: a username and password form this provider serves itself,
-// for the accounts of a `local` block (localaccounts.go).
+// The local login: a page this provider serves itself, where a person signs in
+// with a passkey (WebAuthn), for the accounts of a `local` block
+// (localaccounts.go). There is no password anywhere: the page has no password
+// field, no route reads one, and nothing checks one.
 //
 // What it refuses, each with a test:
 //
-//   - a POST that does not carry the CSRF token of THIS login (the token is an
-//     HMAC of the login's handle under a key derived from the subject salt), or
-//     that a browser says is cross-site, or whose Origin is not the issuer's;
-//   - a password it checks in different time for an unknown login (the same
-//     argon2id runs against a dummy hash) -- so no user enumeration by timing;
-//   - the sixth wrong password for one login in a quarter of an hour, and the
-//     eleventh from one host (a /64 for IPv6), whatever the logins: both are
-//     refused BEFORE any hashing, and both count unknown logins too, so a
-//     refusal says nothing about whether the account exists;
-//   - more than localHashers password checks at once: an argon2id costs 64 MiB,
-//     and the form is anonymous.
+//   - a request that does not carry the CSRF token of THIS login (the token is
+//     an HMAC of the login's handle under a key derived from the subject salt),
+//     or that a browser says is cross-site, or whose Origin is not the
+//     issuer's;
+//   - a challenge answered twice, or by another login, or after five minutes;
+//   - a credential the account does not have, one whose user handle is
+//     another account's, one that fails go-authn/webauthn's checks (origin,
+//     rpIdHash, user verification, signature, a counter that did not advance);
+//   - the eleventh failure from one host (a /64 for IPv6) in a quarter of an
+//     hour: refused BEFORE any verification.
 //
 // And what it never does is take a destination from the request: the only
 // place a successful login goes is the redirect URI the sealed login already
 // holds, which authorize registered it against (redirectAllowed).
 
 const (
-	// localLoginMax is the wrong passwords one login may have in localWindow.
-	localLoginMax = 5
-	// localHostMax is the wrong passwords one host may have in localWindow; its
+	// localHostMax is the failures one host may have in localWindow; its
 	// network gets coarseFactor times as many (limitKeys).
 	localHostMax = 10
-	localWindow  = 15 * time.Minute
-	// localTracked bounds the logins counted at once. Anonymous people choose
-	// the keys, so the table is capped, and past the cap a login nobody has
+	// localLoginMax is the failures one key may have in localWindow.
+	localLoginMax = 5
+	localWindow   = 15 * time.Minute
+	// localTracked bounds the keys counted at once. Anonymous people choose
+	// the keys, so the table is capped, and past the cap a key nobody has
 	// failed yet is refused rather than evicting one somebody has.
 	localTracked = 20000
-	// localHashers is how many password checks run at once.
-	localHashers = 4
-	// localHashWait is how long a request waits for one of them.
-	localHashWait = 2 * time.Second
 )
 
-// localThrottle counts the wrong passwords, by login and by host.
+// localThrottle counts the failures, by key and by host.
 type localThrottle struct {
 	mu      sync.Mutex
 	now     func() time.Time
@@ -102,7 +99,7 @@ func (t *localThrottle) sweepLocked() {
 	}
 }
 
-// loginKey is what a typed login is counted under: the whole of it, folded,
+// loginKey is what a typed name is counted under: the whole of it, folded,
 // bounded -- whether or not such an account exists.
 func loginKey(login string) string {
 	l := oidc.ASCIILower(login)
@@ -121,6 +118,9 @@ func (t *localThrottle) blocked(addr, login string) bool {
 	if len(t.recent(t.hosts, fine)) >= t.perHost || len(t.recent(t.hosts, coarse)) >= t.perHost*coarseFactor {
 		return true
 	}
+	if login == "" {
+		return false
+	}
 	k := loginKey(login)
 	n := len(t.recent(t.logins, k))
 	if n == 0 && len(t.logins) >= localTracked {
@@ -129,7 +129,7 @@ func (t *localThrottle) blocked(addr, login string) bool {
 	return n >= localLoginMax
 }
 
-// failed counts a wrong password.
+// failed counts a refusal. An empty login counts the host alone.
 func (t *localThrottle) failed(addr, login string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -137,13 +137,16 @@ func (t *localThrottle) failed(addr, login string) {
 	fine, coarse := limitKeys(addr)
 	t.hosts[fine] = append(t.recent(t.hosts, fine), now)
 	t.hosts[coarse] = append(t.recent(t.hosts, coarse), now)
+	if login == "" {
+		return
+	}
 	k := loginKey(login)
 	if _, tracked := t.logins[k]; tracked || len(t.logins) < localTracked {
 		t.logins[k] = append(t.recent(t.logins, k), now)
 	}
 }
 
-// succeeded forgets the login's failures: the person is in.
+// succeeded forgets the key's failures: the person is in.
 func (t *localThrottle) succeeded(login string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -152,7 +155,7 @@ func (t *localThrottle) succeeded(login string) {
 
 // ---- the pages ----
 
-// localCSRF is the token a login's form carries: an HMAC of the login's handle
+// localCSRF is the token a login's page carries: an HMAC of the login's handle
 // under a key derived from the subject salt -- stateless, bound to this login,
 // and not something another site can compute or read.
 func (s *server) localCSRF(id string) (string, error) {
@@ -167,7 +170,8 @@ func (s *server) localCSRF(id string) (string, error) {
 
 // sameOrigin says whether a POST came from a page of this provider, as far as
 // the browser says. A request with neither header (curl, an old browser) is
-// not refused here: the CSRF token and the login cookie are what hold.
+// not refused here: the CSRF token, the single-use challenge and the login
+// cookie are what hold.
 func (s *server) sameOrigin(r *http.Request) bool {
 	if v := r.Header.Get("Sec-Fetch-Site"); v != "" && v != "same-origin" && v != "none" {
 		return false
@@ -202,16 +206,16 @@ func localFormAction(l *login) string {
 	return "'self' " + src
 }
 
-func (s *server) renderLocal(w http.ResponseWriter, status int, l *login, id, login, msg string) {
+func (s *server) renderLocal(w http.ResponseWriter, status int, l *login, id, msg string) {
 	csrf, err := s.localCSRF(id)
 	if err != nil {
 		s.logf("local: csrf: %v", err)
 		s.page(w, http.StatusInternalServerError, "The login could not be shown.")
 		return
 	}
-	pageHeaders(w, localFormAction(l))
+	pageHeadersScript(w, localFormAction(l))
 	w.WriteHeader(status)
-	tmpl.ExecuteTemplate(w, "locallogin", map[string]any{"CSRF": csrf, "Login": login, "Error": msg})
+	tmpl.ExecuteTemplate(w, "locallogin", map[string]any{"CSRF": csrf, "Error": msg})
 }
 
 // loginMethod is the page offered when people can log in through the
@@ -248,126 +252,43 @@ func (s *server) loginMethod(w http.ResponseWriter, r *http.Request) {
 	tmpl.ExecuteTemplate(w, "method", map[string]any{"Federation": fed})
 }
 
-// localLogin is the username and password form, and what it posts to.
+// localLogin is the passkey page. It only answers GET: the sign-in itself is
+// /local/login/begin and /local/login/finish, and nothing here reads a
+// password, whatever is posted.
 func (s *server) localLogin(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Local == nil {
 		http.NotFound(w, r)
 		return
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed: local accounts sign in with a passkey, there is no password form", http.StatusMethodNotAllowed)
 		return
 	}
-	id, l, err := s.current(r)
-	if err != nil {
-		s.page(w, http.StatusBadRequest, err.Error())
+	id, l, ok := s.localLoginState(w, r)
+	if !ok {
 		return
 	}
-	// One login, one way in: one that already went to an institution has an
-	// AuthnRequest out, whose response could still arrive.
-	if l.started {
-		s.page(w, http.StatusBadRequest, "This login has already gone to an institution; start again from the application.")
-		return
-	}
-	if l.options.IsPassive {
-		// prompt=none: there is no session here to find.
-		s.finishError(w, r, l, "login_required", "no session: a local account needs a password")
-		return
-	}
-	if r.Method == http.MethodGet {
-		s.renderLocal(w, http.StatusOK, l, id, "", "")
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	if err := r.ParseForm(); err != nil {
-		s.page(w, http.StatusBadRequest, "The request could not be read.")
-		return
-	}
-	want, err := s.localCSRF(id)
-	if err != nil {
-		s.page(w, http.StatusInternalServerError, "The login could not be checked.")
-		return
-	}
-	if !s.sameOrigin(r) || subtle.ConstantTimeCompare([]byte(r.PostForm.Get("csrf")), []byte(want)) != 1 {
-		s.logf("local: a login form did not come from this provider's page (from %s)", s.clientAddr(r))
-		s.page(w, http.StatusForbidden, "The form did not come from this page; start again from the application.")
-		return
-	}
-
-	addr := s.clientAddr(r)
-	typed := r.PostForm.Get("login")
-	password := r.PostForm.Get("password")
-	if s.localLimit.blocked(addr, typed) {
-		s.counters.inc("bridge_logins_total", "local_throttled")
-		w.Header().Set("Retry-After", "900")
-		s.renderLocal(w, http.StatusTooManyRequests, l, id, "", "Trop d'essais. Réessayez dans un quart d'heure. / Too many attempts: try again in fifteen minutes.")
-		return
-	}
-
-	acct, ok, busy := s.checkLocal(strings.TrimSpace(typed), password)
-	switch {
-	case busy:
-		w.Header().Set("Retry-After", "5")
-		s.renderLocal(w, http.StatusServiceUnavailable, l, id, "", "Le service est occupé. Réessayez dans un instant. / Busy: try again in a moment.")
-		return
-	case !ok:
-		s.localLimit.failed(addr, typed)
-		s.logf("local: a wrong login or password from %s", addr)
-		s.counters.inc("bridge_logins_total", "local_wrong")
-		// The same answer whether or not the account exists. The login is not
-		// echoed back: it is what the person typed, and they can retype it.
-		s.renderLocal(w, http.StatusUnauthorized, l, id, "", "Identifiant ou mot de passe incorrect. / Wrong login or password.")
-		return
-	}
-	s.localLimit.succeeded(typed)
-	http.SetCookie(w, s.cookie(loginCookie, "", -1))
-	if err := s.usedLogins.putNew(id, true, l.expires); err != nil {
-		s.page(w, http.StatusBadRequest, "This login has already been answered; start again from the application.")
-		return
-	}
-	who := s.localPerson(acct)
-	s.finishLogin(w, r, l, who)
-}
-
-// checkLocal verifies a login and password. The same argon2id runs for a login
-// that does not exist, against a dummy hash. busy is true when no hasher
-// became free in time: nothing was checked.
-func (s *server) checkLocal(login, password string) (acct *directory.Identity, ok, busy bool) {
-	select {
-	case s.localHash <- struct{}{}:
-		defer func() { <-s.localHash }()
-	case <-time.After(localHashWait):
-		return nil, false, true
-	}
-	id, known := s.cfg.Local.store.get(login)
-	if !known || len(password) == 0 || len(password) > maxPasswordLen {
-		// An unknown login, or a password no account's could be: the work is
-		// still done, once.
-		dummyHash().verify([]byte(password[:min(len(password), maxPasswordLen)]))
-		return nil, false, false
-	}
-	if id.Verify(password) != nil {
-		return nil, false, false
-	}
-	return id, true, false
+	s.renderLocal(w, http.StatusOK, l, id, "")
 }
 
 // localPerson is a local account as this provider describes a person: the
 // subject, like a federated one, is HMACed under the salt (person.sub) from
-// "local:" and the login, and never shown.
-func (s *server) localPerson(id *directory.Identity) *person {
+// "local:" and the login, and never shown. credential is the passkey that
+// signed in, which the grants it buys are held to.
+func (s *server) localPerson(id *directory.Identity, rec *passkeyRecord) *person {
 	login := id.Name()
 	scope := s.cfg.Local.Scope
 	p := &person{
-		subject:  "local:" + login,
-		idp:      s.cfg.localEntityID(),
-		username: login,
-		authTime: s.now(),
-		acr:      localACR,
-		profile:  map[string]any{"preferred_username": login},
-		email:    map[string]any{},
-		edu:      map[string]any{"eduperson_principal_name": login + "@" + scope},
+		subject:    "local:" + login,
+		idp:        s.cfg.localEntityID(),
+		username:   login,
+		credential: rec.key(),
+		authTime:   s.now(),
+		acr:        localACR,
+		profile:    map[string]any{"preferred_username": login},
+		email:      map[string]any{},
+		edu:        map[string]any{"eduperson_principal_name": login + "@" + scope},
 	}
 	if n := id.Attributes().Get("displayName"); len(n) > 0 {
 		p.profile["name"] = n[0]
@@ -386,13 +307,40 @@ func (s *server) localPerson(id *directory.Identity) *person {
 	return p
 }
 
-// localAccountGone says whether who is a local account the file no longer has.
+// localAccountGone says whether who is a local grant that its sources no
+// longer stand behind: the account is gone from the file, or the passkey it
+// was bought with is gone from the database (removed by the administrator, or
+// not the account's). A grant whose record keeps no passkey (an application
+// password, a certificate) is held to the account having one.
+//
+// ⛔ A database that cannot be read refuses: a revocation must not wait on it.
 func (s *server) localAccountGone(who *person) bool {
 	if s.cfg.Local == nil || who.idp != s.cfg.localEntityID() {
 		return false
 	}
-	_, ok := s.cfg.Local.store.get(who.username)
-	return !ok
+	if _, ok := s.cfg.Local.store.get(who.username); !ok {
+		return true
+	}
+	if s.passkeys == nil {
+		return true
+	}
+	if who.credential == "" {
+		// An application password or a certificate: what the store keeps of
+		// them is the login and the IdP, not the passkey. They are held to the
+		// account having a passkey at all -- remove the last and they stop.
+		have, err := s.passkeys.passkeys(who.username)
+		if err != nil {
+			s.logf("local: reading passkeys to check a grant: %v", err)
+			return true
+		}
+		return len(have) == 0
+	}
+	rec, ok, err := s.passkeys.passkey(who.credential)
+	if err != nil {
+		s.logf("local: reading a passkey to check a grant: %v", err)
+		return true
+	}
+	return !ok || rec.Login != who.username
 }
 
 // check is everything that can be said wrong about a local block.
@@ -402,6 +350,9 @@ func (l *localBlock) check(c *config) error {
 	}
 	if !scopeSyntax.MatchString(l.Scope) || len(l.Scope) > 253 {
 		return fmt.Errorf("scope %q: a lowercase domain such as \"plateau-de-saclay.net\"", l.Scope)
+	}
+	if c.State == nil {
+		return errors.New("a local block needs a state { } block: the passkeys, their signature counters and the invitations are kept in the state database")
 	}
 	store, err := newLocalStore(l.AccountsFile, l.Scope, c.Claims.TrustedGroups[c.localEntityID()])
 	if err != nil {

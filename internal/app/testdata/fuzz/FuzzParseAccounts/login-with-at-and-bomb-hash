@@ -1,2 +1,0 @@
-go test fuzz v1
-[]byte("account \"alice@univ.example\" {\n  password_hash = \"$argon2id$v=19$m=4194304,t=4000000000,p=255$AA$AA\"\n  name = \"Al\\nice\"\n  groups = [\"admins\", \"urn:geant:evil.example:x\"]\n}\naccount \"alice@univ.example\" {}\n")

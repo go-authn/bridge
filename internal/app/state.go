@@ -408,15 +408,18 @@ type storedPerson struct {
 	Profile    map[string]any `json:"profile,omitempty"`
 	Email      map[string]any `json:"email,omitempty"`
 	Edu        map[string]any `json:"edu,omitempty"`
+	// Credential is a local account's passkey (person.credential).
+	Credential string `json:"credential,omitempty"`
 }
 
 func storePerson(p *person) storedPerson {
-	return storedPerson{p.subject, p.idp, p.username, p.groups, p.authTime, p.acr, p.sessionEnd, p.profile, p.email, p.edu}
+	return storedPerson{p.subject, p.idp, p.username, p.groups, p.authTime, p.acr, p.sessionEnd, p.profile, p.email, p.edu, p.credential}
 }
 
 func (s storedPerson) person() *person {
 	return &person{subject: s.Subject, idp: s.IdP, username: s.Username, groups: s.Groups, authTime: s.AuthTime,
-		acr: s.ACR, sessionEnd: s.SessionEnd, profile: orEmpty(s.Profile), email: orEmpty(s.Email), edu: orEmpty(s.Edu)}
+		acr: s.ACR, sessionEnd: s.SessionEnd, profile: orEmpty(s.Profile), email: orEmpty(s.Email), edu: orEmpty(s.Edu),
+		credential: s.Credential}
 }
 
 func orEmpty(m map[string]any) map[string]any {

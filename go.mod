@@ -11,6 +11,7 @@ require (
 	github.com/go-authn/saml v0.6.0
 	github.com/go-authn/servercert v0.5.3
 	github.com/go-authn/sshcert v0.1.10
+	github.com/go-authn/webauthn v0.1.0
 	github.com/go-authn/wireguard v0.1.3
 	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/go-net-health/endpoint v0.1.0
@@ -28,7 +29,6 @@ require (
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/term v0.47.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.61.1
