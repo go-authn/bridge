@@ -178,9 +178,13 @@ authn-bridge local-account invite --config /etc/authn-bridge --name "Alice Marti
 authn-bridge local-account invite        --config /etc/authn-bridge alice   # another key for alice
 authn-bridge local-account revoke-invite --config /etc/authn-bridge alice
 authn-bridge local-account passkeys      --config /etc/authn-bridge alice   # ID, created, last used, backup-eligible
-authn-bridge local-account remove-passkey --config /etc/authn-bridge alice <id>
+authn-bridge local-account remove-passkey --config /etc/authn-bridge alice <id>   # 8+ hex characters of the ID
 authn-bridge local-account remove        --config /etc/authn-bridge alice
 ```
+
+A passkey's ID, as `passkeys` lists it and `remove-passkey` takes it, is the
+SHA-256 of the credential ID in lowercase hex: 64 characters, of which any
+unique prefix of eight or more will do.
 
 `invite` with `--name` creates the account (and its file); on an existing one it
 adds a key. The token is in the URL's **fragment**, which a browser never sends,

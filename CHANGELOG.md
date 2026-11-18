@@ -25,7 +25,9 @@ Added:
   same-origin checks, per-host throttling, no open redirect, groups held to the
   scope. A `password_hash` in an accounts file is refused with a message that
   says so. No released version ever had local accounts with passwords. See
-  the README. `saml` stays required.
+  the README. `saml` stays required. A passkey's ID, as the CLI lists and takes
+  it, is lowercase hex: an ID in base64url began with `-` one time in 64 and
+  could not be passed to `remove-passkey`, which read it as a flag.
 - Pages now send `base-uri 'none'` and `X-Content-Type-Options: nosniff`.
 
 ## v0.23.12
