@@ -234,7 +234,7 @@ func (s *server) renderLocal(w http.ResponseWriter, status int, l *login, id, ms
 	}
 	pageHeadersScript(w, localFormAction(l))
 	w.WriteHeader(status)
-	tmpl.ExecuteTemplate(w, "locallogin", map[string]any{"CSRF": csrf, "Error": msg})
+	s.show(w, "locallogin", map[string]any{"CSRF": csrf, "Error": msg})
 }
 
 // loginMethod is the page offered when people can log in through the
@@ -268,7 +268,7 @@ func (s *server) loginMethod(w http.ResponseWriter, r *http.Request) {
 	// Links, unlike forms, are not held by form-action: the page has none.
 	headers(w)
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "method", map[string]any{"Federation": fed})
+	s.show(w, "method", map[string]any{"Federation": fed})
 }
 
 // localLogin is the passkey page. It only answers GET: the sign-in itself is

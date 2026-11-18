@@ -80,6 +80,10 @@ const passkeyJS = `"use strict";
 
   function failed(e) {
     if (button) { button.disabled = false; }
+    // A refusal is when the help is wanted: open the panel, which is a plain
+    // <details> and works without this line.
+    var help = document.getElementById("passkey-help");
+    if (help) { help.open = true; }
     if (e && e.name === "NotAllowedError") {
       say("Annulé, ou le délai est dépassé.", "Cancelled, or timed out.");
     } else if (e && e.name === "InvalidStateError") {
@@ -192,8 +196,12 @@ const passkeyJS = `"use strict";
           body[b.getAttribute("data-field")] = document.getElementById(b.getAttribute("data-from")).value;
         }
         b.disabled = true;
+        // data-after names a same-origin path to go to afterwards (the page of
+        // a session that has ended); without it the page is reloaded.
+        var after = b.getAttribute("data-after");
         post(b.getAttribute("data-post"), body)
-          .then(function () { location.reload(); }).catch(function (e) { b.disabled = false; failed(e); });
+          .then(function () { if (after && after.charAt(0) === "/" && after.charAt(1) !== "/") { location.assign(after); } else { location.reload(); } })
+          .catch(function (e) { b.disabled = false; failed(e); });
       });
     });
   }

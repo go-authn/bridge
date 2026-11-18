@@ -190,7 +190,9 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	k, sess, ok := s.session(r)
 	if !ok {
 		w.WriteHeader(http.StatusOK)
-		tmpl.ExecuteTemplate(w, "account", map[string]any{"Signed": false, "Passkey": s.cfg.Local != nil})
+		// ?done=1 is where the page's own sign-out button goes: the same
+		// confirmation, under the words that say the session has ended.
+		s.show(w, "account", map[string]any{"Signed": false, "Passkey": s.cfg.Local != nil, "Done": r.URL.Query().Get("done") == "1"})
 		return
 	}
 	who := sess.who
@@ -252,7 +254,7 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	access := s.accessOf(who)
 	view["Access"], view["AccessOn"] = access, s.cfg.AppPasswords != nil || s.certs.path != ""
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "account", view)
+	s.show(w, "account", view)
 }
 
 // jsonArg is a button's request body, as an HTML attribute carries it.
@@ -427,7 +429,7 @@ func (s *server) accountFromACS(w http.ResponseWriter, r *http.Request, a *saml.
 	}
 	pageHeadersScript(w, "'self'")
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "accountopen", map[string]any{"Handle": h})
+	s.show(w, "accountopen", map[string]any{"Handle": h})
 }
 
 // accountOpen is the same-origin POST that turns the handle into the cookie.

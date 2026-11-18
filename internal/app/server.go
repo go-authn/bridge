@@ -219,6 +219,7 @@ func (s *server) logf(format string, a ...any) {
 // handler is every endpoint.
 func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/assets/{name}", s.asset)
 	mux.HandleFunc("GET /.well-known/openid-configuration", s.discovery)
 	mux.HandleFunc("GET /jwks", s.jwks)
 	mux.HandleFunc("/authorize", s.limited(s.authorize))
