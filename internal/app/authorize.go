@@ -90,6 +90,10 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "this client may not ask for NFS certificates")
 		return
 	}
+	if slices.Contains(scopes, "kerberos") && !client.KerberosTickets {
+		fail("invalid_scope", "this client may not ask for Kerberos tickets")
+		return
+	}
 	if slices.Contains(scopes, "ssf") {
 		fail("invalid_scope", "the ssf scope is for client credentials, not for a login")
 		return

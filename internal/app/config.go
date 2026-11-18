@@ -122,6 +122,10 @@ type config struct {
 	// X509CA issues X.509 client certificates for NFS over TLS (x509ca.go).
 	X509CA *x509CABlock `hcl:"x509_ca,block"`
 
+	// Kerberos has a realm's KDC issue a TGT to a person who logged in here
+	// with no password (kerberos.go).
+	Kerberos *kerberosBlock `hcl:"kerberos,block"`
+
 	// WireGuard keeps the WireGuard public keys people register, and serves
 	// a gateway the signed list of them (wireguard.go).
 	WireGuard *wireguardBlock `hcl:"wireguard,block"`
@@ -344,6 +348,10 @@ type clientBlock struct {
 	// have an X.509 client certificate issued by the x509_ca block -- which
 	// is how NFS over TLS (RFC 9289) names a federated person.
 	X509Certificates bool `hcl:"x509_certificates,optional"`
+
+	// KerberosTickets lets tokens of this client, with the "kerberos" scope,
+	// have the realm's KDC issue a TGT for the person (the kerberos block).
+	KerberosTickets bool `hcl:"kerberos_tickets,optional"`
 
 	// AccessTokenGroups, false, leaves the person's groups out of this
 	// client's access tokens. For a client whose token is pasted as an SSH
@@ -641,6 +649,11 @@ func (c *config) check() error {
 			return fmt.Errorf("x509_ca: %w", err)
 		}
 	}
+	if c.Kerberos != nil {
+		if err := c.Kerberos.load(); err != nil {
+			return fmt.Errorf("kerberos: %w", err)
+		}
+	}
 	if c.SSHCA != nil {
 		if err := c.SSHCA.load(); err != nil {
 			return fmt.Errorf("ssh_ca: %w", err)
@@ -767,6 +780,9 @@ func (c *config) check() error {
 		}
 		if cl.X509Certificates && c.X509CA == nil {
 			return fmt.Errorf("client %q: x509_certificates needs an x509_ca block", cl.ID)
+		}
+		if cl.KerberosTickets && c.Kerberos == nil {
+			return fmt.Errorf("client %q: kerberos_tickets needs a kerberos block", cl.ID)
 		}
 		// ⛔ Refused rather than quietly obeyed: the SSH and X.509
 		// certificates take the person's groups FROM the access token
