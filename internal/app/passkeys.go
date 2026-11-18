@@ -83,9 +83,21 @@ type passkeyRecord struct {
 	AAGUID         []byte    `json:"aaguid,omitempty"`
 	Created        time.Time `json:"created"`
 	LastUsed       time.Time `json:"last_used,omitzero"`
+	// RemoveAt is when a removal the person asked for from /account takes
+	// effect (zero: none is pending). Until then the key works like any other;
+	// any of the account's keys may cancel it (account_removal.go).
+	RemoveAt        time.Time `json:"remove_at,omitzero"`
+	RemoveRequested time.Time `json:"remove_requested,omitzero"`
 }
 
 func (r *passkeyRecord) key() string { return passkeyKey(r.ID) }
+
+// pending says whether a removal is waiting on this key; due, whether its time
+// has come.
+func (r *passkeyRecord) pending() bool { return !r.RemoveAt.IsZero() }
+func (r *passkeyRecord) due(now time.Time) bool {
+	return !r.RemoveAt.IsZero() && !now.Before(r.RemoveAt)
+}
 
 // passkeyKey is the row key of a credential: the SHA-256 of its ID in
 // lowercase HEX, 64 characters whatever the ID's length (up to 1023 bytes), and
@@ -120,6 +132,9 @@ type inviteRecord struct {
 type passkeyStore struct {
 	b   *stateBlock
 	now func() time.Time
+	// onRemoved is called, once, for a key whose pending removal has come due
+	// and was carried out (account_removal.go). May be nil.
+	onRemoved func(*passkeyRecord)
 }
 
 func (s *passkeyStore) put(kind, k string, v any, expires time.Time) error {
@@ -192,15 +207,72 @@ func (s *passkeyStore) passkeys(login string) ([]*passkeyRecord, error) {
 		err = bad
 	}
 	slices.SortFunc(out, func(a, b *passkeyRecord) int { return a.Created.Compare(b.Created) })
+	if err == nil {
+		out, err = s.reap(out)
+	}
 	return out, err
 }
 
-// passkey is the credential with this row key.
+// reap carries out the removals whose delay is over, for the keys of ONE
+// account (list), and returns the keys that remain. It is what makes a pending
+// removal take effect at its time: every read of an account's keys, and the
+// login's lookup of one, goes through here. A removal that would leave the
+// account without a key is not carried out (it cannot be asked for: see
+// requestRemoval) and is dropped instead.
+func (s *passkeyStore) reap(list []*passkeyRecord) ([]*passkeyRecord, error) {
+	now := s.now()
+	var keep, gone []*passkeyRecord
+	for _, r := range list {
+		if r.due(now) {
+			gone = append(gone, r)
+		} else {
+			keep = append(keep, r)
+		}
+	}
+	if len(gone) == 0 {
+		return list, nil
+	}
+	if len(keep) == 0 {
+		for _, r := range gone {
+			r.RemoveAt, r.RemoveRequested = time.Time{}, time.Time{}
+			if err := s.savePasskey(r); err != nil {
+				return list, err
+			}
+		}
+		return gone, nil
+	}
+	for _, r := range gone {
+		n, err := s.del(kindPasskey, r.key())
+		if err != nil {
+			return list, err
+		}
+		if n && s.onRemoved != nil {
+			s.onRemoved(r)
+		}
+	}
+	return keep, nil
+}
+
+// passkey is the credential with this row key. A key whose removal is due is
+// not found: it stops working at its time, whether or not anybody has looked at
+// the account since.
 func (s *passkeyStore) passkey(k string) (*passkeyRecord, bool, error) {
 	var r passkeyRecord
 	ok, err := s.get(kindPasskey, k, &r)
 	if !ok || err != nil {
 		return nil, false, err
+	}
+	if r.due(s.now()) {
+		if _, err := s.passkeys(r.Login); err != nil { // carries the removal out
+			return nil, false, err
+		}
+		ok, err = s.get(kindPasskey, k, &r)
+		if !ok || err != nil {
+			return nil, false, err
+		}
+		if r.due(s.now()) { // the last key: its removal was dropped
+			r.RemoveAt, r.RemoveRequested = time.Time{}, time.Time{}
+		}
 	}
 	return &r, true, nil
 }

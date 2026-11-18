@@ -377,6 +377,14 @@ func (l *localBlock) check(c *config) error {
 	if c.State == nil {
 		return errors.New("a local block needs a state { } block: the passkeys, their signature counters and the invitations are kept in the state database")
 	}
+	l.removalDelay = defaultRemovalDelay
+	if l.PasskeyRemovalDelay != "" {
+		d, err := time.ParseDuration(l.PasskeyRemovalDelay)
+		if err != nil || d < 0 || d > maxRemovalDelay {
+			return fmt.Errorf("passkey_removal_delay %q: a duration from 0 to %s, such as \"24h\"", l.PasskeyRemovalDelay, maxRemovalDelay)
+		}
+		l.removalDelay = d
+	}
 	store, err := newLocalStore(l.AccountsFile, l.Scope, c.Claims.TrustedGroups[c.localEntityID()])
 	if err != nil {
 		return fmt.Errorf("accounts_file: %w", err)

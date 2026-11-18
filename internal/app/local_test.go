@@ -70,7 +70,9 @@ func stateExtra(t *testing.T) string {
 // configuration.
 func localExtra(t *testing.T) string {
 	t.Helper()
-	return fmt.Sprintf("local {\n  accounts_file = %q\n  scope = %q\n}\n", filepath.ToSlash(writeAccountsFile(t, localAccountsText())), localScope) + stateExtra(t)
+	// The fixtures remove a key at once (the delay is 0), as before the delay
+	// existed; the tests of the delay set f.s.cfg.Local.removalDelay.
+	return fmt.Sprintf("local {\n  accounts_file = %q\n  scope = %q\n  passkey_removal_delay = \"0\"\n}\n", filepath.ToSlash(writeAccountsFile(t, localAccountsText())), localScope) + stateExtra(t)
 }
 
 func localFixture(t *testing.T, extra string) *fixture {
