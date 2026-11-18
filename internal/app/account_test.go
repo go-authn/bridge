@@ -510,9 +510,9 @@ func TestAccountChangesRefuseWhatDidNotComeFromThePage(t *testing.T) {
 		}{
 			"no session":                {"", c.body, nil, 401},
 			"a forged cookie":           {accountCookieName + "=forged", c.body, nil, 401},
-			"no token":                  {s.cookie, map[string]string{"key": c.body["key"]}, nil, 403},
-			"another account's token":   {s.cookie, map[string]string{"csrf": sb.csrf, "key": c.body["key"]}, nil, 403},
-			"a token of the login page": {s.cookie, map[string]string{"csrf": mustLocalCSRF(t, f, "x"), "key": c.body["key"]}, nil, 403},
+			"no token":                  {s.cookie, withCSRF(c.body, ""), nil, 403},
+			"another account's token":   {s.cookie, withCSRF(c.body, sb.csrf), nil, 403},
+			"a token of the login page": {s.cookie, withCSRF(c.body, mustLocalCSRF(t, f, "x")), nil, 403},
 			"a cross-site request":      {s.cookie, c.body, []string{"Sec-Fetch-Site", "cross-site"}, 403},
 			"a same-site request":       {s.cookie, c.body, []string{"Sec-Fetch-Site", "same-site"}, 403},
 			"another origin":            {s.cookie, c.body, []string{"Origin", "https://evil.example"}, 403},
@@ -538,6 +538,19 @@ func TestAccountChangesRefuseWhatDidNotComeFromThePage(t *testing.T) {
 	if st := f.addKey(s, mustAuth(t, webauthn.AlgES256), webauthntest.Options{}); st != http.StatusOK {
 		t.Errorf("control: the session no longer works: %d", st)
 	}
+}
+
+// withCSRF is body with another token (none when csrf is empty).
+func withCSRF(body map[string]string, csrf string) map[string]string {
+	out := map[string]string{}
+	for k, v := range body {
+		out[k] = v
+	}
+	delete(out, "csrf")
+	if csrf != "" {
+		out["csrf"] = csrf
+	}
+	return out
 }
 
 func mustLocalCSRF(t *testing.T, f *fixture, id string) string {
