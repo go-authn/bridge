@@ -22,25 +22,30 @@ func urlUnescape(s string) (string, error) { return url.QueryUnescape(s) }
 func (s *server) discovery(w http.ResponseWriter, r *http.Request) {
 	i := s.cfg.Issuer
 	grants := []string{"authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"}
-	if s.cfg.SSF != nil {
-		grants = append(grants, "client_credentials") // SSF receivers only
+	if s.cfg.SSF != nil || s.cfg.WireGuard != nil || s.cfg.hasKeyClients() {
+		grants = append(grants, "client_credentials") // receivers, gateways and machines only
+	}
+	authMethods := []string{"client_secret_basic", "client_secret_post", "none"}
+	if s.cfg.hasKeyClients() {
+		authMethods = append(authMethods, "private_key_jwt")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"issuer":                                i,
-		"authorization_endpoint":                i + "/authorize",
-		"token_endpoint":                        i + "/token",
-		"userinfo_endpoint":                     i + "/userinfo",
-		"jwks_uri":                              i + "/jwks",
-		"response_types_supported":              []string{"code"},
-		"response_modes_supported":              []string{"query"},
-		"grant_types_supported":                 grants,
-		"device_authorization_endpoint":         i + "/device_authorization",
-		"subject_types_supported":               []string{"public", "pairwise"},
-		"id_token_signing_alg_values_supported": []string{"RS256"},
-		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"code_challenge_methods_supported":      []string{"S256"},
-		"scopes_supported":                      []string{"openid", "profile", "email", "eduperson", "groups"},
+		"issuer":                                           i,
+		"authorization_endpoint":                           i + "/authorize",
+		"token_endpoint":                                   i + "/token",
+		"userinfo_endpoint":                                i + "/userinfo",
+		"jwks_uri":                                         i + "/jwks",
+		"response_types_supported":                         []string{"code"},
+		"response_modes_supported":                         []string{"query"},
+		"grant_types_supported":                            grants,
+		"device_authorization_endpoint":                    i + "/device_authorization",
+		"subject_types_supported":                          []string{"public", "pairwise"},
+		"id_token_signing_alg_values_supported":            []string{"RS256"},
+		"token_endpoint_auth_methods_supported":            authMethods,
+		"token_endpoint_auth_signing_alg_values_supported": []string{"RS256", "ES256", "EdDSA"},
+		"code_challenge_methods_supported":                 []string{"S256"},
+		"scopes_supported":                                 []string{"openid", "profile", "email", "eduperson", "groups"},
 		"claims_supported": []string{"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "acr",
 			"name", "given_name", "family_name", "preferred_username", "email", "groups",
 			"eduperson_principal_name", "eduperson_scoped_affiliation", "eduperson_entitlement",

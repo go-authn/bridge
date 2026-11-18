@@ -1075,6 +1075,43 @@ meanwhile is not honoured.
   ones stay revoked, a retired refresh token used again still revokes its
   family; with no `state` block the same restart forgets, which is the control.
 
+## Machines with a key and no secret: `private_key_jwt`
+
+An unattended machine -- a Windows service nobody logs into -- should hold a
+key, not a password. A confidential client registers PUBLIC keys and proves
+itself by signing a short JWT with the private one (RFC 7523 2.2, OpenID
+Connect Core 9), on the token endpoint, for `client_credentials` (and for
+`authorization_code`, for a client that has a redirect URI):
+
+```hcl
+client "winpc-17" {
+  jwks_file = "/etc/authn-bridge/winpc-17.jwks.json"   # or jwks = <<EOT { "keys": [ … ] } EOT
+  audience  = ["https://s3.example.org"]               # what its token is addressed to
+}
+```
+
+- `jwks` / `jwks_file` is a JWK Set (RFC 7517) of public keys: RS256 (2048 bits
+  at least), ES256 (P-256) or EdDSA. A private key, a symmetric key, another
+  curve, a duplicate `kid` or a set of more than 16 keys is refused at load.
+  Several keys are how a key is rotated: add the new one, reload, retire the
+  old one.
+- The client has **no `secret_file`**: both together are refused, and a request
+  that carries an assertion and a secret is refused as well. A key client
+  cannot be authenticated with an empty secret.
+- The assertion (`client_assertion_type =
+  urn:ietf:params:oauth:client-assertion-type:jwt-bearer`) has `iss` = `sub` =
+  the client ID, `aud` = the token endpoint (`<issuer>/token`) or the issuer,
+  `exp` at most five minutes ahead (a minute of clock skew is allowed, and
+  `exp - iat` is bounded too), and a `jti`. A `jti` is accepted once, until the
+  assertion would have expired; the cache holds 20000 and a full one refuses
+  rather than forgets. `alg: none`, HMAC and every algorithm other than the
+  three above are refused, and a key of another kind than the header says does
+  not verify.
+- The `client_credentials` token of such a client has `sub` and `azp` = the
+  client ID, `aud` = the client's `audience`, scope `machine`, no refresh token
+  and no ID token. Discovery lists `private_key_jwt` and
+  `token_endpoint_auth_signing_alg_values_supported`.
+
 ## Shared Signals: telling the services that verify on their own
 
 An access token, an opkssh certificate, are checked where they are used,

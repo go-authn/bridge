@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	jose "github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -392,12 +393,21 @@ type clientBlock struct {
 	// send no PKCE. A public client has no such choice (RFC 9700: MUST).
 	PKCE string `hcl:"pkce,optional"`
 
+	// JWKS or JWKSFile registers the public keys this CONFIDENTIAL client
+	// authenticates with, by private_key_jwt (RFC 7523 2.2): a JWK Set, inline
+	// or in a file, RS256, ES256 (P-256) or EdDSA. Instead of secret_file,
+	// never with it -- a machine then holds a key and no password. Read at
+	// load; a rotation is a new key added to the set and a reload.
+	JWKS     string `hcl:"jwks,optional"`
+	JWKSFile string `hcl:"jwks_file,optional"`
+
+	keys        *jose.JSONWebKeySet
 	secret      string
 	refreshTTL  time.Duration
 	sshValidity time.Duration // ssh_validity, or the ssh_ca validity
 }
 
-func (c *clientBlock) public() bool { return c.secret == "" }
+func (c *clientBlock) public() bool { return c.secret == "" && c.keys == nil }
 
 func loadConfig(paths []string) (*config, error) {
 	files, err := hclFiles(paths)
@@ -714,9 +724,20 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: a secret of %d characters is a password somebody can guess", cl.ID, len(cl.secret))
 			}
 		}
-		// An SSF receiver and a WireGuard gateway are machines with client
-		// credentials: no person logs in through them.
-		if len(cl.RedirectURIs) == 0 && !cl.Device && !cl.SSFReceiver && len(cl.WireGuardPeers) == 0 {
+		if cl.JWKS != "" || cl.JWKSFile != "" {
+			if cl.SecretFile != "" {
+				return fmt.Errorf("client %q: secret_file and jwks/jwks_file: a client authenticates with a secret or with a key, not both", cl.ID)
+			}
+			if cl.JWKS != "" && cl.JWKSFile != "" {
+				return fmt.Errorf("client %q: jwks and jwks_file: give one", cl.ID)
+			}
+			if cl.keys, err = loadClientKeys(cl.JWKS, cl.JWKSFile); err != nil {
+				return fmt.Errorf("client %q: jwks: %w", cl.ID, err)
+			}
+		}
+		// An SSF receiver, a WireGuard gateway and a machine holding a key are
+		// machines with client credentials: no person logs in through them.
+		if len(cl.RedirectURIs) == 0 && !cl.Device && !cl.SSFReceiver && len(cl.WireGuardPeers) == 0 && cl.keys == nil {
 			return fmt.Errorf("client %q: no redirect_uris, and not a device client", cl.ID)
 		}
 		if cl.RefreshLifetime != "" {
@@ -760,7 +781,7 @@ func (c *config) check() error {
 		if (cl.WireGuardKeys || len(cl.WireGuardPeers) > 0) && c.WireGuard == nil {
 			return fmt.Errorf("client %q: wireguard_keys and wireguard_peers need a wireguard block", cl.ID)
 		}
-		if len(cl.WireGuardPeers) > 0 && cl.SecretFile == "" {
+		if len(cl.WireGuardPeers) > 0 && cl.public() {
 			return fmt.Errorf("client %q: wireguard_peers is for a gateway's own confidential client; a public client has no credentials to read the list with", cl.ID)
 		}
 		switch cl.PKCE {
@@ -768,7 +789,7 @@ func (c *config) check() error {
 			cl.PKCE = "required"
 		case "required":
 		case "or_nonce":
-			if cl.SecretFile == "" {
+			if cl.public() {
 				return fmt.Errorf("client %q: pkce = \"or_nonce\" is for confidential clients; a public client must use PKCE (RFC 9700 2.1.1)", cl.ID)
 			}
 		default:
@@ -781,7 +802,7 @@ func (c *config) check() error {
 		default:
 			return fmt.Errorf("client %q: ssf_subject_format = %q: \"aliases\" or \"iss_sub\"", cl.ID, cl.SSFSubjectFormat)
 		}
-		if cl.SSFReceiver && (c.SSF == nil || cl.SecretFile == "") {
+		if cl.SSFReceiver && (c.SSF == nil || cl.public()) {
 			return fmt.Errorf("client %q: ssf_receiver needs an ssf block and a secret_file", cl.ID)
 		}
 		switch cl.Subject {
