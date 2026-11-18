@@ -23,7 +23,7 @@ func themeServer() (*server, http.Handler) {
 	return s, withLang(mux)
 }
 
-func getReq(h http.Handler,target string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+func getReq(h http.Handler, target string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	r := httptest.NewRequest("GET", target, nil)
 	for _, c := range cookies {
 		r.AddCookie(c)
@@ -51,7 +51,7 @@ func TestThemeIsDrawnByTheServer(t *testing.T) {
 		if c.cookie != "" {
 			ck = append(ck, &http.Cookie{Name: themeCookie, Value: c.cookie})
 		}
-		body := getReq(h,"/page/method", ck...).Body.String()
+		body := getReq(h, "/page/method", ck...).Body.String()
 		if got := htmlOpen.FindString(body); got != c.want {
 			t.Errorf("theme cookie %q: %s, want %s", c.cookie, got, c.want)
 		}
@@ -62,7 +62,7 @@ func TestThemeIsDrawnByTheServer(t *testing.T) {
 	}
 	// The three buttons say which one is pressed, and name themselves in each
 	// language (the words hextra's docs use).
-	body := getReq(h,"/page/method", &http.Cookie{Name: themeCookie, Value: "dark"}).Body.String()
+	body := getReq(h, "/page/method", &http.Cookie{Name: themeCookie, Value: "dark"}).Body.String()
 	for _, want := range []string{
 		`name="theme" value="light" title="Clair" aria-label="Clair" aria-pressed="false"`,
 		`name="theme" value="dark" title="Sombre" aria-label="Sombre" aria-pressed="true"`,
@@ -73,12 +73,12 @@ func TestThemeIsDrawnByTheServer(t *testing.T) {
 			t.Errorf("the theme switch lacks %q", want)
 		}
 	}
-	if !strings.Contains(getReq(h,"/page/method").Body.String(), `<meta name="color-scheme" content="light dark">`) {
+	if !strings.Contains(getReq(h, "/page/method").Body.String(), `<meta name="color-scheme" content="light dark">`) {
 		t.Error("system: the colour scheme is not both")
 	}
 	// The words, in the other languages.
 	for lang, want := range map[string]string{"de": "Dunkel", "es": "Oscuro", "ja": "ダーク", "ko": "어두운 테마", "zh-cn": "深色", "en": "Dark"} {
-		body := getReq(h,"/page/method", &http.Cookie{Name: langCookie, Value: lang}).Body.String()
+		body := getReq(h, "/page/method", &http.Cookie{Name: langCookie, Value: lang}).Body.String()
 		if !strings.Contains(body, `title="`+want+`"`) {
 			t.Errorf("%s: the dark button is not %q", lang, want)
 		}
@@ -88,7 +88,7 @@ func TestThemeIsDrawnByTheServer(t *testing.T) {
 func TestSetTheme(t *testing.T) {
 	_, h := themeServer()
 	for _, v := range themes {
-		w := getReq(h,"/theme?theme="+v+"&next=%2Faccount%3Fx%3D1")
+		w := getReq(h, "/theme?theme="+v+"&next=%2Faccount%3Fx%3D1")
 		var c *http.Cookie
 		for _, k := range w.Result().Cookies() {
 			if k.Name == themeCookie {
@@ -102,7 +102,7 @@ func TestSetTheme(t *testing.T) {
 	}
 	// Refused: another theme, none, another method, an open redirect.
 	for _, target := range []string{"/theme?theme=purple", "/theme", "/theme?theme=", "/theme?theme=DARK"} {
-		if w := getReq(h,target); w.Code != http.StatusNotFound || len(w.Result().Cookies()) != 0 {
+		if w := getReq(h, target); w.Code != http.StatusNotFound || len(w.Result().Cookies()) != 0 {
 			t.Errorf("%s: %d", target, w.Code)
 		}
 	}
@@ -112,11 +112,11 @@ func TestSetTheme(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Errorf("POST /theme: %d", w.Code)
 	}
-	if w := getReq(h,"/theme?theme=dark&next=//evil.example"); w.Header().Get("Location") != "/" {
+	if w := getReq(h, "/theme?theme=dark&next=//evil.example"); w.Header().Get("Location") != "/" {
 		t.Errorf("redirect to %q", w.Header().Get("Location"))
 	}
 	// The cookie carries the choice and nothing else.
-	w = getReq(h,"/theme?theme=dark")
+	w = getReq(h, "/theme?theme=dark")
 	if sc := w.Header().Get("Set-Cookie"); strings.Count(sc, ";") > 5 || strings.Contains(sc, "csrf") {
 		t.Errorf("Set-Cookie: %s", sc)
 	}
@@ -126,12 +126,12 @@ func TestSetTheme(t *testing.T) {
 // and hides its button; the CSP lets it run and nothing inline.
 func TestHeaderScriptAndPolicy(t *testing.T) {
 	_, h := themeServer()
-	w := getReq(h,"/ui.js")
+	w := getReq(h, "/ui.js")
 	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/javascript") || w.Header().Get("X-Content-Type-Options") != "nosniff" ||
 		!strings.Contains(w.Body.String(), `sel.form.submit()`) || strings.Contains(w.Body.String(), "fetch") {
 		t.Errorf("/ui.js: %d %v", w.Code, w.Header())
 	}
-	w = getReq(h,"/page/method")
+	w = getReq(h, "/page/method")
 	csp := w.Header().Get("Content-Security-Policy")
 	for _, want := range []string{"default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self'", "base-uri 'none'", "frame-ancestors 'none'"} {
 		if !strings.Contains(csp, want) {
@@ -148,7 +148,7 @@ func TestHeaderScriptAndPolicy(t *testing.T) {
 	// The pages that cannot take a switch (the invitation is in the URL's
 	// fragment) have neither the controls nor the script, whatever the theme.
 	for _, p := range []string{"localenroll", "accountopen"} {
-		body := getReq(h,"/page/"+p, &http.Cookie{Name: themeCookie, Value: "dark"}).Body.String()
+		body := getReq(h, "/page/"+p, &http.Cookie{Name: themeCookie, Value: "dark"}).Body.String()
 		if strings.Contains(body, "/ui.js") || strings.Contains(body, `action="/lang"`) || strings.Contains(body, `action="/theme"`) {
 			t.Errorf("%s has the switches", p)
 		}
