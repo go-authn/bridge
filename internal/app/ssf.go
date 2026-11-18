@@ -569,6 +569,12 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 	if !client.public() && len(client.WireGuardPeers) > 0 && s.cfg.WireGuard != nil {
 		allowed = append(allowed, "wireguard_peers")
 	}
+	// A client holding a registered key is a machine identity: a token whose
+	// sub is the client and whose audience is what it lists (an S3 endpoint,
+	// say), for the "machine" scope.
+	if client.keys != nil {
+		allowed = append(allowed, machineScope)
+	}
 	if len(allowed) == 0 {
 		tokenError(w, http.StatusBadRequest, "unauthorized_client", "this client may not use the client_credentials grant")
 		return
@@ -587,7 +593,7 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 	now := s.now()
 	jti := token()
 	at := map[string]any{
-		"iss": s.cfg.Issuer, "sub": client.ID, "aud": s.accessAudience(client, scopes), "client_id": client.ID,
+		"iss": s.cfg.Issuer, "sub": client.ID, "aud": s.accessAudience(client, scopes), "client_id": client.ID, "azp": client.ID,
 		"exp": now.Add(s.cfg.tokenTTL).Unix(), "iat": now.Unix(), "jti": jti, "scope": scope,
 	}
 	access, err := s.cfg.accessKey.sign("at+jwt", at)

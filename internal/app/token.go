@@ -43,6 +43,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // A public client sends only its ID, and one that sends a secret anyway is
 // refused rather than ignored: it is configured as something it is not.
 func (s *server) authenticateClient(r *http.Request) (*clientBlock, bool) {
+	// private_key_jwt (clientassertion.go): a signed assertion instead of a
+	// secret.
+	if r.PostForm.Has("client_assertion") || r.PostForm.Has("client_assertion_type") {
+		return s.authenticateAssertion(r)
+	}
 	id, secret, basic := r.BasicAuth()
 	if basic {
 		// RFC 6749 2.3.1: the Basic credentials are form-encoded first.
@@ -57,6 +62,11 @@ func (s *server) authenticateClient(r *http.Request) (*clientBlock, bool) {
 	}
 	c, ok := s.cfg.client(id)
 	if !ok {
+		return nil, false
+	}
+	if c.keys != nil {
+		// A key-registered client has no secret: an empty one must not
+		// compare equal to the empty secret it holds.
 		return nil, false
 	}
 	if c.public() {

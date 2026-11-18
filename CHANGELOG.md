@@ -7,6 +7,13 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 Added:
 
+- **`private_key_jwt` client authentication** (RFC 7523 2.2, OIDC Core 9) for
+  confidential clients: `jwks` / `jwks_file` in a client block registers
+  RS256, ES256 or EdDSA public keys instead of a `secret_file`, for
+  `client_credentials` and `authorization_code`. One-use `jti` (bounded
+  cache), `exp` within five minutes, `aud` = token endpoint or issuer. A
+  machine client's token has `sub` and `azp` = the client ID and the client's
+  `audience`; scope `machine`. See "Machines with a key and no secret".
 - **Designed pages, and a `branding` block.** Every page is now a template file
   drawn by one Tailwind CSS v4 stylesheet (compiled at build time by
   `go run ./internal/webbuild` with the standalone CLI, pinned by version and

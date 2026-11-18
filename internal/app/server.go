@@ -59,6 +59,9 @@ type server struct {
 	// issued access tokens, by jti: what /userinfo answers with, and what
 	// revocation removes.
 	issued *ttl[issuedToken]
+	// assertionJTIs are the client assertions already used (RFC 7523), until
+	// they would have expired anyway (clientassertion.go).
+	assertionJTIs *ttl[bool]
 
 	// devices waiting for their person, by device code; and the user codes
 	// people type, pointing at them.
@@ -170,6 +173,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.codes = newTTL[*grant](now)
 	s.spent = newTTL[[]string](now)
 	s.issued = newTTL[issuedToken](now)
+	s.assertionJTIs = newTTL[bool](now).capped(maxPending)
 	s.devices = newTTL[*deviceGrant](now).capped(maxPending).evicting()
 	s.poll = deviceInterval * time.Second
 	s.userCodes = newTTL[string](now).capped(maxPending).evicting()
