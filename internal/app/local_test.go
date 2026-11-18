@@ -774,7 +774,14 @@ func TestPasskeyLoginRefusals(t *testing.T) {
 		{name: "another origin", a: alice, as: "alice", hdr: []string{"Origin", "https://evil.example"}, want: http.StatusForbidden},
 		{name: "a null origin", a: alice, as: "alice", hdr: []string{"Origin", "null"}, want: http.StatusForbidden},
 		{name: "an origin prefix", a: alice, as: "alice", hdr: []string{"Origin", f.s.cfg.Issuer + ".evil.example"}, want: http.StatusForbidden},
-		{name: "the page's own headers", a: alice, as: "alice", hdr: []string{"Sec-Fetch-Site", "same-origin", "Origin", f.s.cfg.Issuer}, want: http.StatusFound},
+		{name: "a cross-site null origin", a: alice, as: "alice", hdr: []string{"Sec-Fetch-Site", "cross-site", "Origin", "null"}, want: http.StatusForbidden},
+		{name: "a same-origin fetch's headers", a: alice, as: "alice", hdr: []string{"Sec-Fetch-Site", "same-origin", "Origin", f.s.cfg.Issuer}, want: http.StatusFound},
+		// ⛔ What a browser REALLY sends for the page's form.submit(): the page is
+		// served with Referrer-Policy: no-referrer, so the Origin of a navigation
+		// is "null" (Fetch, "serialize a request origin"). The row above was the
+		// only "accepted" row until 2026-11-18, and every passkey login in
+		// production was refused.
+		{name: "the page's own form post", a: alice, as: "alice", hdr: []string{"Sec-Fetch-Site", "same-origin", "Origin", "null"}, want: http.StatusFound},
 	} {
 		f.resetThrottle()
 		b := newBrowser(t)
