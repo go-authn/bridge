@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package app
+
+// catES is Spanish. Written without a native review: corrections are welcome.
+var catES = map[string]string{
+	"skip": "Saltar al contenido",
+	"help": "Ayuda",
+
+	"lang.nav": "Idioma",
+	"lang.go":  "Aplicar",
+
+	"theme.nav":    "Cambiar tema",
+	"theme.light":  "Claro",
+	"theme.dark":   "Oscuro",
+	"theme.system": "Sistema",
+
+	"js.unsupported": "Este navegador no admite llaves de acceso.",
+	"js.invite":      "Abra el enlace de invitación completo.",
+	"js.cancelled":   "Cancelado o tiempo agotado.",
+	"js.exists":      "Este dispositivo ya tiene una llave de acceso para esta cuenta.",
+	"js.failed":      "Error: %s",
+	"js.registered":  "Llave de acceso registrada. Puede cerrar esta página.",
+	"js.waiting":     "Esperando a su dispositivo…",
+
+	"msg.title": "Inicio de sesión",
+
+	"choose.title":  "Elija su institución",
+	"choose.ttl":    "Elegir una institución",
+	"choose.q":      "Nombre o dominio",
+	"choose.search": "Buscar",
+	"choose.none":   "Ninguna institución coincide.",
+	"choose.more":   "%d más: afine la búsqueda.",
+
+	"method.title":     "Iniciar sesión",
+	"method.fed":       "Con mi institución",
+	"method.fed.sub":   "Su cuenta profesional o universitaria.",
+	"method.local":     "Con una cuenta local",
+	"method.local.sub": "Una llave de acceso creada con una invitación.",
+
+	"login.title":  "Cuenta local",
+	"login.button": "Iniciar sesión con una llave de acceso",
+	"login.manage": "Gestionar mis llaves de acceso",
+
+	"nojs.passkey": "Una llave de acceso requiere JavaScript.",
+	"nojs.page":    "Esta página requiere JavaScript.",
+
+	"enroll.title":  "Registrar una llave de acceso",
+	"enroll.p":      "Un administrador le ha enviado una invitación. Su dispositivo le pedirá que cree una llave de acceso y la desbloquee (huella, rostro o PIN).",
+	"enroll.button": "Crear mi llave de acceso",
+
+	"device.title":    "Conectar un dispositivo",
+	"device.code":     "Código que muestra el dispositivo",
+	"device.err.rate": "Demasiados intentos. Vuelva a intentarlo en unos minutos.",
+	"device.err.code": "Este código no es válido o ha caducado.",
+	"continue":        "Continuar",
+
+	"confirm.ttl":    "Confirmar",
+	"confirm.title":  "%s solicita iniciar sesión en su nombre",
+	"confirm.code":   "Código",
+	"h.confirm.warn": "<strong>Continúe solo si usted inició este acceso, en su propio dispositivo.</strong> Si alguien le envió este código, rechácelo: esa persona obtendría el acceso en su lugar.",
+	"confirm.yes":    "Sí, soy yo",
+	"confirm.no":     "No",
+
+	"open.wait": "Un momento…",
+
+	"acct.title":      "Mi cuenta",
+	"acct.done":       "Terminar",
+	"acct.identity":   "Identidad",
+	"acct.login":      "Identificador",
+	"acct.name":       "Nombre",
+	"acct.mail":       "Correo electrónico",
+	"acct.groups":     "Grupos",
+	"acct.source":     "Origen",
+	"acct.src":        "Cuenta local",
+	"acct.note.local": "El correo y los grupos los modifica el administrador del servicio, no aquí.",
+	"acct.note.fed":   "El correo y los grupos los modifica su institución, no aquí.",
+	"acct.dispname":   "Nombre mostrado",
+	"save":            "Guardar",
+
+	"keys.title":    "Llaves de acceso",
+	"keys.sub":      "Cada dispositivo guarda su propia llave: elimine la de un dispositivo perdido.",
+	"keys.created":  "creada",
+	"keys.lastused": "último uso",
+	"keys.never":    "nunca usada",
+	"keys.backup":   "sincronizable",
+	"keys.current":  "llave de esta confirmación",
+	"keys.confirm":  "¿Eliminar esta llave de acceso?",
+	"keys.full":     "Una cuenta tiene como máximo %d llaves: elimine una para añadir otra.",
+	"keys.add":      "Añadir una llave de acceso",
+	"remove":        "Eliminar",
+
+	"apps.title":      "Aplicaciones y sesiones",
+	"apps.opened":     "abierta",
+	"apps.never":      "nunca renovada",
+	"apps.none":       "Ninguna.",
+	"apps.confirm":    "¿Cerrar esta sesión?",
+	"apps.revokeall":  "Revocar todo",
+	"apps.confirmall": "¿Cerrar todas las sesiones?",
+	"revoke":          "Revocar",
+
+	"access.kind.app_password": "Contraseña de aplicación",
+	"access.kind.ssh":          "Certificado SSH",
+	"access.kind.x509":         "Certificado X.509",
+	"access.kind.wireguard":    "Clave WireGuard",
+	"access.title":             "Accesos técnicos",
+	"access.expires":           "caduca",
+	"access.none":              "Ninguno.",
+	"access.confirm":           "¿Revocar este acceso?",
+
+	"step.done.title": "Sesión terminada",
+	"step.done.p":     "Su espacio de cuenta está cerrado. Puede cerrar esta página o volver a iniciar sesión.",
+	"step.p":          "Confirme que es usted: la confirmación dura cinco minutos.",
+	"step.passkey":    "Confirmar con mi llave de acceso",
+	"step.fed":        "Confirmar con mi institución",
+
+	"ph.summary":   "Ayuda sobre las llaves de acceso",
+	"ph.what.h":    "¿Qué es una llave de acceso?",
+	"ph.what.p":    "Es una forma de iniciar sesión sin escribir nada: su dispositivo la desbloquea con su huella, su rostro o su PIN. Nunca sale del dispositivo y solo sirve para este servicio.",
+	"ph.dev.h":     "Teléfono, ordenador o llave de seguridad",
+	"h.ph.dev.1":   "<strong>Ordenador o teléfono:</strong> confirme con la huella, el rostro o el PIN del dispositivo. Si la llave está en su teléfono, elija «teléfono» en la ventana del navegador y escanee el código QR.",
+	"h.ph.dev.2":   "<strong>Llave de seguridad (USB, NFC):</strong> conéctela y <strong>tóquela</strong> cuando el navegador lo pida. Se le pedirá su PIN si tiene uno.",
+	"ph.fail.h":    "Si se rechaza",
+	"ph.fail.1":    "«Cancelado» o «tiempo agotado»: vuelva a intentarlo y responda sin demora a la solicitud del dispositivo.",
+	"ph.fail.2":    "Desbloquee el dispositivo, conecte o acerque la llave; en un teléfono, active el Bluetooth.",
+	"ph.fail.3":    "Pruebe con otro navegador actualizado o con el dispositivo en el que se creó la llave.",
+	"ph.fail.pre":  "¿Sigue bloqueado?",
+	"ph.support":   "Contacte con el soporte",
+	"ph.admin":     "Contacte con el administrador del servicio",
+	"ph.fail.post": "para obtener una nueva invitación.",
+}

@@ -36,7 +36,8 @@
 {{if .B.SupportURL}}<a href="{{.B.SupportURL}}" rel="noopener noreferrer">{{t "help"}}</a>{{end}}
 </footer>
 </div>
-</body></html>{{end}}
+{{if .Switch}}<script src="/ui.js"></script>
+{{end}}</body></html>{{end}}
 
 {{/* The words the script says, in the page's language: it reads them from here. */}}
 {{define "jsmsgs"}}<div id="msgs" hidden data-unsupported="{{t "js.unsupported"}}" data-invite="{{t "js.invite"}}" data-cancelled="{{t "js.cancelled"}}" data-exists="{{t "js.exists"}}" data-failed="{{t "js.failed"}}" data-registered="{{t "js.registered"}}" data-waiting="{{t "js.waiting"}}"></div>{{end}}

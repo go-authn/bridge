@@ -944,7 +944,7 @@ func TestLocalPagesAreStrict(t *testing.T) {
 		}
 		body := readBody(res)
 		// No inline script, no password field, one external script from this origin.
-		if strings.Count(body, "<script") != 1 || !strings.Contains(body, `<script src="passkey.js"></script>`) {
+		if strings.Count(strings.ReplaceAll(body, `<script src="/ui.js"></script>`, ""), "<script") != 1 ||!strings.Contains(body, `<script src="passkey.js"></script>`) {
 			t.Errorf("%s: scripts:\n%s", name, body)
 		}
 		if strings.Contains(strings.ToLower(body), "password") || strings.Contains(body, "mot de passe") || strings.Contains(body, `type="password"`) {

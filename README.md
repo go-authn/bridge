@@ -322,23 +322,45 @@ Every page a person sees (the choice between the federation and a local
 account, the passkey sign-in with its help panel, enrolment from an invitation,
 `/account`, the device-code and confirmation pages, errors, the signed-out
 state) is a server-rendered `html/template` page, in light or dark mode as the
-browser asks. A page is in ONE language, French or English: the `lang` cookie
-if there is one, else the browser's `Accept-Language`, else French; a small
-FR | EN switch in the header (a plain link to `/lang/<code>`, which sets the
-cookie, `SameSite=Lax`, and goes back; no script) changes it, and `<html lang>`
-follows. Every string is in one catalogue (`internal/app/i18n.go`) in both
-languages, and a test fails on a missing translation. The enrolment page has no
-switch, because its invitation lives in the URL's fragment, which a reload would
-lose; it still follows the cookie and `Accept-Language`. They are drawn by one
+browser asks, or as the person chose. A page is in ONE language, among the seven
+of the fleet's documentation sites: `fr`, `en`, `de`, `es`, `ja`, `ko` and
+`zh-cn`. The language is the `lang` cookie if there is one, else the browser's
+`Accept-Language` (parsed with its q-values; `zh-CN`, `zh-Hans` and the other
+`zh-*` tags give `zh-cn`), else French; `<html lang>` follows (`zh-CN` for
+Chinese). The header has a language combo, a `<select>` that names each language
+in itself (Français, English, Deutsch, Español, 日本語, 한국어, 简体中文). It is a
+form (`GET /lang?lang=<code>&next=<path>`, which sets the cookie,
+`SameSite=Lax`, and goes back) that works without script, with a visible submit
+button; a tiny static same-origin script (`/ui.js`) submits it on change and
+hides the button. Every string is in one catalogue (`internal/app/i18n.go`,
+with `i18n_<code>.go` for the languages after French and English) and a test
+fails on a missing translation in any of the seven. **The German, Spanish,
+Japanese, Korean and Chinese texts were written without a native review;
+corrections are welcome** (an issue or a pull request on `i18n_<code>.go`). The
+terms follow the documentation sites' (the theme words are hextra's own). CJK
+text uses system fonts only (PingFang, Hiragino, Noto Sans CJK, Microsoft
+YaHei, Yu Gothic, Malgun Gothic) and wraps between characters on narrow screens.
+
+The **theme** is light, dark or system (the default: the browser's
+`prefers-color-scheme`), as on the docs: three buttons next to the combo, a form
+(`GET /theme?theme=light|dark|system&next=<path>`) that works without script.
+The choice is the `theme` cookie (`SameSite=Lax`, `Path=/`, nothing but the
+word), and the SERVER writes `class="dark"` or `class="light"` on `<html>`, so
+the first byte of the page is already right and nothing flashes. Tailwind's
+`dark` variant follows that class when it is set and the media query when it is
+not; the brand colour's computed variants exist for both. The enrolment page
+(`/local/enroll`) and the auto-submitting page have neither control, because the
+invitation lives in the URL's fragment, which a reload would lose; they still
+follow the cookies and `Accept-Language`. They are drawn by one
 [Tailwind CSS](https://tailwindcss.com) v4 stylesheet compiled at build time and
 embedded in the binary, and by [Lucide](https://lucide.dev) icons (ISC licence,
 `internal/app/web/icons/LICENSE`) inlined as SVG. Nothing is fetched from a CDN
 or a third-party font: the stylesheet, the brand colour and the logo are served
 from the provider's own origin, under `/assets/<name>.<hash>.<ext>`, so they
 can be cached for good, and the content security policy of a page is
-`default-src 'none'; style-src 'self'; img-src 'self'` (plus `script-src 'self';
-connect-src 'self'` on the two pages that run the passkey script). There is no
-inline style and no `'unsafe-inline'`.
+`default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'` (plus
+`connect-src 'self'` on the pages that run the passkey script). There is no
+inline script, no inline style and no `'unsafe-inline'`.
 
 The theme is neutral. A deployment gives it its own face with an optional
 `branding` block:

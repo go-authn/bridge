@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package app
+
+// catDE is German. Written without a native review: corrections are welcome.
+var catDE = map[string]string{
+	"skip": "Zum Inhalt springen",
+	"help": "Hilfe",
+
+	"lang.nav": "Sprache",
+	"lang.go":  "Übernehmen",
+
+	"theme.nav":    "Darstellung ändern",
+	"theme.light":  "Hell",
+	"theme.dark":   "Dunkel",
+	"theme.system": "System",
+
+	"js.unsupported": "Dieser Browser unterstützt keine Passkeys.",
+	"js.invite":      "Öffnen Sie den vollständigen Einladungslink.",
+	"js.cancelled":   "Abgebrochen oder Zeitlimit überschritten.",
+	"js.exists":      "Dieses Gerät hat bereits einen Passkey für dieses Konto.",
+	"js.failed":      "Fehlgeschlagen: %s",
+	"js.registered":  "Passkey registriert. Sie können diese Seite schließen.",
+	"js.waiting":     "Warten auf Ihr Gerät …",
+
+	"msg.title": "Anmeldung",
+
+	"choose.title":  "Wählen Sie Ihre Einrichtung",
+	"choose.ttl":    "Einrichtung auswählen",
+	"choose.q":      "Name oder Domain",
+	"choose.search": "Suchen",
+	"choose.none":   "Keine Einrichtung gefunden.",
+	"choose.more":   "%d weitere: Bitte die Suche eingrenzen.",
+
+	"method.title":     "Anmelden",
+	"method.fed":       "Mit meiner Einrichtung",
+	"method.fed.sub":   "Ihr dienstliches oder universitäres Konto.",
+	"method.local":     "Mit einem lokalen Konto",
+	"method.local.sub": "Ein Passkey, der per Einladung erstellt wurde.",
+
+	"login.title":  "Lokales Konto",
+	"login.button": "Mit einem Passkey anmelden",
+	"login.manage": "Meine Passkeys verwalten",
+
+	"nojs.passkey": "Ein Passkey benötigt JavaScript.",
+	"nojs.page":    "Diese Seite benötigt JavaScript.",
+
+	"enroll.title":  "Passkey registrieren",
+	"enroll.p":      "Eine Administratorin oder ein Administrator hat Sie eingeladen. Ihr Gerät fordert Sie auf, einen Passkey zu erstellen und zu entsperren (Fingerabdruck, Gesicht oder PIN).",
+	"enroll.button": "Meinen Passkey erstellen",
+
+	"device.title":    "Gerät verbinden",
+	"device.code":     "Auf dem Gerät angezeigter Code",
+	"device.err.rate": "Zu viele Versuche. Bitte versuchen Sie es in einigen Minuten erneut.",
+	"device.err.code": "Dieser Code ist ungültig oder abgelaufen.",
+	"continue":        "Weiter",
+
+	"confirm.ttl":    "Bestätigen",
+	"confirm.title":  "%s möchte sich in Ihrem Namen anmelden",
+	"confirm.code":   "Code",
+	"h.confirm.warn": "<strong>Fahren Sie nur fort, wenn Sie diese Anmeldung selbst auf Ihrem eigenen Gerät gestartet haben.</strong> Wenn Ihnen jemand diesen Code geschickt hat, lehnen Sie ab: Diese Person würde den Zugang an Ihrer Stelle erhalten.",
+	"confirm.yes":    "Ja, ich bin es",
+	"confirm.no":     "Nein",
+
+	"open.wait": "Einen Moment …",
+
+	"acct.title":      "Mein Konto",
+	"acct.done":       "Beenden",
+	"acct.identity":   "Identität",
+	"acct.login":      "Benutzername",
+	"acct.name":       "Name",
+	"acct.mail":       "E-Mail",
+	"acct.groups":     "Gruppen",
+	"acct.source":     "Quelle",
+	"acct.src":        "Lokales Konto",
+	"acct.note.local": "E-Mail und Gruppen werden von der Administration des Dienstes geändert, nicht hier.",
+	"acct.note.fed":   "E-Mail und Gruppen werden von Ihrer Einrichtung geändert, nicht hier.",
+	"acct.dispname":   "Anzeigename",
+	"save":            "Speichern",
+
+	"keys.title":    "Passkeys",
+	"keys.sub":      "Jedes Gerät hat seinen eigenen Schlüssel: Entfernen Sie den eines verlorenen Geräts.",
+	"keys.created":  "erstellt",
+	"keys.lastused": "zuletzt verwendet",
+	"keys.never":    "nie verwendet",
+	"keys.backup":   "synchronisierbar",
+	"keys.current":  "Passkey dieser Bestätigung",
+	"keys.confirm":  "Diesen Passkey entfernen?",
+	"keys.full":     "Ein Konto hat höchstens %d Passkeys: Entfernen Sie einen, um einen weiteren hinzuzufügen.",
+	"keys.add":      "Passkey hinzufügen",
+	"remove":        "Entfernen",
+
+	"apps.title":      "Anwendungen und Sitzungen",
+	"apps.opened":     "geöffnet",
+	"apps.never":      "nie erneuert",
+	"apps.none":       "Keine.",
+	"apps.confirm":    "Diese Sitzung beenden?",
+	"apps.revokeall":  "Alle widerrufen",
+	"apps.confirmall": "Alle Sitzungen beenden?",
+	"revoke":          "Widerrufen",
+
+	"access.kind.app_password": "Anwendungspasswort",
+	"access.kind.ssh":          "SSH-Zertifikat",
+	"access.kind.x509":         "X.509-Zertifikat",
+	"access.kind.wireguard":    "WireGuard-Schlüssel",
+	"access.title":             "Technische Zugänge",
+	"access.expires":           "läuft ab",
+	"access.none":              "Keine.",
+	"access.confirm":           "Diesen Zugang widerrufen?",
+
+	"step.done.title": "Sitzung beendet",
+	"step.done.p":     "Ihr Kontobereich ist geschlossen. Sie können diese Seite schließen oder sich erneut anmelden.",
+	"step.p":          "Bestätigen Sie, dass Sie es sind: Die Bestätigung gilt fünf Minuten.",
+	"step.passkey":    "Mit meinem Passkey bestätigen",
+	"step.fed":        "Mit meiner Einrichtung bestätigen",
+
+	"ph.summary":   "Hilfe zu Passkeys",
+	"ph.what.h":    "Was ist ein Passkey?",
+	"ph.what.p":    "Ein Passkey meldet Sie an, ohne dass Sie etwas eintippen: Ihr Gerät entsperrt ihn mit Fingerabdruck, Gesicht oder PIN. Er verlässt das Gerät nie und funktioniert nur für diesen Dienst.",
+	"ph.dev.h":     "Telefon, Computer oder Sicherheitsschlüssel",
+	"h.ph.dev.1":   "<strong>Computer oder Telefon:</strong> Bestätigen Sie mit Fingerabdruck, Gesicht oder PIN des Geräts. Befindet sich der Passkey auf Ihrem Telefon, wählen Sie im Browserfenster „Telefon“ und scannen Sie den QR-Code.",
+	"h.ph.dev.2":   "<strong>Sicherheitsschlüssel (USB, NFC):</strong> Stecken Sie ihn ein und <strong>berühren Sie ihn</strong>, wenn der Browser dazu auffordert. Falls er eine PIN hat, wird sie abgefragt.",
+	"ph.fail.h":    "Wenn es abgelehnt wird",
+	"ph.fail.1":    "„Abgebrochen“ oder „Zeitüberschreitung“: Versuchen Sie es erneut und beantworten Sie die Aufforderung des Geräts zügig.",
+	"ph.fail.2":    "Entsperren Sie das Gerät, stecken Sie den Schlüssel ein oder halten Sie ihn an; schalten Sie bei einem Telefon Bluetooth ein.",
+	"ph.fail.3":    "Versuchen Sie einen anderen, aktuellen Browser oder das Gerät, auf dem der Passkey erstellt wurde.",
+	"ph.fail.pre":  "Immer noch blockiert?",
+	"ph.support":   "Wenden Sie sich an den Support",
+	"ph.admin":     "Wenden Sie sich an die Administration des Dienstes",
+	"ph.fail.post": "und fordern Sie eine neue Einladung an.",
+}

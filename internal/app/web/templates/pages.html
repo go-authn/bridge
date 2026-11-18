@@ -21,7 +21,7 @@
 </form>
 </section>
 <ul class="surface rows mt-4 overflow-hidden">
-{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}" class="flex w-full items-center justify-between gap-3 py-0.5 font-medium no-underline hover:underline"><span class="text-slate-900 dark:text-slate-100">{{.Name $.Lang "fr" "en"}}</span><span class="text-brand-ink">{{icon "check" "size-4"}}</span></a></li>
+{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}" class="flex w-full items-center justify-between gap-3 py-0.5 font-medium no-underline hover:underline"><span class="text-slate-900 dark:text-slate-100">{{.Name $.NameLang "fr" "en"}}</span><span class="text-brand-ink">{{icon "check" "size-4"}}</span></a></li>
 {{else}}<li><span class="muted">{{t "choose.none"}}</span></li>{{end}}
 </ul>
 {{if .More}}<p class="muted mt-3">{{tf "choose.more" .More}}</p>{{end}}
@@ -59,7 +59,7 @@
 <noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.passkey"}}</p></noscript>
 </section>
 <p class="mt-4 text-center text-sm"><a href="/account">{{t "login.manage"}}</a></p>
-<script src="passkey.js"></script>
+{{template "jsmsgs" .}}<script src="passkey.js"></script>
 {{template "foot" .}}{{end}}
 
 {{define "localenroll"}}{{template "head" .}}
@@ -74,7 +74,7 @@
 {{template "passkeyhelp" .}}
 <noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.passkey"}}</p></noscript>
 </section>
-<script src="passkey.js"></script>
+{{template "jsmsgs" .}}<script src="passkey.js"></script>
 {{template "foot" .}}{{end}}
 
 {{define "device"}}{{template "head" .}}

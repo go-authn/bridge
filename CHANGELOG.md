@@ -21,6 +21,18 @@ Added:
   without a password on non-domain Windows (go-authn/kinit). A machine with a
   registered key and `kerberos_tickets` may ask `client_credentials` for the
   `kerberos` scope by name and gets a TGT for `<client>@<issuer host>`.
+- **Seven languages and a theme switcher.** Pages now speak `fr`, `en`, `de`,
+  `es`, `ja`, `ko` and `zh-cn` (the languages of the docs sites), chosen by the
+  `lang` cookie, then `Accept-Language` with q-values (`zh-CN`/`zh-Hans` give
+  `zh-cn`), then French; `<html lang>` is exact (`zh-CN`). The FR | EN link pair
+  is replaced by a combo of language names in themselves, a form (`GET /lang`)
+  that works without script, with a tiny static `/ui.js` that submits on change.
+  A light / dark / system theme (`GET /theme`, `theme` cookie) is drawn by the
+  server on `<html>`, with no flash and no script needed. The passkey script's
+  words come from the page (`#msgs`), not from the script. German, Spanish,
+  Japanese, Korean and Chinese were written without native review; corrections
+  welcome. CSP gains `script-src 'self'` on every page (it already had it on the
+  passkey pages); nothing inline. CJK uses system fonts.
 - **Designed pages, and a `branding` block.** Every page is now a template file
   drawn by one Tailwind CSS v4 stylesheet (compiled at build time by
   `go run ./internal/webbuild` with the standalone CLI, pinned by version and

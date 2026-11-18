@@ -446,6 +446,27 @@ func (s *server) localEnrollPage(w http.ResponseWriter, r *http.Request) {
 	s.show(w, "localenroll", nil)
 }
 
+// uiJS is the one thing the header's script does: submit the language combo
+// when it changes, and hide its button (which is for browsers without script).
+// Static, the same for everybody, served from this origin.
+const uiJS = `"use strict";
+(function () {
+  var sel = document.getElementById("lang-select");
+  if (!sel || !sel.form) { return; }
+  var go = document.getElementById("lang-go");
+  if (go) { go.hidden = true; }
+  sel.addEventListener("change", function () { sel.form.submit(); });
+})();
+`
+
+// uiScript serves uiJS at /ui.js.
+func (s *server) uiScript(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write([]byte(uiJS))
+}
+
 // localScript is the script both pages run: the browser half of WebAuthn.
 func (s *server) localScript(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")

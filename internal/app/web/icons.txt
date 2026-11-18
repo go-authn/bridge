@@ -9,8 +9,11 @@ fingerprint-pattern
 key-round
 laptop
 log-out
+monitor
 monitor-smartphone
+moon
 plug
 shield-check
+sun
 trash-2
 user-round

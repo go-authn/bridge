@@ -209,7 +209,7 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	} else {
 		src := who.idp
 		if idp, ok := s.fed.IdP(who.idp); ok {
-			src = idp.Name("fr", "en") + " (" + who.idp + ")"
+			src = idp.Name("fr", "en") + " (" + who.idp + ")" // the page's own language is not known here
 		}
 		view["Source"] = src
 	}

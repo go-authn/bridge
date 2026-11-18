@@ -227,6 +227,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("/lang/{code}", s.setLang)
 	mux.HandleFunc("/lang", s.setLang)
 	mux.HandleFunc("/theme", s.setTheme)
+	mux.HandleFunc("GET /ui.js", s.uiScript)
 	mux.HandleFunc("GET /.well-known/openid-configuration", s.discovery)
 	mux.HandleFunc("GET /jwks", s.jwks)
 	mux.HandleFunc("/authorize", s.limited(s.authorize))

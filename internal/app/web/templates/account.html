@@ -90,5 +90,5 @@
 </section>
 {{end}}
 <noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.page"}}</p></noscript>
-<script src="account/passkey.js"></script>
+{{template "jsmsgs" .}}<script src="account/passkey.js"></script>
 {{template "foot" .}}{{end}}
