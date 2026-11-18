@@ -103,6 +103,37 @@ home {
 	}
 }
 
+// go-authn is the software, not the organisation: the page names the
+// configured title (in every language), or "this site", never the software.
+// The brand is set too, so the header and footer do not name it either.
+func TestHomePageNeverNamesTheSoftware(t *testing.T) {
+	titled := localFixture(t, "home {\n title = \"Mésocentre de Saclay\"\n}\nbranding {\n name = \"Mésocentre\"\n}\n")
+	plain := localFixture(t, "")
+	for _, l := range languages {
+		c := "Cookie"
+		v := langCookie + "=" + l.Code
+		body := html.UnescapeString(homeGet(titled.s.handler(), "GET", "/", c, v).Body.String())
+		if strings.Contains(strings.ToLower(body), "go-authn") {
+			t.Errorf("%s: a titled home page names the software:\n%s", l.Code, body)
+		}
+		sentence, _ := lookup(l.Code, "home.p")
+		if want := strings.Replace(sentence, "%s", "Mésocentre de Saclay", 1); !strings.Contains(body, want) {
+			t.Errorf("%s: the sentence does not name the title: %q", l.Code, want)
+		}
+		// With no title: "this site", and the main text still never names the
+		// software (the header and footer carry the deployment's brand, which
+		// defaults to it).
+		pb := html.UnescapeString(homeGet(plain.s.handler(), "GET", "/", c, v).Body.String())
+		main := pb[strings.Index(pb, "<main"):strings.Index(pb, "</main>")]
+		if strings.Contains(strings.ToLower(main), "go-authn") {
+			t.Errorf("%s: the untitled main text names the software", l.Code)
+		}
+		if site, _ := lookup(l.Code, "home.p.site"); !strings.Contains(main, site) {
+			t.Errorf("%s: no \"this site\" sentence: %q", l.Code, site)
+		}
+	}
+}
+
 // Nothing about clients, users or keys is shown to an anonymous visitor: not a
 // client ID, a redirect URI, an audience, a login, a mail or a key.
 func TestHomePageShowsNothingAboutClientsUsersOrKeys(t *testing.T) {
