@@ -1,5 +1,5 @@
 {{define "head"}}<!doctype html>
-<html lang="fr"><head><meta charset="utf-8">
+<html lang="{{.Lang}}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{.Title}} · {{.B.Name}}</title>
@@ -8,47 +8,47 @@
 <link rel="stylesheet" href="{{.B.BrandCSSURL}}">
 </head>
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-dark-bg dark:text-slate-100">
-<a href="#main" class="skip">Aller au contenu / Skip to content</a>
+<a href="#main" class="skip">{{t "skip"}}</a>
 <div class="mx-auto flex min-h-screen w-full flex-col px-4 {{if .Wide}}max-w-3xl{{else}}max-w-md{{end}}">
 <header class="flex items-center gap-3 py-6">
 <img src="{{.B.LogoURL}}" alt="" width="36" height="36" class="size-9 rounded-lg object-contain">
 <span class="text-lg font-semibold tracking-tight">{{.B.Name}}</span>
+{{if .Switch}}<nav aria-label="{{t "lang.nav"}}" class="ml-auto flex items-center gap-1 text-sm">
+{{if eq .Lang "fr"}}<span aria-current="true" lang="fr" class="chip-brand">FR</span><a href="/lang/en?next={{.Next}}" hreflang="en" lang="en" rel="nofollow" class="chip-plain no-underline hover:underline" aria-label="English">EN</a>{{else}}<a href="/lang/fr?next={{.Next}}" hreflang="fr" lang="fr" rel="nofollow" class="chip-plain no-underline hover:underline" aria-label="Français">FR</a><span aria-current="true" lang="en" class="chip-brand">EN</span>{{end}}
+</nav>{{end}}
 </header>
 <main id="main" class="flex-1 pb-8">
 {{end}}
 {{define "foot"}}</main>
 <footer class="flex flex-wrap items-center justify-between gap-2 py-6 muted">
 <span>{{.B.Name}}</span>
-{{if .B.SupportURL}}<a href="{{.B.SupportURL}}" rel="noopener noreferrer">Aide / Help</a>{{end}}
+{{if .B.SupportURL}}<a href="{{.B.SupportURL}}" rel="noopener noreferrer">{{t "help"}}</a>{{end}}
 </footer>
 </div>
 </body></html>{{end}}
 
 {{define "passkeyhelp"}}<details id="passkey-help" class="help mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5">
-<summary>{{icon "key-round" "size-4 shrink-0"}}<span>Aide sur les clés d'accès / <span lang="en">Help with passkeys</span></span>{{icon "chevron-down" "chev ml-auto size-4 shrink-0 transition-transform"}}</summary>
+<summary>{{icon "key-round" "size-4 shrink-0"}}<span>{{t "ph.summary"}}</span>{{icon "chevron-down" "chev ml-auto size-4 shrink-0 transition-transform"}}</summary>
 <div class="mt-3 space-y-4 text-slate-700 dark:text-slate-300">
 <div>
-<h2 class="font-semibold text-slate-900 dark:text-white">Qu'est-ce qu'une clé d'accès ?</h2>
-<p>C'est un moyen de se connecter sans rien taper : votre appareil la déverrouille avec votre empreinte, votre visage ou son code. Elle ne quitte jamais l'appareil et ne sert que sur ce service.</p>
-<p lang="en" class="muted">A passkey signs you in without typing anything: your device unlocks it with your fingerprint, your face or its PIN. It never leaves the device and only works for this service.</p>
+<h2 class="font-semibold text-slate-900 dark:text-white">{{t "ph.what.h"}}</h2>
+<p>{{t "ph.what.p"}}</p>
 </div>
 <div>
-<h2 class="font-semibold text-slate-900 dark:text-white">Téléphone, ordinateur ou clé de sécurité</h2>
+<h2 class="font-semibold text-slate-900 dark:text-white">{{t "ph.dev.h"}}</h2>
 <ul class="list-disc space-y-1 pl-5">
-<li><strong>Ordinateur ou téléphone :</strong> validez avec l'empreinte, le visage ou le code de l'appareil. Si la clé est sur votre téléphone, choisissez « téléphone » dans la fenêtre du navigateur et scannez le code QR.</li>
-<li><strong>Clé de sécurité (USB, NFC) :</strong> insérez-la, puis <strong>touchez-la</strong> quand le navigateur le demande. Son code PIN, s'il existe, sera demandé.</li>
+<li>{{th "h.ph.dev.1"}}</li>
+<li>{{th "h.ph.dev.2"}}</li>
 </ul>
-<p lang="en" class="muted">Laptop or phone: confirm with the device's fingerprint, face or PIN; for a passkey on your phone, pick “phone” in the browser prompt and scan the QR code. Security key (USB, NFC): plug it in, then touch it when the browser asks; its PIN is asked if it has one.</p>
 </div>
 <div>
-<h2 class="font-semibold text-slate-900 dark:text-white">Si c'est refusé</h2>
+<h2 class="font-semibold text-slate-900 dark:text-white">{{t "ph.fail.h"}}</h2>
 <ul class="list-disc space-y-1 pl-5">
-<li>« Annulé » ou « délai dépassé » : relancez, et répondez à la demande de l'appareil sans attendre.</li>
-<li>Déverrouillez l'appareil, branchez ou approchez la clé ; pour un téléphone, activez le Bluetooth.</li>
-<li>Essayez un autre navigateur à jour, ou l'appareil sur lequel la clé a été créée.</li>
-<li>Toujours bloqué ? {{if .B.SupportURL}}<a href="{{.B.SupportURL}}" rel="noopener noreferrer">Contactez le support</a>{{else}}Contactez l'administrateur du service{{end}} : il peut vous envoyer une nouvelle invitation.</li>
+<li>{{t "ph.fail.1"}}</li>
+<li>{{t "ph.fail.2"}}</li>
+<li>{{t "ph.fail.3"}}</li>
+<li>{{t "ph.fail.pre"}} {{if .B.SupportURL}}<a href="{{.B.SupportURL}}" rel="noopener noreferrer">{{t "ph.support"}}</a>{{else}}{{t "ph.admin"}}{{end}} {{t "ph.fail.post"}}</li>
 </ul>
-<p lang="en" class="muted">If it is refused: retry and answer the device promptly; unlock the device or plug in the key (Bluetooth on for a phone); try an up-to-date browser or the device the passkey was created on. Still stuck? Ask the support or the service administrator for a new invitation.</p>
 </div>
 </div>
 </details>{{end}}

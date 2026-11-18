@@ -2,75 +2,72 @@
 {{if .Signed}}
 <div id="account" data-csrf="{{.CSRF}}" class="space-y-6">
 <div class="flex items-center justify-between gap-4">
-<div>
-<h1 class="text-2xl font-semibold tracking-tight">Mon compte</h1>
-<p lang="en" class="muted">My account.</p>
-</div>
-<button id="signout" type="button" data-post="account/signout" data-after="/account?done=1" class="btn-outline shrink-0">{{icon "log-out" "size-4"}}<span>Terminer / Done</span></button>
+<h1 class="text-2xl font-semibold tracking-tight">{{t "acct.title"}}</h1>
+<button id="signout" type="button" data-post="account/signout" data-after="/account?done=1" class="btn-outline shrink-0">{{icon "log-out" "size-4"}}<span>{{t "acct.done"}}</span></button>
 </div>
 
 <section class="surface p-5 sm:p-6" aria-labelledby="h-identity">
-<h2 id="h-identity" class="flex items-center gap-2 text-lg font-semibold">{{icon "user-round" "size-5 text-brand-ink"}}<span>Identité / <span lang="en">Identity</span></span></h2>
+<h2 id="h-identity" class="flex items-center gap-2 text-lg font-semibold">{{icon "user-round" "size-5 text-brand-ink"}}<span>{{t "acct.identity"}}</span></h2>
 <dl id="identity" class="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[10rem_1fr]">
-<dt class="muted">Identifiant / Login</dt><dd class="font-semibold">{{.Login}}</dd>
-<dt class="muted">Nom / Name</dt><dd><span id="shown-name">{{.Name}}</span></dd>
-<dt class="muted">Courriel / Mail</dt><dd><span id="shown-mail">{{.Mail}}</span></dd>
-<dt class="muted">Groupes / Groups</dt><dd class="flex flex-wrap gap-1.5">{{range .Groups}}<code>{{.}}</code>{{else}}<span>—</span>{{end}}</dd>
-<dt class="muted">Source</dt><dd>{{.Source}}</dd>
+<dt class="muted">{{t "acct.login"}}</dt><dd class="font-semibold">{{.Login}}</dd>
+<dt class="muted">{{t "acct.name"}}</dt><dd><span id="shown-name">{{.Name}}</span></dd>
+<dt class="muted">{{t "acct.mail"}}</dt><dd><span id="shown-mail">{{.Mail}}</span></dd>
+<dt class="muted">{{t "acct.groups"}}</dt><dd class="flex flex-wrap gap-1.5">{{range .Groups}}<code>{{.}}</code>{{else}}<span>—</span>{{end}}</dd>
+<dt class="muted">{{t "acct.source"}}</dt><dd>{{if .Local}}{{t "acct.src"}}{{else}}{{.Source}}{{end}}</dd>
 </dl>
-<p class="muted mt-4 flex items-start gap-2">Le courriel et les groupes sont modifiés par {{.ChangedBy}}, pas ici. / Mail and groups are changed by {{.ChangedBy}}, not here.</p>
+<p class="muted mt-4">{{if .Local}}{{t "acct.note.local"}}{{else}}{{t "acct.note.fed"}}{{end}}</p>
 {{if .Local}}<div class="mt-5 border-t border-slate-200/80 pt-5 dark:border-white/[0.07]">
-<label for="name" class="label">Nom affiché / <span lang="en">Display name</span></label>
+<label for="name" class="label">{{t "acct.dispname"}}</label>
 <div class="flex flex-col gap-2 sm:flex-row">
 <input id="name" value="{{.Name}}" maxlength="100" autocomplete="off" class="field">
-<button type="button" data-post="account/profile" data-from="name" data-field="name" class="btn-primary shrink-0">Enregistrer / Save</button>
+<button type="button" data-post="account/profile" data-from="name" data-field="name" class="btn-primary shrink-0">{{t "save"}}</button>
 </div>
 </div>{{end}}
 </section>
 
 {{if .Local}}<section class="surface" aria-labelledby="h-keys">
 <div class="p-5 pb-3 sm:p-6 sm:pb-3">
-<h2 id="h-keys" class="flex items-center gap-2 text-lg font-semibold">{{icon "fingerprint-pattern" "size-5 text-brand-ink"}}<span>Clés d'accès / <span lang="en">Passkeys</span></span></h2>
-<p class="muted mt-1">Chaque appareil garde sa propre clé : retirez celle d'un appareil perdu. / <span lang="en">Each device holds its own key: remove the one of a lost device.</span></p>
+<h2 id="h-keys" class="flex items-center gap-2 text-lg font-semibold">{{icon "fingerprint-pattern" "size-5 text-brand-ink"}}<span>{{t "keys.title"}}</span></h2>
+<p class="muted mt-1">{{t "keys.sub"}}</p>
 </div>
 <ul id="keys" class="rows border-t border-slate-200/80 dark:border-white/[0.07]">{{range .Keys}}<li>
 <div class="flex min-w-0 items-start gap-3">
 <span class="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400">{{icon "key-round" "size-5"}}</span>
 <div class="min-w-0 text-sm">
 <div><code>{{.Prefix}}</code></div>
-<div class="muted mt-1">créée / created {{.Created}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais utilisée / never used{{end}}</div>
-<div class="mt-1.5 flex flex-wrap gap-1.5">{{if .Backup}}<span class="chip-plain">synchronisable / backup-eligible</span>{{end}}{{if .Current}}<span class="chip-brand">{{icon "check" "size-3"}}clé de cette confirmation / this confirmation's key</span>{{end}}</div>
+<div class="muted mt-1">{{t "keys.created"}} {{.Created}} · {{if .LastUsed}}{{t "keys.lastused"}} {{.LastUsed}}{{else}}{{t "keys.never"}}{{end}}</div>
+<div class="mt-1.5 flex flex-wrap gap-1.5">{{if .Backup}}<span class="chip-plain">{{t "keys.backup"}}</span>{{end}}{{if .Current}}<span class="chip-brand">{{icon "check" "size-3"}}{{t "keys.current"}}</span>{{end}}</div>
 </div>
 </div>
-<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="Supprimer cette clé d'accès ? / Remove this passkey?" class="btn-danger btn-sm shrink-0">{{icon "trash-2" "size-3.5"}}<span>Supprimer / Remove</span></button>
+<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="{{t "keys.confirm"}}" class="btn-danger btn-sm shrink-0">{{icon "trash-2" "size-3.5"}}<span>{{t "remove"}}</span></button>
 </li>{{end}}</ul>
 <div class="border-t border-slate-200/80 p-5 sm:p-6 dark:border-white/[0.07]">
-{{if .Full}}<p class="muted">Un compte a au plus {{.Max}} clés : supprimez-en une pour en ajouter. / At most {{.Max}} passkeys: remove one to add another.</p>
-{{else}}<button id="passkey-button" type="button" data-mode="add" class="btn-primary" disabled>{{icon "key-round" "size-4"}}<span>Ajouter une clé d'accès / Add a passkey</span></button>{{end}}
+{{if .Full}}<p class="muted">{{tf "keys.full" .Max}}</p>
+{{else}}<button id="passkey-button" type="button" data-mode="add" class="btn-primary" disabled>{{icon "key-round" "size-4"}}<span>{{t "keys.add"}}</span></button>{{end}}
 {{template "passkeyhelp" .}}
 </div>
 </section>{{end}}
 
 <section class="surface" aria-labelledby="h-apps">
 <div class="p-5 pb-3 sm:p-6 sm:pb-3">
-<h2 id="h-apps" class="flex items-center gap-2 text-lg font-semibold">{{icon "laptop" "size-5 text-brand-ink"}}<span>Applications et sessions / <span lang="en">Applications and sessions</span></span></h2>
+<h2 id="h-apps" class="flex items-center gap-2 text-lg font-semibold">{{icon "laptop" "size-5 text-brand-ink"}}<span>{{t "apps.title"}}</span></h2>
 </div>
 <ul id="apps" class="rows border-t border-slate-200/80 dark:border-white/[0.07]">{{range .Apps}}<li>
 <div class="min-w-0 text-sm"><div class="font-semibold">{{.Client}}</div>
-<div class="muted mt-1">{{if .Created}}ouverte / opened {{.Created}}{{else}}ouverte / opened —{{end}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais renouvelée / never renewed{{end}}</div></div>
-<button type="button" data-post="account/apps/revoke" data-json="{{.Arg}}" data-confirm="Mettre fin à cette session ? / End this session?" class="btn-outline btn-sm shrink-0">Révoquer / Revoke</button>
-</li>{{else}}<li><span class="muted">Aucune. / None.</span></li>{{end}}</ul>
-{{if .Apps}}<div class="border-t border-slate-200/80 p-5 dark:border-white/[0.07]"><button type="button" data-post="account/apps/revoke" data-json="{&#34;all&#34;:true}" data-confirm="Mettre fin à toutes les sessions ? / End all sessions?" class="btn-danger btn-sm">Tout révoquer / Revoke all</button></div>{{end}}
+<div class="muted mt-1">{{t "apps.opened"}} {{if .Created}}{{.Created}}{{else}}—{{end}} · {{if .LastUsed}}{{t "keys.lastused"}} {{.LastUsed}}{{else}}{{t "apps.never"}}{{end}}</div></div>
+<button type="button" data-post="account/apps/revoke" data-json="{{.Arg}}" data-confirm="{{t "apps.confirm"}}" class="btn-outline btn-sm shrink-0">{{t "revoke"}}</button>
+</li>{{else}}<li><span class="muted">{{t "apps.none"}}</span></li>{{end}}</ul>
+{{if .Apps}}<div class="border-t border-slate-200/80 p-5 dark:border-white/[0.07]"><button type="button" data-post="account/apps/revoke" data-json="{&#34;all&#34;:true}" data-confirm="{{t "apps.confirmall"}}" class="btn-danger btn-sm">{{t "apps.revokeall"}}</button></div>{{end}}
 </section>
 
 {{if .AccessOn}}<section class="surface" aria-labelledby="h-access">
 <div class="p-5 pb-3 sm:p-6 sm:pb-3">
-<h2 id="h-access" class="flex items-center gap-2 text-lg font-semibold">{{icon "plug" "size-5 text-brand-ink"}}<span>Accès techniques / <span lang="en">Technical access</span></span></h2>
+<h2 id="h-access" class="flex items-center gap-2 text-lg font-semibold">{{icon "plug" "size-5 text-brand-ink"}}<span>{{t "access.title"}}</span></h2>
 </div>
 <ul id="access" class="rows border-t border-slate-200/80 dark:border-white/[0.07]">{{range .Access}}<li>
-<div class="min-w-0 text-sm"><span class="font-semibold">{{.What}}</span>{{if .Detail}} <code>{{.Detail}}</code>{{end}}<div class="muted mt-1">expire / expires {{.Expires}}</div></div>
-<button type="button" data-post="account/access/revoke" data-json="{{.Arg}}" data-confirm="Révoquer cet accès ? / Revoke this access?" class="btn-outline btn-sm shrink-0">Révoquer / Revoke</button>
-</li>{{else}}<li><span class="muted">Aucun. / None.</span></li>{{end}}</ul>
+<div class="min-w-0 text-sm"><span class="font-semibold">{{tor .What}}</span>{{if .Detail}} <code>{{.Detail}}</code>{{end}}<div class="muted mt-1">{{t "access.expires"}} {{.Expires}}</div></div>
+<button type="button" data-post="account/access/revoke" data-json="{{.Arg}}" data-confirm="{{t "access.confirm"}}" class="btn-outline btn-sm shrink-0">{{t "revoke"}}</button>
+</li>{{else}}<li><span class="muted">{{t "access.none"}}</span></li>{{end}}</ul>
 </section>{{end}}
 
 <p id="passkey-status" role="status" aria-live="polite" class="muted min-h-[1.25rem]"></p>
@@ -78,22 +75,20 @@
 {{else}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 {{if .Done}}<span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200">{{icon "circle-check" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Session terminée</h1>
-<p lang="en" class="muted">Session ended.</p>
-<p class="mt-4">Votre espace est fermé. Vous pouvez fermer cette page, ou vous reconnecter. / <span lang="en" class="muted">Your account space is closed. You can close this page, or sign in again.</span></p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "step.done.title"}}</h1>
+<p class="mt-4">{{t "step.done.p"}}</p>
 {{else}}<span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "user-round" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Mon compte</h1>
-<p lang="en" class="muted">My account.</p>
-<p class="mt-4">Confirmez que c'est vous : la confirmation dure cinq minutes. / Confirm it is you: the confirmation lasts five minutes.</p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "acct.title"}}</h1>
+<p class="mt-4">{{t "step.p"}}</p>
 {{end}}
 <div class="mt-6 flex flex-col gap-3">
-{{if .Passkey}}<button id="passkey-button" type="button" data-mode="stepup" class="btn-primary w-full" disabled>{{icon "fingerprint-pattern" "size-4"}}<span>Confirmer avec ma clé d'accès / Confirm with my passkey</span></button>{{end}}
-<a id="federation-link" href="account/federation" class="btn-outline w-full">{{icon "building-2" "size-4"}}<span>Confirmer avec mon établissement / Confirm with my institution</span></a>
+{{if .Passkey}}<button id="passkey-button" type="button" data-mode="stepup" class="btn-primary w-full" disabled>{{icon "fingerprint-pattern" "size-4"}}<span>{{t "step.passkey"}}</span></button>{{end}}
+<a id="federation-link" href="account/federation" class="btn-outline w-full">{{icon "building-2" "size-4"}}<span>{{t "step.fed"}}</span></a>
 </div>
 <p id="passkey-status" role="status" aria-live="polite" class="muted mt-3 min-h-[1.25rem]"></p>
 {{if .Passkey}}{{template "passkeyhelp" .}}{{end}}
 </section>
 {{end}}
-<noscript><p class="mt-4 text-sm font-semibold">Cette page demande JavaScript. / This page needs JavaScript.</p></noscript>
+<noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.page"}}</p></noscript>
 <script src="account/passkey.js"></script>
 {{template "foot" .}}{{end}}

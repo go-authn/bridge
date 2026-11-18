@@ -87,13 +87,28 @@ func TestPageScreenshots(t *testing.T) {
 		} else {
 			headers(w)
 		}
-		s.show(w, tn, data)
+		lang := langFR
+		if r.URL.Query().Get("lang") == langEN {
+			lang = langEN
+		}
+		s.show(&langWriter{ResponseWriter: w, lang: lang, next: r.URL.RequestURI()}, tn, data)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
+	// Every page in French; the English variants of the sign-in choices and of
+	// the account space.
+	type shot struct{ name, lang string }
+	var shots []shot
+	for _, n := range names {
+		shots = append(shots, shot{n, langFR})
+		if tn := templateOf(n); tn == "choose" || tn == "locallogin" || tn == "account" {
+			shots = append(shots, shot{n, langEN})
+		}
+	}
 	for _, scheme := range []string{"light", "dark"} {
-		for _, name := range names {
+		for _, sh := range shots {
+			name := sh.name
 			p := &page{t: t, ctx: ctx}
 			p.call(func(ctx context.Context, tg *chromedp.Target) error {
 				if _, err := cdp.Call(ctx, tg, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{
@@ -103,7 +118,12 @@ func TestPageScreenshots(t *testing.T) {
 				_, err := cdp.Call(ctx, tg, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 900, Height: 800, DeviceScaleFactor: 1})
 				return err
 			})
-			p.goTo(srv.URL + "/shot/" + name)
+			p.goTo(srv.URL + "/shot/" + name + "?lang=" + sh.lang)
+			var htmlLang string
+			p.eval(`document.documentElement.lang`, &htmlLang)
+			if htmlLang != sh.lang {
+				p.fatalf("%s: <html lang> is %q, want %s", name, htmlLang, sh.lang)
+			}
 			// The stylesheet was applied under the page's own CSP: a card has
 			// rounded corners, the body has the scheme's background, and the
 			// logo has loaded.
@@ -127,11 +147,15 @@ func TestPageScreenshots(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s (%s): %v", name, scheme, err)
 			}
-			file := filepath.Join(dir, fmt.Sprintf("%s-%s.png", strings.ReplaceAll(name, "/", "_"), scheme))
+			suffix := ""
+			if sh.lang == langEN {
+				suffix = "-en"
+			}
+			file := filepath.Join(dir, fmt.Sprintf("%s%s-%s.png", strings.ReplaceAll(name, "/", "_"), suffix, scheme))
 			if err := os.WriteFile(file, png, 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
-	t.Logf("%d screenshots in %s", 2*len(names), dir)
+	t.Logf("%d screenshots in %s", 2*len(shots), dir)
 }

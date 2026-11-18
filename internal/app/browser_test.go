@@ -41,7 +41,9 @@ const browserTimeout = 3 * time.Minute
 func startChrome(t *testing.T) context.Context {
 	t.Helper()
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
-	opts = append(opts, chromedp.Flag("headless", true))
+	// The pages follow Accept-Language: the lane's assertions are on the
+	// English texts, so the browser's language is pinned.
+	opts = append(opts, chromedp.Flag("headless", true), chromedp.Flag("lang", "en-US"))
 	if p := os.Getenv("BRIDGE_CHROME"); p != "" {
 		opts = append(opts, chromedp.ExecPath(p))
 	}
@@ -394,7 +396,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 	}
 	var rows []string
 	p.eval(`Array.from(document.querySelectorAll("#keys li")).map(li => li.innerText)`, &rows)
-	if len(rows) != 1 || !strings.Contains(rows[0], key1[:16]) || !strings.Contains(rows[0], "this confirmation") {
+	if len(rows) != 1 || !strings.Contains(rows[0], key1[:16]) || !strings.Contains(rows[0], "this confirmation") { // Chrome sends Accept-Language en-US: the pages are in English
 		t.Fatalf("the key list after the step-up: %q", rows)
 	}
 

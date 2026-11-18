@@ -16,6 +16,12 @@ Added:
   (SVG or PNG, 256 KiB at most), accent (a validated `#rrggbb`, adjusted for
   WCAG AA) and support link. The assets are served from the provider's origin
   as `/assets/<name>.<hash>.<ext>`.
+- **One language per page**, French or English: the `lang` cookie, else
+  `Accept-Language`, else French, with an FR | EN switch (`/lang/<code>`, a plain
+  link; `SameSite=Lax` cookie) and one catalogue of strings with a test for
+  missing translations. This replaces the "fr / en" doubling of every label; the
+  account page's "changed by X" sentence, which interpolated an
+  already-bilingual value into each language, is now one sentence per language.
 - **CSP:** `style-src 'unsafe-inline'` is replaced by `style-src 'self'` and
   `img-src 'self'` on every page; the pages have no inline style.
 - CI: a `web` job regenerates the stylesheet and icons and fails on a

@@ -104,6 +104,7 @@ func pageHeaders(w http.ResponseWriter, formAction string) {
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")
+	h.Add("Vary", "Accept-Language, Cookie")
 }
 
 // The pages are html/template files, one stylesheet (web/static/app.css,
@@ -115,8 +116,6 @@ var templateFS embed.FS
 
 //go:embed web/icons/*.svg
 var iconFS embed.FS
-
-var tmpl = template.Must(template.New("").Funcs(template.FuncMap{"icon": icon}).ParseFS(templateFS, "web/templates/*.html"))
 
 // icons maps a Lucide icon's name to the markup inside its <svg>, which is
 // what the file holds between the tags: a fixed set of paths, from the
@@ -156,29 +155,36 @@ func icon(name, class string) (template.HTML, error) {
 
 // pageTitles are the <title>s, and which pages are the wide ones.
 var pageTitles = map[string]string{
-	"message":     "Connexion",
-	"choose":      "Choisir un établissement",
-	"method":      "Se connecter",
-	"locallogin":  "Compte local",
-	"account":     "Mon compte",
-	"accountopen": "Mon compte",
-	"localenroll": "Enregistrer une clé d'accès",
-	"device":      "Connecter un appareil",
-	"confirm":     "Confirmer",
+	"message":     "msg.title",
+	"choose":      "choose.ttl",
+	"method":      "method.title",
+	"locallogin":  "login.title",
+	"account":     "acct.title",
+	"accountopen": "acct.title",
+	"localenroll": "enroll.title",
+	"device":      "device.title",
+	"confirm":     "confirm.ttl",
 }
 
-// show executes a page with what every page has: the deployment's brand and
-// a title. data may be nil.
+// show executes a page, in the request's language, with what every page has:
+// the deployment's brand, a title and the language switch. data may be nil.
 func (s *server) show(w http.ResponseWriter, name string, data map[string]any) {
 	if data == nil {
 		data = map[string]any{}
 	}
+	lang, next := langOf(w)
 	data["B"] = s.cfg.brandView()
-	data["Title"] = pageTitles[name]
+	data["Lang"] = lang
+	data["Title"] = catalogue[pageTitles[name]][langIndex(lang)]
+	data["Next"] = next // escaped by the template, in its query context
+	// The enrolment page keeps its invitation in the URL's fragment, which a
+	// reload through the switch would lose; the auto-submitting page has
+	// nothing to switch. Both still follow the cookie and Accept-Language.
+	data["Switch"] = name != "localenroll" && name != "accountopen"
 	if name == "account" && data["Signed"] == true {
 		data["Wide"] = true
 	}
-	tmpl.ExecuteTemplate(w, name, data)
+	tmplByLang[lang].ExecuteTemplate(w, name, data)
 }
 
 // render shows one of the pages above.

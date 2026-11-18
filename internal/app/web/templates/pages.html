@@ -3,8 +3,7 @@
 <div class="flex items-start gap-3">
 <span class="mt-0.5 text-brand-ink">{{icon "circle-alert" "size-6"}}</span>
 <div>
-<h1 id="t" class="text-xl font-semibold tracking-tight">Connexion</h1>
-<p lang="en" class="muted">Sign in</p>
+<h1 id="t" class="text-xl font-semibold tracking-tight">{{t "msg.title"}}</h1>
 <p class="mt-4" role="alert">{{.Msg}}</p>
 </div>
 </div>
@@ -14,34 +13,32 @@
 {{define "choose"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 <span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "building-2" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Choisissez votre établissement</h1>
-<p lang="en" class="muted">Choose your institution.</p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "choose.title"}}</h1>
 <form method="get" action="choose" role="search" class="mt-6">
-<label for="q" class="label">Nom ou domaine / <span lang="en">name or domain</span></label>
+<label for="q" class="label">{{t "choose.q"}}</label>
 <input id="q" name="q" value="{{.Q}}" class="field" autocomplete="off" autofocus>
-<button class="btn-primary mt-3 w-full">Rechercher / <span lang="en">Search</span></button>
+<button class="btn-primary mt-3 w-full">{{t "choose.search"}}</button>
 </form>
 </section>
 <ul class="surface rows mt-4 overflow-hidden">
-{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}" class="flex w-full items-center justify-between gap-3 py-0.5 font-medium no-underline hover:underline"><span class="text-slate-900 dark:text-slate-100">{{.Name "fr" "en"}}</span><span class="text-brand-ink">{{icon "check" "size-4"}}</span></a></li>
-{{else}}<li><span class="muted">Aucun établissement ne correspond. / <span lang="en">No institution matches.</span></span></li>{{end}}
+{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}" class="flex w-full items-center justify-between gap-3 py-0.5 font-medium no-underline hover:underline"><span class="text-slate-900 dark:text-slate-100">{{.Name $.Lang "fr" "en"}}</span><span class="text-brand-ink">{{icon "check" "size-4"}}</span></a></li>
+{{else}}<li><span class="muted">{{t "choose.none"}}</span></li>{{end}}
 </ul>
-{{if .More}}<p class="muted mt-3">{{.More}} autres : précisez la recherche. / <span lang="en">more: narrow the search.</span></p>{{end}}
+{{if .More}}<p class="muted mt-3">{{tf "choose.more" .More}}</p>{{end}}
 {{template "foot" .}}{{end}}
 
 {{define "method"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Se connecter</h1>
-<p lang="en" class="muted">Sign in.</p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "method.title"}}</h1>
 <ul class="mt-6 space-y-3">
 <li><a href="{{.Federation}}" class="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 no-underline transition hover:border-brand-ink hover:shadow-sm dark:border-white/15 dark:bg-dark-bg dark:hover:border-brand-ink">
 <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "building-2" "size-6"}}</span>
-<span><span class="block font-semibold text-slate-900 dark:text-white">Avec mon établissement (fédération) / With my institution (federation)</span>
-<span class="muted block">Votre compte professionnel ou universitaire. / <span lang="en">Your work or university account.</span></span></span></a></li>
+<span><span class="block font-semibold text-slate-900 dark:text-white">{{t "method.fed"}}</span>
+<span class="muted block">{{t "method.fed.sub"}}</span></span></a></li>
 <li><a href="local/login" class="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 no-underline transition hover:border-brand-ink hover:shadow-sm dark:border-white/15 dark:bg-dark-bg dark:hover:border-brand-ink">
 <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "fingerprint-pattern" "size-6"}}</span>
-<span><span class="block font-semibold text-slate-900 dark:text-white">Avec un compte local / With a local account</span>
-<span class="muted block">Une clé d'accès créée sur invitation. / <span lang="en">A passkey created from an invitation.</span></span></span></a></li>
+<span><span class="block font-semibold text-slate-900 dark:text-white">{{t "method.local"}}</span>
+<span class="muted block">{{t "method.local.sub"}}</span></span></a></li>
 </ul>
 </section>
 {{template "foot" .}}{{end}}
@@ -49,36 +46,33 @@
 {{define "locallogin"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 <span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "fingerprint-pattern" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Compte local</h1>
-<p lang="en" class="muted">Local account.</p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "login.title"}}</h1>
 {{if .Error}}<p role="alert" class="mt-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:bg-red-500/15 dark:text-red-200">{{icon "circle-alert" "mt-0.5 size-4 shrink-0"}}<span>{{.Error}}</span></p>{{end}}
 <form id="passkey-login" method="post" action="login/finish" data-csrf="{{.CSRF}}" class="mt-6">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
 <input type="hidden" name="handle"><input type="hidden" name="id"><input type="hidden" name="clientDataJSON">
 <input type="hidden" name="authenticatorData"><input type="hidden" name="signature"><input type="hidden" name="userHandle">
-<button id="passkey-button" type="button" class="btn-primary w-full" disabled>{{icon "key-round" "size-4"}}<span>Se connecter avec une clé d'accès / Sign in with a passkey</span></button>
+<button id="passkey-button" type="button" class="btn-primary w-full" disabled>{{icon "key-round" "size-4"}}<span>{{t "login.button"}}</span></button>
 <p id="passkey-status" role="status" aria-live="polite" class="muted mt-3 min-h-[1.25rem]"></p>
 </form>
 {{template "passkeyhelp" .}}
-<noscript><p class="mt-4 text-sm font-semibold">Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
+<noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.passkey"}}</p></noscript>
 </section>
-<p class="mt-4 text-center text-sm"><a href="/account">Gérer mes clés d'accès / Manage my passkeys</a></p>
+<p class="mt-4 text-center text-sm"><a href="/account">{{t "login.manage"}}</a></p>
 <script src="passkey.js"></script>
 {{template "foot" .}}{{end}}
 
 {{define "localenroll"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 <span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "shield-check" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Enregistrer une clé d'accès</h1>
-<p lang="en" class="muted">Register a passkey.</p>
-<p class="mt-4">Vous avez reçu une invitation d'un administrateur. Votre appareil va vous demander de créer une clé d'accès et de la déverrouiller (empreinte, visage ou code).</p>
-<p lang="en" class="muted mt-2">An administrator invited you. Your device will ask you to create a passkey and unlock it (fingerprint, face or PIN).</p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "enroll.title"}}</h1>
+<p class="mt-4">{{t "enroll.p"}}</p>
 <div class="mt-6">
-<button id="passkey-button" type="button" data-mode="enroll" class="btn-primary w-full" disabled>{{icon "key-round" "size-4"}}<span>Créer ma clé d'accès / Create my passkey</span></button>
+<button id="passkey-button" type="button" data-mode="enroll" class="btn-primary w-full" disabled>{{icon "key-round" "size-4"}}<span>{{t "enroll.button"}}</span></button>
 <p id="passkey-status" role="status" aria-live="polite" class="muted mt-3 min-h-[1.25rem]"></p>
 </div>
 {{template "passkeyhelp" .}}
-<noscript><p class="mt-4 text-sm font-semibold">Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
+<noscript><p class="mt-4 text-sm font-semibold">{{t "nojs.passkey"}}</p></noscript>
 </section>
 <script src="passkey.js"></script>
 {{template "foot" .}}{{end}}
@@ -86,13 +80,12 @@
 {{define "device"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 <span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-brand-ink/10 text-brand-ink">{{icon "monitor-smartphone" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">Connecter un appareil</h1>
-<p lang="en" class="muted">Connect a device.</p>
-{{if .Error}}<p role="alert" class="mt-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:bg-red-500/15 dark:text-red-200">{{icon "circle-alert" "mt-0.5 size-4 shrink-0"}}<span>{{.Error}}</span></p>{{end}}
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "device.title"}}</h1>
+{{if .Error}}<p role="alert" class="mt-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:bg-red-500/15 dark:text-red-200">{{icon "circle-alert" "mt-0.5 size-4 shrink-0"}}<span>{{t .Error}}</span></p>{{end}}
 <form method="post" action="device" class="mt-6">
-<label for="user_code" class="label">Code affiché sur l'appareil / <span lang="en">code shown on the device</span></label>
+<label for="user_code" class="label">{{t "device.code"}}</label>
 <input id="user_code" name="user_code" value="{{.Code}}" class="field text-center font-mono text-lg tracking-widest" autocomplete="off" autocapitalize="characters" spellcheck="false" autofocus>
-<button class="btn-primary mt-4 w-full">Continuer / <span lang="en">Continue</span></button>
+<button class="btn-primary mt-4 w-full">{{t "continue"}}</button>
 </form>
 </section>
 {{template "foot" .}}{{end}}
@@ -100,28 +93,25 @@
 {{define "confirm"}}{{template "head" .}}
 <section class="surface p-6 sm:p-8" aria-labelledby="t">
 <span class="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200">{{icon "shield-check" "size-6"}}</span>
-<h1 id="t" class="text-2xl font-semibold tracking-tight">{{.Client}} demande à se connecter en votre nom</h1>
-<p lang="en" class="muted">{{.Client}} is asking to sign in as you.</p>
-<p class="mt-5 rounded-xl bg-slate-100 py-3 text-center dark:bg-white/5"><span class="muted block">Code</span><strong class="font-mono text-2xl tracking-widest">{{.Code}}</strong></p>
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{tf "confirm.title" .Client}}</h1>
+<p class="mt-5 rounded-xl bg-slate-100 py-3 text-center dark:bg-white/5"><span class="muted block">{{t "confirm.code"}}</span><strong class="font-mono text-2xl tracking-widest">{{.Code}}</strong></p>
 <div class="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
-<p><strong>Ne continuez que si c'est vous qui avez lancé cette connexion, sur votre propre appareil.</strong> Si quelqu'un vous a transmis ce code, refusez : il obtiendrait l'accès à votre place.</p>
-<p lang="en" class="mt-2"><strong>Only continue if you started this on your own device.</strong> If somebody sent you this code, refuse: they would get the access, not you.</p>
+<p>{{th "h.confirm.warn"}}</p>
 </div>
 <form method="post" action="device" class="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
 <input type="hidden" name="user_code" value="{{.Code}}"><input type="hidden" name="csrf" value="{{.CSRF}}">
-<button name="confirm" value="yes" class="btn-primary flex-1">{{icon "check" "size-4"}}<span>Oui, c'est moi / Yes, it is me</span></button>
-<button name="confirm" value="no" class="btn-outline flex-1">Non / No</button>
+<button name="confirm" value="yes" class="btn-primary flex-1">{{icon "check" "size-4"}}<span>{{t "confirm.yes"}}</span></button>
+<button name="confirm" value="no" class="btn-outline flex-1">{{t "confirm.no"}}</button>
 </form>
 </section>
 {{template "foot" .}}{{end}}
 
 {{define "accountopen"}}{{template "head" .}}
 <section class="surface p-6 text-center sm:p-8" aria-labelledby="t">
-<h1 id="t" class="text-xl font-semibold tracking-tight">Mon compte</h1>
-<p lang="en" class="muted">My account.</p>
-<p class="muted mt-4" role="status">Un instant… / <span lang="en">One moment…</span></p>
+<h1 id="t" class="text-xl font-semibold tracking-tight">{{t "acct.title"}}</h1>
+<p class="muted mt-4" role="status">{{t "open.wait"}}</p>
 <form id="auto-submit" method="post" action="/account/open"><input type="hidden" name="h" value="{{.Handle}}">
-<noscript><p class="mt-4"><button class="btn-primary">Continuer / Continue</button></p></noscript></form>
+<noscript><p class="mt-4"><button class="btn-primary">{{t "continue"}}</button></p></noscript></form>
 </section>
 <script src="/account/passkey.js"></script>
 {{template "foot" .}}{{end}}

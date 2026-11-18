@@ -220,6 +220,7 @@ func (s *server) logf(format string, a ...any) {
 func (s *server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/assets/{name}", s.asset)
+	mux.HandleFunc("/lang/{code}", s.setLang)
 	mux.HandleFunc("GET /.well-known/openid-configuration", s.discovery)
 	mux.HandleFunc("GET /jwks", s.jwks)
 	mux.HandleFunc("/authorize", s.limited(s.authorize))
@@ -253,7 +254,7 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("/app-password", s.appPassword)
 	mux.HandleFunc("/wireguard/key", s.limited(s.wireguardKey))
 	mux.HandleFunc("GET /wireguard/peers", s.wireguardPeers)
-	return mux
+	return withLang(mux)
 }
 
 // loadSPKey reads the SP's RSA key and certificate.

@@ -257,7 +257,7 @@ func TestAccountSelfServiceEndToEnd(t *testing.T) {
 	s.csrf = f.accountPageCSRF(s.cookie)
 
 	_, page := f.accountPage(s.cookie)
-	for _, want := range []string{"alice", passkeyKey(laptop.ID)[:16], "data-remove", "backup-eligible", "this confirmation"} {
+	for _, want := range []string{"alice", passkeyKey(laptop.ID)[:16], "data-remove", "synchronisable", "clé de cette confirmation"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the key list lacks %q:\n%s", want, page)
 		}
@@ -275,7 +275,7 @@ func TestAccountSelfServiceEndToEnd(t *testing.T) {
 		t.Fatalf("alice has %d passkeys after an add, want 2", len(keys))
 	}
 	_, page = f.accountPage(s.cookie)
-	if strings.Count(page, "data-remove") != 2 || !strings.Contains(page, passkeyKey(phone.ID)[:16]) || strings.Count(page, "this confirmation") != 1 {
+	if strings.Count(page, "data-remove") != 2 || !strings.Contains(page, passkeyKey(phone.ID)[:16]) || strings.Count(page, "clé de cette confirmation") != 1 {
 		t.Errorf("the list after an add:\n%s", page)
 	}
 	// The new key signs in; the one before still does.

@@ -321,8 +321,15 @@ independent verifier in go-authn/webauthn's judge.
 Every page a person sees (the choice between the federation and a local
 account, the passkey sign-in with its help panel, enrolment from an invitation,
 `/account`, the device-code and confirmation pages, errors, the signed-out
-state) is a server-rendered `html/template` page, in French and English, in
-light or dark mode as the browser asks. They are drawn by one
+state) is a server-rendered `html/template` page, in light or dark mode as the
+browser asks. A page is in ONE language, French or English: the `lang` cookie
+if there is one, else the browser's `Accept-Language`, else French; a small
+FR | EN switch in the header (a plain link to `/lang/<code>`, which sets the
+cookie, `SameSite=Lax`, and goes back; no script) changes it, and `<html lang>`
+follows. Every string is in one catalogue (`internal/app/i18n.go`) in both
+languages, and a test fails on a missing translation. The enrolment page has no
+switch, because its invitation lives in the URL's fragment, which a reload would
+lose; it still follows the cookie and `Accept-Language`. They are drawn by one
 [Tailwind CSS](https://tailwindcss.com) v4 stylesheet compiled at build time and
 embedded in the binary, and by [Lucide](https://lucide.dev) icons (ISC licence,
 `internal/app/web/icons/LICENSE`) inlined as SVG. Nothing is fetched from a CDN

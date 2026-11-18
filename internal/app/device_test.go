@@ -51,7 +51,7 @@ func (f *fixture) approve(b *browser, verificationURI string, yes bool, o assert
 	f.t.Helper()
 	page := b.get(verificationURI)
 	body, _ := io.ReadAll(page.Body)
-	if !strings.Contains(string(body), "rclone (WebDAV)") || !strings.Contains(string(body), "Only continue if you started this") {
+	if !strings.Contains(string(body), "rclone (WebDAV)") || !strings.Contains(string(body), "Ne continuez que si c'est vous") {
 		f.t.Fatalf("the confirmation page does not say who is asking, or does not warn:\n%s", body)
 	}
 	m := csrfField.FindSubmatch(body)

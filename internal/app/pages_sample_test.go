@@ -22,8 +22,8 @@ func samplePages() map[string]map[string]any {
 		{Client: "rclone (WebDAV) (rclone)", Created: "2026-11-17 14:30 UTC", Arg: `{"id":"d4e5f6"}`},
 	}
 	access := []accountAccess{
-		{What: "Certificat SSH / SSH certificate", Detail: "SHA256:aBcD…", Expires: "2026-11-19 08:00 UTC", Arg: `{"kind":"ssh"}`},
-		{What: "Mot de passe d'application / App credential", Detail: "SMB", Expires: "2026-12-01 00:00 UTC", Arg: `{"kind":"app"}`},
+		{What: "access.kind.ssh", Detail: "SHA256:aBcD…", Expires: "2026-11-19 08:00 UTC", Arg: `{"kind":"ssh"}`},
+		{What: "access.kind.app_password", Detail: "SMB", Expires: "2026-12-01 00:00 UTC", Arg: `{"kind":"app"}`},
 	}
 	signed := func(local bool) map[string]any {
 		m := map[string]any{
@@ -32,12 +32,9 @@ func samplePages() map[string]map[string]any {
 			"Apps": apps, "Access": access, "AccessOn": true,
 		}
 		if local {
-			m["Source"] = "Compte local / Local account"
-			m["ChangedBy"] = "l'administrateur du service / the service's administrator"
 			m["Keys"], m["Max"], m["Full"] = keys, maxPasskeys, false
 		} else {
 			m["Source"] = "Université d'Exemple (https://idp.univ-example.example/idp)"
-			m["ChangedBy"] = "votre établissement / your institution"
 		}
 		return m
 	}
@@ -50,7 +47,7 @@ func samplePages() map[string]map[string]any {
 		"locallogin-error":   {"CSRF": "sample-csrf", "Error": "Clé d'accès refusée. / Passkey refused."},
 		"localenroll":        {},
 		"device":             {},
-		"device-error":       {"Error": "Ce code n'est pas valide, ou a expiré.", "Code": "ABCD-EFGH"},
+		"device-error":       {"Error": "device.err.code", "Code": "ABCD-EFGH"},
 		"confirm":            {"Client": "rclone (WebDAV)", "Code": "ABCD-EFGH", "CSRF": "sample-csrf"},
 		"accountopen":        {"Handle": "sample-handle"},
 		"account-signed":     signed(true),

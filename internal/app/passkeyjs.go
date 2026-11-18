@@ -25,7 +25,8 @@ const passkeyJS = `"use strict";
   var mode = button ? (button.getAttribute("data-mode") || "login") : "account";
   var enroll = mode === "enroll";
 
-  function say(fr, en) { status.textContent = fr + " / " + en; }
+  // One language, the page's (<html lang>, set from the person's choice).
+  function say(fr, en) { status.textContent = document.documentElement.lang === "en" ? en : fr; }
 
   function dec(s) {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -89,7 +90,7 @@ const passkeyJS = `"use strict";
     } else if (e && e.name === "InvalidStateError") {
       say("Cet appareil a déjà une clé d'accès pour ce compte.", "This device already has a passkey for this account.");
     } else {
-      say("Échec : " + (e && e.message ? e.message : e), "Failed.");
+      say("Échec : " + (e && e.message ? e.message : e), "Failed: " + (e && e.message ? e.message : e));
     }
   }
 
