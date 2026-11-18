@@ -26,7 +26,8 @@ var catES = map[string]string{
 	"msg.title": "Inicio de sesión",
 
 	"home.title":   "Servicio de inicio de sesión",
-	"home.p":       "Este servicio le conecta a las aplicaciones de %s: se identifica aquí, una sola vez, y vuelve a la aplicación.",
+	"home.p":       "Este servicio le conecta a las aplicaciones de «%s»: se identifica aquí, una sola vez, y vuelve a la aplicación.",
+	"home.p.site":  "Este servicio le conecta a las aplicaciones de este sitio: se identifica aquí, una sola vez, y vuelve a la aplicación.",
 	"home.p.local": "Las cuentas locales inician sesión con una llave de acceso: nunca se escribe ni se guarda una contraseña.",
 	"home.account": "Mi cuenta",
 	"home.fed":     "Las personas de las instituciones de la federación %s pueden iniciar sesión con su propia institución.",

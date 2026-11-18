@@ -26,7 +26,8 @@ var catDE = map[string]string{
 	"msg.title": "Anmeldung",
 
 	"home.title":   "Anmeldedienst",
-	"home.p":       "Dieser Dienst meldet Sie bei den Anwendungen von %s an: Sie identifizieren sich hier einmal und kehren dann zur Anwendung zurück.",
+	"home.p":       "Dieser Dienst meldet Sie bei den Anwendungen von „%s“ an: Sie identifizieren sich hier einmal und kehren dann zur Anwendung zurück.",
+	"home.p.site":  "Dieser Dienst meldet Sie bei den Anwendungen dieser Website an: Sie identifizieren sich hier einmal und kehren dann zur Anwendung zurück.",
 	"home.p.local": "Lokale Konten melden sich mit einem Passkey an: Es wird nie ein Passwort eingegeben oder gespeichert.",
 	"home.account": "Mein Konto",
 	"home.fed":     "Angehörige der Einrichtungen der Föderation %s können sich mit ihrer eigenen Einrichtung anmelden.",
