@@ -148,6 +148,16 @@ func (b *appPasswordsBlock) remove(login string) error {
 	return err
 }
 
+// expiry is when a person's application password expires, if they have one.
+func (b *appPasswordsBlock) expiry(login string) (time.Time, bool) {
+	var exp int64
+	err := b.db.QueryRow(`SELECT expires FROM `+b.Table+` WHERE LOWER(login) = LOWER(`+b.arg(1)+`)`, login).Scan(&exp)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(exp, 0), true
+}
+
 // removeCount deletes a person's application password and says how many
 // there were.
 func (b *appPasswordsBlock) removeCount(login string) (int64, error) {

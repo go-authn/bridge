@@ -7,6 +7,20 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 Added:
 
+- **"Mon compte / My account" at `/account`**, for every signed-in person,
+  federated or local, behind a fresh authentication at most five minutes old
+  (a passkey assertion for a local account; a SAML login with `ForceAuthn`,
+  whose `AuthnInstant` is checked, for a federated person) held in a `__Host-`
+  `SameSite=Strict` cookie. Sections: identity (read-only; a local account may
+  change its display name; mail and groups never), passkeys for local accounts
+  (add, list, remove, never the last; a removed key refuses the grants it
+  bought), applications and sessions (the refresh-token families, revoke one or
+  all), and technical access where configured (application password, SSH and
+  X.509 certificates, WireGuard keys). CSRF, same-origin, per-host throttling
+  and an audit line on every change. `/local/account` redirects. A real-Chrome
+  test lane (`BRIDGE_REQUIRE_BROWSER=1` in CI) drives the provider's real pages
+  with a virtual authenticator. `chromedp` is a test-only dependency.
+
 - **Local accounts, passkey-only**: a `local { accounts_file, scope }` block
   (with a `state` block, which it requires), a login page served by the
   provider, and `authn-bridge local-account invite|revoke-invite|passkeys|

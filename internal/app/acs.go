@@ -70,6 +70,12 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 		s.page(w, http.StatusBadRequest, "This login has already been answered; start again from the application.")
 		return
 	}
+	// A confirmation for the account page (account.go) ends there, not at a
+	// client.
+	if l.kind == "account" {
+		s.accountFromACS(w, r, a)
+		return
+	}
 	if l.maxAge > 0 && !l.options.ForceAuthn {
 		age := s.now().Sub(a.AuthnInstant)
 		// An instant later than now + skew has not happened: the elapsed
@@ -93,6 +99,10 @@ func (s *server) acs(w http.ResponseWriter, r *http.Request) {
 // at the ACS, a local account at its form: held to the same refusals, then a
 // code for the client, or the device's answer.
 func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, l *login, who *person) {
+	if l.client == nil {
+		s.page(w, http.StatusBadRequest, "This login is not for an application.")
+		return
+	}
 	if why := s.refused(who); why != "" {
 		s.logf("login: %s via %s refused: %s", orUnnamed(who.username), who.idp, why)
 		s.counters.inc("bridge_logins_total", "disabled")
@@ -131,6 +141,10 @@ func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, l *login, w
 // URI, or, for a device, on the page the person is looking at (the device
 // learns access_denied when it next polls).
 func (s *server) finishError(w http.ResponseWriter, r *http.Request, l *login, code, desc string) {
+	if l.kind == "account" {
+		s.page(w, http.StatusUnauthorized, "Refusé : "+desc+". / Refused.")
+		return
+	}
 	if l.kind == "device" {
 		s.deviceDone(w, l, nil, "Refusé : "+desc+".")
 		return

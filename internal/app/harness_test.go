@@ -186,6 +186,12 @@ func newFixture(t *testing.T, extra string) *fixture {
 	}
 	t.Cleanup(f.srv.Close)
 	f.redirect = "http://127.0.0.1:9/callback"
+	// A browser takes only a name as a WebAuthn RP ID, never an IP address, so
+	// the real-browser lane serves the provider as localhost.
+	issuer := f.srv.URL
+	if fixtureAsLocalhost {
+		issuer = "http://localhost:" + issuer[strings.LastIndex(issuer, ":")+1:]
+	}
 
 	if err := generateKey(filepath.Join(dir, "oidc.key"), 2048); err != nil {
 		t.Fatal(err)
@@ -224,7 +230,7 @@ client "cli" {
   redirect_uris = ["http://127.0.0.1/callback"]
   subject       = "pairwise"
 }
-%s`, f.srv.URL, filepath.Join(dir, "oidc.key"), filepath.Join(dir, "salt"),
+%s`, issuer, filepath.Join(dir, "oidc.key"), filepath.Join(dir, "salt"),
 		f.sp.keyFile, f.sp.certFile, f.metadata.URL, f.fedKey.certFile, fingerprint(f.fedKey.cert),
 		filepath.Join(dir, "web.secret"), f.redirect, extra)
 	f.cfgFile = filepath.Join(dir, "bridge.hcl")
@@ -421,6 +427,9 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 
 // fixtureOverTLS makes newFixture serve the provider over https.
 var fixtureOverTLS bool
+
+// fixtureAsLocalhost makes newFixture name the provider http://localhost:PORT.
+var fixtureAsLocalhost bool
 
 // newFixtureTLS is newFixture with an https issuer.
 func newFixtureTLS(t *testing.T, extra string) *fixture {

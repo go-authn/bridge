@@ -28,6 +28,9 @@ type refreshGrant struct {
 	// until is the end of the family, fixed at the login: rotation does not
 	// extend it. The federation is not asked again before it.
 	until time.Time
+	// created is when the family started and lastUsed when it last rotated, for
+	// the account page. Zero in a state written before they were kept.
+	created, lastUsed time.Time
 }
 
 // newRefresh starts a family, if the client has refresh tokens at all.
@@ -44,7 +47,7 @@ func (s *server) newRefresh(client *clientBlock, who *person, scopes, resources 
 	}
 	family := token()
 	rt := token()
-	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, resources: resources, family: family, until: until}, until)
+	s.refresh.put(hashToken(rt), &refreshGrant{client: client, who: who, scopes: scopes, resources: resources, family: family, until: until, created: s.now()}, until)
 	s.families.put(family, []string{jti}, until.Add(s.cfg.tokenTTL))
 	return rt, family
 }
@@ -120,6 +123,7 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	}
 	// A rotation stays in its family, with the family's end.
 	next := token()
+	g.lastUsed = s.now()
 	s.refresh.put(hashToken(next), g, g.until)
 	s.families.update(g.family, func(j *[]string) { *j = append(*j, jti) })
 	resp["refresh_token"] = next

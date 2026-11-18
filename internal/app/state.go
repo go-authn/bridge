@@ -438,6 +438,9 @@ type storedRefresh struct {
 	// Resources: RFC 8707. Absent in a state written before v0.21.0,
 	// which means what it meant then: the client's whole audience.
 	Resources []string `json:"resources,omitempty"`
+	// Created and LastUsed are for the account page; absent before they were kept.
+	Created  time.Time `json:"created,omitzero"`
+	LastUsed time.Time `json:"last_used,omitzero"`
 }
 
 type storedIssued struct {
@@ -458,7 +461,7 @@ func (s *server) persistStores() error {
 	s.state = &persister{b: b, logf: s.logf, count: s.counters.inc}
 	if err := s.refresh.persist(s.state, "refresh",
 		func(g *refreshGrant) ([]byte, error) {
-			return json.Marshal(storedRefresh{g.client.ID, storePerson(g.who), g.scopes, g.family, g.until, g.resources})
+			return json.Marshal(storedRefresh{g.client.ID, storePerson(g.who), g.scopes, g.family, g.until, g.resources, g.created, g.lastUsed})
 		},
 		func(b []byte) (*refreshGrant, error) {
 			var r storedRefresh
@@ -469,7 +472,7 @@ func (s *server) persistStores() error {
 			if !ok {
 				return nil, errUnknownClient
 			}
-			return &refreshGrant{client: c, who: r.Who.person(), scopes: r.Scopes, resources: r.Resources, family: r.Family, until: r.Until}, nil
+			return &refreshGrant{client: c, who: r.Who.person(), scopes: r.Scopes, resources: r.Resources, family: r.Family, until: r.Until, created: r.Created, lastUsed: r.LastUsed}, nil
 		}); err != nil {
 		return err
 	}

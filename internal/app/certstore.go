@@ -186,6 +186,20 @@ func (s *certStore) revokeWhere(match func(issuedCert) bool, now time.Time) (int
 	return len(marked), nil
 }
 
+// liveWhere is the certificates and keys match says are somebody's that are
+// neither revoked nor expired.
+func (s *certStore) liveWhere(match func(issuedCert) bool, now time.Time) []issuedCert {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []issuedCert
+	for _, c := range s.Certs {
+		if c.Revoked.IsZero() && now.Before(c.NotAfter) && match(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // revoked is the unexpired revoked certificates of one kind, and the
 // version they are at.
 func (s *certStore) revoked(kind string, now time.Time) ([]issuedCert, uint64) {
