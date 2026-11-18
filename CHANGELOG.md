@@ -21,6 +21,13 @@ Added:
   without a password on non-domain Windows (go-authn/kinit). A machine with a
   registered key and `kerberos_tickets` may ask `client_credentials` for the
   `kerberos` scope by name and gets a TGT for `<client>@<issuer host>`.
+- **A home page at `/`** (it answered 404): what the service is, a "My account"
+  button, what a passkey is, the federation people can sign in through (RENATER
+  and eduGAIN by name, else the metadata host) and, from an optional `home {
+  title, link "Name" { url } }` block, the deployment's own links (https only,
+  refused at load otherwise, escaped on the page). Same design, seven languages,
+  language combo and theme; same CSP. It shows nothing about clients, users or
+  keys. Every other unknown path is still 404.
 - **Seven languages and a theme switcher.** Pages now speak `fr`, `en`, `de`,
   `es`, `ja`, `ko` and `zh-cn` (the languages of the docs sites), chosen by the
   `lang` cookie, then `Accept-Language` with q-values (`zh-CN`/`zh-Hans` give
