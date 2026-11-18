@@ -108,6 +108,10 @@ type config struct {
 	// it: saml is still required.
 	Local *localBlock `hcl:"local,block"`
 
+	// Branding is the deployment's name, logo, accent colour and support link
+	// on the pages (branding.go). Absent: the neutral go-authn theme.
+	Branding *brandingBlock `hcl:"branding,block"`
+
 	Claims  *claimsBlock  `hcl:"claims,block"`
 	Clients []clientBlock `hcl:"client,block"`
 
@@ -141,6 +145,7 @@ type config struct {
 	IDTokenLifetime string `hcl:"id_token_lifetime,optional"` // 5m
 
 	files []string
+	brand *brand
 
 	trustedProxies []netip.Prefix
 
@@ -802,6 +807,11 @@ func (c *config) check() error {
 				return fmt.Errorf("client %q: wireguard_peers names %q, which is not a client with wireguard_keys", cl.ID, id)
 			}
 		}
+	}
+	// The pages' face: the neutral go-authn theme unless the deployment says
+	// otherwise (branding.go). A refused value is refused here, at load.
+	if c.brand, err = c.Branding.build(); err != nil {
+		return err
 	}
 	return nil
 }

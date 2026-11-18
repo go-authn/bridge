@@ -25,7 +25,8 @@ const passkeyJS = `"use strict";
   var mode = button ? (button.getAttribute("data-mode") || "login") : "account";
   var enroll = mode === "enroll";
 
-  function say(fr, en) { status.textContent = fr + " / " + en; }
+  // One language, the page's (<html lang>, set from the person's choice).
+  function say(fr, en) { status.textContent = document.documentElement.lang === "en" ? en : fr; }
 
   function dec(s) {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -80,12 +81,16 @@ const passkeyJS = `"use strict";
 
   function failed(e) {
     if (button) { button.disabled = false; }
+    // A refusal is when the help is wanted: open the panel, which is a plain
+    // <details> and works without this line.
+    var help = document.getElementById("passkey-help");
+    if (help) { help.open = true; }
     if (e && e.name === "NotAllowedError") {
       say("Annulé, ou le délai est dépassé.", "Cancelled, or timed out.");
     } else if (e && e.name === "InvalidStateError") {
       say("Cet appareil a déjà une clé d'accès pour ce compte.", "This device already has a passkey for this account.");
     } else {
-      say("Échec : " + (e && e.message ? e.message : e), "Failed.");
+      say("Échec : " + (e && e.message ? e.message : e), "Failed: " + (e && e.message ? e.message : e));
     }
   }
 
@@ -192,8 +197,12 @@ const passkeyJS = `"use strict";
           body[b.getAttribute("data-field")] = document.getElementById(b.getAttribute("data-from")).value;
         }
         b.disabled = true;
+        // data-after names a same-origin path to go to afterwards (the page of
+        // a session that has ended); without it the page is reloaded.
+        var after = b.getAttribute("data-after");
         post(b.getAttribute("data-post"), body)
-          .then(function () { location.reload(); }).catch(function (e) { b.disabled = false; failed(e); });
+          .then(function () { if (after && after.charAt(0) === "/" && after.charAt(1) !== "/") { location.assign(after); } else { location.reload(); } })
+          .catch(function (e) { b.disabled = false; failed(e); });
       });
     });
   }

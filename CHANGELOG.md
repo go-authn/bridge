@@ -7,6 +7,26 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 Added:
 
+- **Designed pages, and a `branding` block.** Every page is now a template file
+  drawn by one Tailwind CSS v4 stylesheet (compiled at build time by
+  `go run ./internal/webbuild` with the standalone CLI, pinned by version and
+  sha256) and Lucide icons (lucide-static 1.75.0, ISC), light and dark, with a
+  help panel on the passkey pages and a signed-out state. `branding { name,
+  logo_file, accent_color, support_url }` gives a deployment its own name, logo
+  (SVG or PNG, 256 KiB at most), accent (a validated `#rrggbb`, adjusted for
+  WCAG AA) and support link. The assets are served from the provider's origin
+  as `/assets/<name>.<hash>.<ext>`.
+- **One language per page**, French or English: the `lang` cookie, else
+  `Accept-Language`, else French, with an FR | EN switch (`/lang/<code>`, a plain
+  link; `SameSite=Lax` cookie) and one catalogue of strings with a test for
+  missing translations. This replaces the "fr / en" doubling of every label; the
+  account page's "changed by X" sentence, which interpolated an
+  already-bilingual value into each language, is now one sentence per language.
+- **CSP:** `style-src 'unsafe-inline'` is replaced by `style-src 'self'` and
+  `img-src 'self'` on every page; the pages have no inline style.
+- CI: a `web` job regenerates the stylesheet and icons and fails on a
+  difference; the Chrome lane keeps a screenshot of every page, light and dark,
+  as an artifact.
 - **"Mon compte / My account" at `/account`**, for every signed-in person,
   federated or local, behind a fresh authentication at most five minutes old
   (a passkey assertion for a local account; a SAML login with `ForceAuthn`,

@@ -190,7 +190,9 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	k, sess, ok := s.session(r)
 	if !ok {
 		w.WriteHeader(http.StatusOK)
-		tmpl.ExecuteTemplate(w, "account", map[string]any{"Signed": false, "Passkey": s.cfg.Local != nil})
+		// ?done=1 is where the page's own sign-out button goes: the same
+		// confirmation, under the words that say the session has ended.
+		s.show(w, "account", map[string]any{"Signed": false, "Passkey": s.cfg.Local != nil, "Done": r.URL.Query().Get("done") == "1"})
 		return
 	}
 	who := sess.who
@@ -203,15 +205,13 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	}
 	view["Login"], view["Name"], view["Mail"], view["Groups"] = login, name, mail, who.groups
 	if s.isLocal(who) {
-		view["Source"] = "Compte local / Local account"
-		view["ChangedBy"] = "l'administrateur du service / the service's administrator"
+		// The words are the page's, in the person's language (i18n.go).
 	} else {
 		src := who.idp
 		if idp, ok := s.fed.IdP(who.idp); ok {
 			src = idp.Name("fr", "en") + " (" + who.idp + ")"
 		}
 		view["Source"] = src
-		view["ChangedBy"] = "votre établissement / your institution"
 	}
 
 	if s.isLocal(who) {
@@ -252,7 +252,7 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	access := s.accessOf(who)
 	view["Access"], view["AccessOn"] = access, s.cfg.AppPasswords != nil || s.certs.path != ""
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "account", view)
+	s.show(w, "account", view)
 }
 
 // jsonArg is a button's request body, as an HTML attribute carries it.
@@ -286,12 +286,12 @@ func (s *server) accessOf(who *person) []accountAccess {
 	now := s.now()
 	if ap := s.cfg.AppPasswords; ap != nil && who.username != "" {
 		if exp, ok := ap.expiry(who.username); ok && now.Before(exp) {
-			out = append(out, accountAccess{Kind: "app_password", What: "Mot de passe d'application / Application password",
+			out = append(out, accountAccess{Kind: "app_password", What: "access.kind.app_password",
 				Expires: exp.UTC().Format(accountTimeLayout), Arg: jsonArg(map[string]string{"kind": "app_password", "id": "-"})})
 		}
 	}
 	for _, c := range s.certs.liveWhere(s.ownedBy(who), now) {
-		what := map[string]string{"ssh": "Certificat SSH / SSH certificate", "x509": "Certificat X.509 / X.509 certificate", "wireguard": "Clé WireGuard / WireGuard key"}[c.Kind]
+		what := map[string]string{"ssh": "access.kind.ssh", "x509": "access.kind.x509", "wireguard": "access.kind.wireguard"}[c.Kind]
 		if what == "" {
 			what = c.Kind
 		}
@@ -427,7 +427,7 @@ func (s *server) accountFromACS(w http.ResponseWriter, r *http.Request, a *saml.
 	}
 	pageHeadersScript(w, "'self'")
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "accountopen", map[string]any{"Handle": h})
+	s.show(w, "accountopen", map[string]any{"Handle": h})
 }
 
 // accountOpen is the same-origin POST that turns the handle into the cookie.

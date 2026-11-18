@@ -1,0 +1,131 @@
+/* The source of static/app.css. Compiled by `go run ./internal/webbuild` with
+ * the Tailwind v4 standalone CLI (version and sha256 pinned in that program),
+ * committed, embedded, and served from the provider's own origin: nothing here
+ * is fetched at run time, and the pages carry no inline style.
+ *
+ * The component vocabulary (.surface, .btn-*, .field, .label, the focus ring,
+ * the three dark surface levels) follows the one deskplan/web uses; the
+ * palette does not: it is neutral, and the accent is the deployment's, set by
+ * brand.css (branding.go) through the --brand* custom properties below.
+ * Those are written only from a validated hex colour. */
+@import "tailwindcss" source(none);
+@source "./templates";
+@plugin "@tailwindcss/forms";
+
+@theme {
+	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+	/* The accent: brand.css overrides --brand* per deployment and per colour
+	   scheme. The fallbacks are the go-authn mark's cyan, already adjusted. */
+	--color-brand: var(--brand, #0079a8);
+	--color-brand-hover: var(--brand-hover, #00668d);
+	--color-brand-on: var(--brand-on, #ffffff);
+	--color-brand-ink: var(--brand-ink, #006a93);
+
+	/* Soft-dark elevation: page < card < raised. */
+	--color-dark-bg: #12151a;
+	--color-dark-surface: #1b2027;
+	--color-dark-raised: #242b34;
+}
+
+@layer base {
+	html {
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+		color-scheme: light dark;
+	}
+	/* One focus ring for every interactive element, in the accent, and visible
+	   on both surfaces. */
+	:focus-visible {
+		@apply outline-none ring-2 ring-brand-ink ring-offset-2 ring-offset-slate-50 dark:ring-offset-dark-bg;
+	}
+	a {
+		@apply text-brand-ink underline underline-offset-2 hover:no-underline;
+	}
+	code {
+		@apply rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-slate-800 dark:bg-white/10 dark:text-slate-100;
+	}
+}
+
+@utility btn {
+	@apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold no-underline
+		transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+}
+
+/* Status chips on a list row. */
+@utility chip {
+	@apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+}
+
+@layer components {
+	/* Surface: a card or a panel, lifted softly rather than boxed. */
+	.surface {
+		@apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_16px_-4px_rgba(16,24,40,0.08)]
+			dark:border-white/[0.07] dark:bg-dark-surface dark:shadow-none;
+	}
+	.btn-primary {
+		@apply btn bg-brand text-brand-on shadow-sm hover:bg-brand-hover hover:no-underline;
+	}
+	.btn-ghost {
+		@apply btn text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white;
+	}
+	.btn-outline {
+		@apply btn border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50
+			dark:border-white/20 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/10;
+	}
+	/* The destructive action: one style in the whole product. */
+	.btn-danger {
+		@apply btn bg-red-700 text-white shadow-sm hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500;
+	}
+	.btn-sm {
+		@apply px-3 py-1.5 text-xs;
+	}
+	.field {
+		@apply w-full rounded-lg border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition
+			focus:border-brand-ink focus:ring-2 focus:ring-brand-ink/30
+			dark:border-white/20 dark:bg-dark-bg dark:text-slate-100;
+	}
+	.label {
+		@apply mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-100;
+	}
+	.muted {
+		@apply text-sm text-slate-600 dark:text-slate-400;
+	}
+	.chip-plain {
+		@apply chip bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200;
+	}
+	.chip-brand {
+		@apply chip bg-brand-ink/10 text-brand-ink;
+	}
+	/* The skip link is the first thing a keyboard reaches. */
+	.skip {
+		@apply absolute left-2 top-2 z-10 -translate-y-16 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow focus:translate-y-0 dark:bg-dark-raised dark:text-white;
+	}
+	/* A list of rows inside a surface. */
+	.rows > li {
+		@apply flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between;
+	}
+	.rows > li + li {
+		@apply border-t border-slate-200/80 dark:border-white/[0.07];
+	}
+	/* The help panel is a native <details>: it works without script. */
+	details.help > summary {
+		@apply flex cursor-pointer list-none items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-brand-ink;
+	}
+	details.help > summary::-webkit-details-marker {
+		display: none;
+	}
+	details.help[open] > summary .chev {
+		@apply rotate-180;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}

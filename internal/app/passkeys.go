@@ -431,7 +431,7 @@ func unb64(s string, max int) ([]byte, bool) {
 // of this provider, from this origin. Nothing inline, nothing from elsewhere.
 func pageHeadersScript(w http.ResponseWriter, formAction string) {
 	pageHeaders(w, formAction)
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 }
 
 // localEnrollPage is /local/enroll: static, and the same for everybody. The
@@ -443,7 +443,7 @@ func (s *server) localEnrollPage(w http.ResponseWriter, r *http.Request) {
 	}
 	pageHeadersScript(w, "'self'")
 	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "localenroll", nil)
+	s.show(w, "localenroll", nil)
 }
 
 // localScript is the script both pages run: the browser half of WebAuthn.

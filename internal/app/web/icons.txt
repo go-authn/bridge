@@ -1,0 +1,16 @@
+# The Lucide icons the pages use (ISC licence, see icons/LICENSE), from the
+# lucide-static release pinned in internal/webbuild. Only these are shipped.
+building-2
+check
+chevron-down
+circle-alert
+circle-check
+fingerprint-pattern
+key-round
+laptop
+log-out
+monitor-smartphone
+plug
+shield-check
+trash-2
+user-round

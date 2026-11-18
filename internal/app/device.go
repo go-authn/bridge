@@ -246,7 +246,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.tries.blocked(s.clientAddr(r)) {
-		s.render(w, http.StatusTooManyRequests, "device", map[string]any{"Error": "Trop d'essais. Réessayez dans quelques minutes."})
+		s.render(w, http.StatusTooManyRequests, "device", map[string]any{"Error": "device.err.rate"})
 		return
 	}
 	dc, ok := s.userCodes.get(uc)
@@ -256,7 +256,7 @@ func (s *server) device(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		s.tries.failed(s.clientAddr(r))
-		s.render(w, http.StatusBadRequest, "device", map[string]any{"Error": "Ce code n'est pas valide, ou a expiré.", "Code": r.Form.Get("user_code")})
+		s.render(w, http.StatusBadRequest, "device", map[string]any{"Error": "device.err.code", "Code": r.Form.Get("user_code")})
 		return
 	}
 	if r.Method == http.MethodGet || r.Form.Get("confirm") == "" {

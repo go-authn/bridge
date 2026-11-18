@@ -3,6 +3,7 @@
 package app
 
 import (
+	"embed"
 	"errors"
 	"html/template"
 	"net/http"
@@ -91,120 +92,113 @@ func (s *server) spMetadata() ([]byte, error) {
 func headers(w http.ResponseWriter) { pageHeaders(w, "'self'") }
 
 // pageHeaders is headers with the form-action sources a page needs. No script
-// anywhere, no base URI, nothing loaded: the policy is the strictest there is
-// that still lets a form post.
+// anywhere, no base URI, and nothing loaded but this origin's own stylesheet
+// and images (style-src and img-src 'self'): no inline style, no 'unsafe-inline',
+// no font, no frame. The strictest policy that still draws the page and lets
+// a form post.
 func pageHeaders(w http.ResponseWriter, formAction string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("Cache-Control", "no-store")
+	h.Add("Vary", "Accept-Language, Cookie")
 }
 
-var tmpl = template.Must(template.New("").Parse(`
-{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.}}</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#1b1b1b;background:#fff}
-@media (prefers-color-scheme:dark){body{color:#eee;background:#161616}a{color:#8cf}}
-ul{list-style:none;padding:0}li{margin:.3rem 0}input{font:inherit;padding:.4rem;width:100%;box-sizing:border-box}
-button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
-{{define "message"}}{{template "head" "Connexion"}}<h1>Connexion</h1><p>{{.}}</p></body></html>{{end}}
-{{define "choose"}}{{template "head" "Choisir un établissement"}}
-<h1>Choisissez votre établissement</h1><p lang="en">Choose your institution.</p>
-<form method="get" action="choose"><input name="q" value="{{.Q}}" placeholder="Nom ou domaine / name or domain" autofocus></form>
-<ul>{{range .IdPs}}<li><a href="disco?entityID={{.EntityID}}">{{.Name "fr" "en"}}</a></li>{{else}}<li>Aucun établissement ne correspond.</li>{{end}}</ul>
-{{if .More}}<p>{{.More}} autres : précisez la recherche.</p>{{end}}</body></html>{{end}}
-{{define "method"}}{{template "head" "Se connecter"}}
-<h1>Se connecter</h1><p lang="en">Sign in.</p>
-<ul><li><a href="{{.Federation}}">Avec mon établissement (fédération) / With my institution (federation)</a></li>
-<li><a href="local/login">Avec un compte local / With a local account</a></li></ul></body></html>{{end}}
-{{define "locallogin"}}{{template "head" "Compte local"}}
-<h1>Compte local</h1><p lang="en">Local account.</p>
-{{if .Error}}<p role="alert"><strong>{{.Error}}</strong></p>{{end}}
-<form id="passkey-login" method="post" action="login/finish" data-csrf="{{.CSRF}}">
-<input type="hidden" name="csrf" value="{{.CSRF}}">
-<input type="hidden" name="handle"><input type="hidden" name="id"><input type="hidden" name="clientDataJSON">
-<input type="hidden" name="authenticatorData"><input type="hidden" name="signature"><input type="hidden" name="userHandle">
-<p><button id="passkey-button" type="button" disabled>Se connecter avec une clé d'accès / Sign in with a passkey</button></p>
-<p id="passkey-status" role="status"></p></form>
-<p><a href="/account">Gérer mes clés d'accès / Manage my passkeys</a></p>
-<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
-<script src="passkey.js"></script></body></html>{{end}}
-{{define "account"}}{{template "head" "Mon compte"}}
-{{if .Signed}}<h1>Mon compte</h1><p lang="en">My account.</p>
-<div id="account" data-csrf="{{.CSRF}}">
-<h2>Identité / Identity</h2>
-<ul id="identity">
-<li>Identifiant / Login : <strong>{{.Login}}</strong></li>
-<li>Nom / Name : <span id="shown-name">{{.Name}}</span></li>
-<li>Courriel / Mail : <span id="shown-mail">{{.Mail}}</span></li>
-<li>Groupes / Groups : {{range $i, $g := .Groups}}{{if $i}}, {{end}}<code>{{$g}}</code>{{else}}—{{end}}</li>
-<li>Source : {{.Source}}</li></ul>
-<p>Le courriel et les groupes sont modifiés par {{.ChangedBy}}, pas ici. / Mail and groups are changed by {{.ChangedBy}}, not here.</p>
-{{if .Local}}<p><label>Nom affiché / Display name <input id="name" value="{{.Name}}" maxlength="100" autocomplete="off"></label>
-<button type="button" data-post="account/profile" data-from="name" data-field="name">Enregistrer / Save</button></p>
-<h2>Clés d'accès / Passkeys</h2>
-<ul id="keys">{{range .Keys}}<li><code>{{.Prefix}}</code> · créée / created {{.Created}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais utilisée / never used{{end}}{{if .Backup}} · synchronisable / backup-eligible{{end}}{{if .Current}} · <strong>clé de cette confirmation / this confirmation's key</strong>{{end}}
-<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="Supprimer cette clé d'accès ? / Remove this passkey?">Supprimer / Remove</button></li>{{end}}</ul>
-{{if .Full}}<p>Un compte a au plus {{.Max}} clés : supprimez-en une pour en ajouter. / At most {{.Max}} passkeys: remove one to add another.</p>
-{{else}}<p><button id="passkey-button" type="button" data-mode="add" disabled>Ajouter une clé d'accès / Add a passkey</button></p>{{end}}{{end}}
-<h2>Applications et sessions / Applications and sessions</h2>
-<ul id="apps">{{range .Apps}}<li>{{.Client}} · {{if .Created}}ouverte / opened {{.Created}}{{else}}ouverte / opened —{{end}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais renouvelée / never renewed{{end}}
-<button type="button" data-post="account/apps/revoke" data-json="{{.Arg}}" data-confirm="Mettre fin à cette session ? / End this session?">Révoquer / Revoke</button></li>{{else}}<li>Aucune. / None.</li>{{end}}</ul>
-{{if .Apps}}<p><button type="button" data-post="account/apps/revoke" data-json="{&#34;all&#34;:true}" data-confirm="Mettre fin à toutes les sessions ? / End all sessions?">Tout révoquer / Revoke all</button></p>{{end}}
-{{if .AccessOn}}<h2>Accès techniques / Technical access</h2>
-<ul id="access">{{range .Access}}<li>{{.What}}{{if .Detail}} <code>{{.Detail}}</code>{{end}} · expire / expires {{.Expires}}
-<button type="button" data-post="account/access/revoke" data-json="{{.Arg}}" data-confirm="Révoquer cet accès ? / Revoke this access?">Révoquer / Revoke</button></li>{{else}}<li>Aucun. / None.</li>{{end}}</ul>{{end}}
-<p><button id="signout" type="button" data-post="account/signout">Terminer / Done</button></p>
-<p id="passkey-status" role="status"></p></div>
-{{else}}<h1>Mon compte</h1><p lang="en">My account.</p>
-<p>Confirmez que c'est vous : la confirmation dure cinq minutes. / Confirm it is you: the confirmation lasts five minutes.</p>
-{{if .Passkey}}<p><button id="passkey-button" type="button" data-mode="stepup" disabled>Confirmer avec ma clé d'accès / Confirm with my passkey</button></p>{{end}}
-<p><a id="federation-link" href="account/federation">Confirmer avec mon établissement / Confirm with my institution</a></p>
-<p id="passkey-status" role="status"></p>{{end}}
-<noscript><p>Cette page demande JavaScript. / This page needs JavaScript.</p></noscript>
-<script src="account/passkey.js"></script></body></html>{{end}}
-{{define "accountopen"}}{{template "head" "Mon compte"}}
-<h1>Mon compte</h1><p lang="en">My account.</p>
-<form id="auto-submit" method="post" action="/account/open"><input type="hidden" name="h" value="{{.Handle}}">
-<noscript><p><button>Continuer / Continue</button></p></noscript></form>
-<script src="/account/passkey.js"></script></body></html>{{end}}
-{{define "localenroll"}}{{template "head" "Enregistrer une clé d'accès"}}
-<h1>Enregistrer une clé d'accès</h1><p lang="en">Register a passkey.</p>
-<p>Vous avez reçu une invitation d'un administrateur. Votre appareil va vous demander de créer une clé d'accès et de la déverrouiller (empreinte, visage ou code).</p>
-<p lang="en">An administrator invited you. Your device will ask you to create a passkey and unlock it (fingerprint, face or PIN).</p>
-<p><button id="passkey-button" type="button" data-mode="enroll" disabled>Créer ma clé d'accès / Create my passkey</button></p>
-<p id="passkey-status" role="status"></p>
-<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
-<script src="passkey.js"></script></body></html>{{end}}
-{{define "device"}}{{template "head" "Connecter un appareil"}}
-<h1>Connecter un appareil</h1><p lang="en">Connect a device.</p>
-{{if .Error}}<p><strong>{{.Error}}</strong></p>{{end}}
-<form method="post" action="device"><label>Code affiché sur l'appareil / code shown on the device<input name="user_code" value="{{.Code}}" autocomplete="off" autocapitalize="characters" autofocus></label>
-<p><button>Continuer / Continue</button></p></form></body></html>{{end}}
-{{define "confirm"}}{{template "head" "Confirmer"}}
-<h1>{{.Client}} demande à se connecter en votre nom</h1>
-<p lang="en">{{.Client}} is asking to sign in as you.</p>
-<p>Code : <strong>{{.Code}}</strong></p>
-<p><strong>Ne continuez que si c'est vous qui avez lancé cette connexion, sur votre propre appareil.</strong> Si quelqu'un vous a transmis ce code, refusez : il obtiendrait l'accès à votre place.</p>
-<p lang="en"><strong>Only continue if you started this on your own device.</strong> If somebody sent you this code, refuse: they would get the access, not you.</p>
-<form method="post" action="device"><input type="hidden" name="user_code" value="{{.Code}}"><input type="hidden" name="csrf" value="{{.CSRF}}">
-<button name="confirm" value="yes">Oui, c'est moi / Yes, it is me</button> <button name="confirm" value="no">Non / No</button></form></body></html>{{end}}
-`))
+// The pages are html/template files, one stylesheet (web/static/app.css,
+// compiled by internal/webbuild) and Lucide icons (web/icons, ISC licence)
+// inlined as SVG by the icon function: nothing is fetched from elsewhere.
+//
+//go:embed web/templates/*.html
+var templateFS embed.FS
+
+//go:embed web/icons/*.svg
+var iconFS embed.FS
+
+// icons maps a Lucide icon's name to the markup inside its <svg>, which is
+// what the file holds between the tags: a fixed set of paths, from the
+// embedded file, never from a request.
+var icons = func() map[string]string {
+	m := map[string]string{}
+	es, err := iconFS.ReadDir("web/icons")
+	if err != nil {
+		panic(err)
+	}
+	for _, e := range es {
+		b, err := iconFS.ReadFile("web/icons/" + e.Name())
+		if err != nil {
+			panic(err)
+		}
+		s := string(b)
+		o := strings.Index(s, "<svg")
+		i, j := strings.Index(s[max(o, 0):], ">")+max(o, 0), strings.LastIndex(s, "</svg>")
+		if o < 0 || i < o || j < i {
+			panic("web/icons/" + e.Name() + " is not an <svg> file")
+		}
+		m[strings.TrimSuffix(e.Name(), ".svg")] = strings.TrimSpace(s[i+1 : j])
+	}
+	return m
+}()
+
+// icon is a Lucide icon at a size the class names. The class comes from a
+// template's literal text, the paths from the embedded file.
+func icon(name, class string) (template.HTML, error) {
+	inner, ok := icons[name]
+	if !ok {
+		return "", errors.New("no icon " + name)
+	}
+	return template.HTML(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="` +
+		template.HTMLEscapeString(class) + `" aria-hidden="true" focusable="false">` + inner + `</svg>`), nil
+}
+
+// pageTitles are the <title>s, and which pages are the wide ones.
+var pageTitles = map[string]string{
+	"message":     "msg.title",
+	"choose":      "choose.ttl",
+	"method":      "method.title",
+	"locallogin":  "login.title",
+	"account":     "acct.title",
+	"accountopen": "acct.title",
+	"localenroll": "enroll.title",
+	"device":      "device.title",
+	"confirm":     "confirm.ttl",
+}
+
+// show executes a page, in the request's language, with what every page has:
+// the deployment's brand, a title and the language switch. data may be nil.
+func (s *server) show(w http.ResponseWriter, name string, data map[string]any) {
+	if data == nil {
+		data = map[string]any{}
+	}
+	lang, next := langOf(w)
+	data["B"] = s.cfg.brandView()
+	data["Lang"] = lang
+	data["Title"] = catalogue[pageTitles[name]][langIndex(lang)]
+	data["Next"] = next // escaped by the template, in its query context
+	// The enrolment page keeps its invitation in the URL's fragment, which a
+	// reload through the switch would lose; the auto-submitting page has
+	// nothing to switch. Both still follow the cookie and Accept-Language.
+	data["Switch"] = name != "localenroll" && name != "accountopen"
+	if name == "account" && data["Signed"] == true {
+		data["Wide"] = true
+	}
+	tmplByLang[lang].ExecuteTemplate(w, name, data)
+}
 
 // render shows one of the pages above.
-func (s *server) render(w http.ResponseWriter, status int, name string, data any) {
+func (s *server) render(w http.ResponseWriter, status int, name string, data map[string]any) {
 	headers(w)
 	w.WriteHeader(status)
-	tmpl.ExecuteTemplate(w, name, data)
+	s.show(w, name, data)
 }
 
 // page shows a message. Messages are for people; the detail is in the log.
 func (s *server) page(w http.ResponseWriter, status int, msg string) {
 	headers(w)
 	w.WriteHeader(status)
-	tmpl.ExecuteTemplate(w, "message", msg)
+	s.show(w, "message", map[string]any{"Msg": msg})
 }
 
 // choose is this provider's own list of institutions, for a deployment that
@@ -234,7 +228,7 @@ func (s *server) choose(w http.ResponseWriter, r *http.Request) {
 		list = list[:shown]
 	}
 	headers(w)
-	tmpl.ExecuteTemplate(w, "choose", map[string]any{"IdPs": list, "Q": r.URL.Query().Get("q"), "More": more})
+	s.show(w, "choose", map[string]any{"IdPs": list, "Q": r.URL.Query().Get("q"), "More": more})
 }
 
 func matches(i *saml.IdP, q string) bool {
