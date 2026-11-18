@@ -150,6 +150,9 @@ func (b *kerberosBlock) mint(ctx context.Context, principal string, seconds int6
 // local block's scope, which is what eduperson_principal_name says for it. The
 // two cannot meet: a federated name has an "@" and a local login never does.
 func (s *server) kerberosPrincipal(claims map[string]any) string {
+	if machine, ok := s.machineName(claims); ok {
+		return machine
+	}
 	user, _ := claims["preferred_username"].(string)
 	if idp, _ := claims["idp"].(string); s.cfg.Local != nil && idp == s.cfg.localEntityID() {
 		if user == "" || strings.Contains(user, "@") {
@@ -161,6 +164,29 @@ func (s *server) kerberosPrincipal(claims map[string]any) string {
 		return ""
 	}
 	return user
+}
+
+// machineName is the principal of a machine identity's token: the client ID at
+// the issuer's host (`winpc-17@login.example.org`), and true. A machine token
+// (client_credentials with a registered key, ssf.go) has sub = the client ID
+// and neither an idp nor a username; a person's sub is an HMAC and always
+// comes with an idp. The name is DERIVED from the client the token was issued
+// to, never from anything the machine sends, and an ID that holds an "@" or a
+// character a principal cannot is refused, so a machine can never be taken for
+// a person (people's names carry the "@" of their institution's scope, and a
+// machine's carries the issuer's host).
+func (s *server) machineName(claims map[string]any) (string, bool) {
+	id, _ := claims["client_id"].(string)
+	sub, _ := claims["sub"].(string)
+	idp, _ := claims["idp"].(string)
+	user, _ := claims["preferred_username"].(string)
+	if id == "" || sub != id || idp != "" || user != "" {
+		return "", false
+	}
+	if strings.ContainsAny(id, "@/") || certifiableName(id) != nil {
+		return "", true // a machine, but with no name a principal can have
+	}
+	return id + "@" + s.cfg.rpID(), true
 }
 
 // kerberosTGT answers POST /kerberos/tgt with a KRB-CRED for the person the
@@ -232,7 +258,8 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 	// cannot be taken back once out; it is the same window every
 	// certificate here closes with withdrawn.)
 	jti, _ := claims["jti"].(string)
-	if it, live := s.issued.get(jti); !live || s.refused(&person{username: it.username, idp: it.idp, subject: it.subject}) != "" {
+	_, machine := s.machineName(claims)
+	if it, live := s.issued.get(jti); !live || (!machine && s.refused(&person{username: it.username, idp: it.idp, subject: it.subject}) != "") {
 		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 		http.Error(w, "the token is not valid", http.StatusUnauthorized)
 		return

@@ -714,7 +714,11 @@ client "kinit" {
 The principal is the person's scoped name, never a bare one: a federated
 person's `preferred_username` (their eppn, `user@domain`), and for a local
 account, whose login never holds an `@`, the login at the `local` block's scope
-(`alice@mesocentre.example`). The KDC's directory must hold that exact name. The ticket never outlives the identity
+(`alice@mesocentre.example`). The KDC's directory must hold that exact name. A machine with a registered key (`jwks`, see "Machines with a key and no
+secret") and `kerberos_tickets = true` may ask `client_credentials` for the
+`kerberos` scope by name (never part of its default scopes) and buys a TGT for
+itself: `<client id>@<issuer host>`, derived from the client the token was issued
+to; a client ID holding `@` or `/` gets none. The ticket never outlives the identity
 provider's session, nor `validity`, and nothing renews it: a longer day needs a
 new login. A person disabled while the KDC was answering gets nothing.
 

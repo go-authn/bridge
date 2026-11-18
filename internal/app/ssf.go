@@ -574,6 +574,12 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 	// say), for the "machine" scope.
 	if client.keys != nil {
 		allowed = append(allowed, machineScope)
+		// And, when the client says so, a Kerberos TGT for the machine itself
+		// (kerberos.go): only a client that proved a KEY, never one with a
+		// shared secret, whose principal is derived from its ID.
+		if client.KerberosTickets && s.cfg.Kerberos != nil {
+			allowed = append(allowed, "kerberos")
+		}
 	}
 	if len(allowed) == 0 {
 		tokenError(w, http.StatusBadRequest, "unauthorized_client", "this client may not use the client_credentials grant")
@@ -581,7 +587,14 @@ func (s *server) clientCredentials(w http.ResponseWriter, r *http.Request, clien
 	}
 	scopes := strings.Fields(r.PostForm.Get("scope"))
 	if len(scopes) == 0 {
-		scopes = allowed
+		// Asked for nothing, a client gets what it always got: "kerberos" is
+		// only ever asked for by name, since it also makes the token for this
+		// provider alone (accessAudience).
+		for _, sc := range allowed {
+			if sc != "kerberos" {
+				scopes = append(scopes, sc)
+			}
+		}
 	}
 	for _, sc := range scopes {
 		if !slices.Contains(allowed, sc) {
