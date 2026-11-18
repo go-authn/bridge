@@ -128,6 +128,23 @@ button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
 <input type="hidden" name="authenticatorData"><input type="hidden" name="signature"><input type="hidden" name="userHandle">
 <p><button id="passkey-button" type="button" disabled>Se connecter avec une clé d'accès / Sign in with a passkey</button></p>
 <p id="passkey-status" role="status"></p></form>
+<p><a href="account">Gérer mes clés d'accès / Manage my passkeys</a></p>
+<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
+<script src="passkey.js"></script></body></html>{{end}}
+{{define "localaccount"}}{{template "head" "Mes clés d'accès"}}
+{{if .Signed}}<h1>Mes clés d'accès</h1><p lang="en">My passkeys.</p>
+<div id="account" data-csrf="{{.CSRF}}">
+<p>Compte / Account : <strong>{{.Login}}</strong></p>
+<ul>{{range .Keys}}<li><code>{{.Prefix}}</code> · créée / created {{.Created}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais utilisée / never used{{end}}{{if .Backup}} · synchronisable / backup-eligible{{end}}{{if .Current}} · <strong>clé de cette confirmation / this confirmation's key</strong>{{end}}
+<button type="button" data-remove="{{.Key}}">Supprimer / Remove</button></li>{{end}}</ul>
+{{if .Full}}<p>Un compte a au plus {{.Max}} clés : supprimez-en une pour en ajouter. / At most {{.Max}} passkeys: remove one to add another.</p>
+{{else}}<p><button id="passkey-button" type="button" data-mode="add" disabled>Ajouter une clé d'accès / Add a passkey</button></p>{{end}}
+<p><button id="signout" type="button">Terminer / Done</button></p>
+<p id="passkey-status" role="status"></p></div>
+{{else}}<h1>Gérer mes clés d'accès</h1><p lang="en">Manage my passkeys.</p>
+<p>Confirmez que c'est vous avec une clé d'accès : la confirmation dure cinq minutes. / Confirm it is you with a passkey: the confirmation lasts five minutes.</p>
+<p><button id="passkey-button" type="button" data-mode="stepup" disabled>Confirmer avec ma clé d'accès / Confirm with my passkey</button></p>
+<p id="passkey-status" role="status"></p>{{end}}
 <noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
 <script src="passkey.js"></script></body></html>{{end}}
 {{define "localenroll"}}{{template "head" "Enregistrer une clé d'accès"}}

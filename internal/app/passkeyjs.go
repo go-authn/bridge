@@ -14,8 +14,12 @@ const passkeyJS = `"use strict";
 (function () {
   var button = document.getElementById("passkey-button");
   var status = document.getElementById("passkey-status");
-  if (!button) { return; }
-  var enroll = button.getAttribute("data-mode") === "enroll";
+  var account = document.getElementById("account");
+  if (!button && !account) { return; }
+  // mode: "login" (the default), "enroll" (an invitation), "stepup" and "add"
+  // (the account page, before and after the confirmation).
+  var mode = button ? (button.getAttribute("data-mode") || "login") : "account";
+  var enroll = mode === "enroll";
 
   function say(fr, en) { status.textContent = fr + " / " + en; }
 
@@ -68,10 +72,10 @@ const passkeyJS = `"use strict";
       return;
     }
   }
-  button.disabled = false;
+  if (button) { button.disabled = false; }
 
   function failed(e) {
-    button.disabled = false;
+    if (button) { button.disabled = false; }
     if (e && e.name === "NotAllowedError") {
       say("Annulé, ou le délai est dépassé.", "Cancelled, or timed out.");
     } else if (e && e.name === "InvalidStateError") {
@@ -125,10 +129,76 @@ const passkeyJS = `"use strict";
     });
   }
 
-  button.addEventListener("click", function () {
-    button.disabled = true;
-    say("En attente de votre appareil…", "Waiting for your device…");
-    (enroll ? register() : signIn()).catch(failed);
-  });
+  // The account page. Its requests carry the page's CSRF token, which the
+  // server derives from the session; the session itself is an HttpOnly cookie
+  // this script cannot read, and nothing is kept in the browser's storage.
+  function csrf() { return account.getAttribute("data-csrf"); }
+
+  function stepUp() {
+    return post("account/stepup/begin", {}).then(function (b) {
+      var pk = b.publicKey;
+      pk.challenge = dec(pk.challenge);
+      pk.allowCredentials = descriptors(pk.allowCredentials);
+      return navigator.credentials.get({ publicKey: pk }).then(function (cred) {
+        var r = cred.response;
+        if (!r.userHandle) { throw new Error("no user handle"); }
+        return post("account/stepup/finish", {
+          handle: b.handle,
+          id: enc(cred.rawId),
+          clientDataJSON: enc(r.clientDataJSON),
+          authenticatorData: enc(r.authenticatorData),
+          signature: enc(r.signature),
+          userHandle: enc(r.userHandle)
+        });
+      });
+    }).then(function () { location.reload(); });
+  }
+
+  function addKey() {
+    return post("account/add/begin", { csrf: csrf() }).then(function (b) {
+      var pk = b.publicKey;
+      pk.challenge = dec(pk.challenge);
+      pk.user.id = dec(pk.user.id);
+      pk.excludeCredentials = descriptors(pk.excludeCredentials);
+      return navigator.credentials.create({ publicKey: pk }).then(function (cred) {
+        var transports = cred.response.getTransports ? cred.response.getTransports() : [];
+        return post("account/add/finish", {
+          csrf: csrf(),
+          handle: b.handle,
+          id: enc(cred.rawId),
+          clientDataJSON: enc(cred.response.clientDataJSON),
+          attestationObject: enc(cred.response.attestationObject),
+          transports: transports
+        });
+      });
+    }).then(function () { location.reload(); });
+  }
+
+  if (account) {
+    var removers = account.querySelectorAll("[data-remove]");
+    Array.prototype.forEach.call(removers, function (b) {
+      b.addEventListener("click", function () {
+        if (!window.confirm("Supprimer cette clé d'accès ? / Remove this passkey?")) { return; }
+        b.disabled = true;
+        post("account/remove", { csrf: csrf(), key: b.getAttribute("data-remove") })
+          .then(function () { location.reload(); }).catch(function (e) { b.disabled = false; failed(e); });
+      });
+    });
+    var out = document.getElementById("signout");
+    if (out) {
+      out.addEventListener("click", function () {
+        post("account/signout", { csrf: csrf() }).then(function () { location.reload(); }).catch(failed);
+      });
+    }
+  }
+
+  if (button) {
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      say("En attente de votre appareil…", "Waiting for your device…");
+      var run = mode === "enroll" ? register : mode === "stepup" ? stepUp : mode === "add" ? addKey : signIn;
+      run().catch(failed);
+    });
+  }
 })();
 `

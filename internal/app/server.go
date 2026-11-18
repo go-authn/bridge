@@ -81,6 +81,10 @@ type server struct {
 	localLimit *localThrottle
 	passkeys   *passkeyStore
 	ceremonies *ttl[*ceremony]
+	// accountSessions are the step-ups the account page (account.go) holds,
+	// and accountMu serialises the changes it makes to an account's keys.
+	accountSessions *ttl[*accountSession]
+	accountMu       sync.Mutex
 
 	logMu sync.Mutex
 
@@ -178,6 +182,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 		s.localLimit = newLocalThrottle(now)
 		s.passkeys = &passkeyStore{b: cfg.State, now: now}
 		s.ceremonies = newTTL[*ceremony](now).capped(maxPending).evicting()
+		s.accountSessions = newTTL[*accountSession](now).capped(maxPending).evicting()
 		cfg.Local.store.logf = s.logf
 	}
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
@@ -227,6 +232,7 @@ func (s *server) handler() http.Handler {
 		mux.HandleFunc("/local/enroll/begin", s.limited(s.localEnrollBegin))
 		mux.HandleFunc("/local/enroll/finish", s.limited(s.localEnrollFinish))
 		mux.HandleFunc("/local/passkey.js", s.localScript)
+		s.accountRoutes(mux)
 	}
 	mux.HandleFunc("GET /saml/choose", s.choose)
 	mux.HandleFunc("GET /saml/disco", s.disco)

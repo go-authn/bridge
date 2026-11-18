@@ -327,8 +327,13 @@ type ceremony struct {
 	// enrolment: the invitation's token, and whose it is.
 	invite string
 	login  string
-	// login: the sealed login this belongs to.
+	// login: the sealed login this belongs to. For the account page's ceremonies
+	// (purpose set) it is the session's key, for an add and empty for a step-up.
 	loginID string
+	// purpose is "" for a login or an enrolment, purposeStepUp or purposeAddKey
+	// for the account page. A ceremony is taken only by what asked for it: a
+	// step-up assertion cannot end an OIDC login, nor the reverse.
+	purpose string
 }
 
 func (s *server) startCeremony(c *ceremony) (string, error) {
@@ -341,7 +346,16 @@ func (s *server) startCeremony(c *ceremony) (string, error) {
 
 func (s *server) takeCeremony(handle string, enroll bool) (*ceremony, bool) {
 	c, ok := s.ceremonies.take(hashToken(handle))
-	if !ok || c.enroll != enroll {
+	if !ok || c.enroll != enroll || c.purpose != "" {
+		return nil, false
+	}
+	return c, true
+}
+
+// takeCeremonyFor is takeCeremony for the account page's two ceremonies.
+func (s *server) takeCeremonyFor(handle, purpose string) (*ceremony, bool) {
+	c, ok := s.ceremonies.take(hashToken(handle))
+	if !ok || c.enroll || c.purpose != purpose {
 		return nil, false
 	}
 	return c, true

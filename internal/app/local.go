@@ -159,7 +159,13 @@ func (t *localThrottle) succeeded(login string) {
 // under a key derived from the subject salt -- stateless, bound to this login,
 // and not something another site can compute or read.
 func (s *server) localCSRF(id string) (string, error) {
-	key, err := hkdf.Key(sha256.New, s.cfg.salt, nil, "go-authn bridge local login csrf v1", 32)
+	return s.csrfToken("go-authn bridge local login csrf v1", id)
+}
+
+// csrfToken is the HMAC of id under a key derived from the salt and label: one
+// label per kind of page, so that a token of one is no token of another.
+func (s *server) csrfToken(label, id string) (string, error) {
+	key, err := hkdf.Key(sha256.New, s.cfg.salt, nil, label, 32)
 	if err != nil {
 		return "", err
 	}
