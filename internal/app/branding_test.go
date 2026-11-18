@@ -257,6 +257,8 @@ func TestIconsAreExactlyTheOnesUsed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A Windows checkout may have converted the line endings.
+	listed = bytes.ReplaceAll(listed, []byte("\r\n"), []byte("\n"))
 	for n := range used {
 		if _, ok := icons[n]; !ok {
 			t.Errorf("a template uses the icon %q, which is not shipped", n)
@@ -337,7 +339,8 @@ func TestPagesCarryTheBrandAndNothingInline(t *testing.T) {
 
 func TestConfigBrandingBlock(t *testing.T) {
 	c := newConf(t)
-	logo := filepath.Join(c.dir, "logo.png")
+	// Forward slashes: the path is pasted into an HCL string.
+	logo := filepath.ToSlash(filepath.Join(c.dir, "logo.png"))
 	os.WriteFile(logo, pngBytes(32, 32), 0o644)
 	with := func(block string) string { return c.hcl(func(s string) string { return s + block }) }
 
