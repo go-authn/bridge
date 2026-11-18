@@ -182,6 +182,26 @@ things the login does: the issuer's `https` origin reaching the provider
 unchanged, and `X-Forwarded-For` trusted from the proxy only, since the
 per-host throttle and the audit line name the client address.
 
+Removing a passkey other than the one you are signed in with waits
+`passkey_removal_delay` in the `local` block (default `"24h"`; `"0"` removes at
+once). The key keeps working meanwhile, and any of the person's keys can cancel
+the removal from `/account`, which shows a banner. This is the guard against a
+stolen, unlocked phone wiping the other keys. To tell the person, add a signed
+webhook (the bridge sends no mail itself):
+
+```hcl
+notify {
+  url         = "https://hooks.example.org/bridge"   # https, or http to loopback
+  secret_file = "/etc/authn-bridge/notify.secret"    # 16+ characters; HMAC-SHA-256 key
+  # include_address = true   # the client's whole address; by default its family only
+}
+```
+
+Each key added, removal requested, cancelled or done is one POST of a JSON event
+(`event`, `time`, `login`, `mail`, `key` (16 characters), `effective`, `client`,
+`link`), signed in `X-Bridge-Signature: sha256=<hex>` over the body. Without a
+`notify` block the audit log lines and the banner remain.
+
 Create the accounts file empty, owned by root and readable by the service's
 group, name it in the configuration together with the state database, then
 invite the first account:

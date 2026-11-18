@@ -109,6 +109,12 @@ type config struct {
 	// it: saml is still required.
 	Local *localBlock `hcl:"local,block"`
 
+	// Notify is where the events about a person's passkeys go (a key added, a
+	// removal requested, cancelled or done): a signed webhook, which whatever
+	// sends mail for the deployment turns into the mail (account_removal.go).
+	// Optional, and only with a local block.
+	Notify *notifyBlock `hcl:"notify,block"`
+
 	// Branding is the deployment's name, logo, accent colour and support link
 	// on the pages (branding.go). Absent: the neutral go-authn theme.
 	Branding *brandingBlock `hcl:"branding,block"`
@@ -635,6 +641,14 @@ func (c *config) check() error {
 	if c.Local != nil {
 		if err := c.Local.check(c); err != nil {
 			return fmt.Errorf("local: %w", err)
+		}
+	}
+	if c.Notify != nil {
+		if c.Local == nil {
+			return errors.New("notify: it reports on the passkeys of local accounts, and there is no local block")
+		}
+		if err := c.Notify.check(); err != nil {
+			return fmt.Errorf("notify: %w", err)
 		}
 	}
 

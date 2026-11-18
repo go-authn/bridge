@@ -60,7 +60,16 @@ type localBlock struct {
 	// <login>@<scope>.
 	Scope string `hcl:"scope"`
 
-	store *localStore
+	// PasskeyRemovalDelay is how long the removal of a passkey, other than the
+	// one the person is signed in with, waits on /account (a Go duration; the
+	// default is 24h, "0" removes at once). It is the guard against a stolen,
+	// unlocked device wiping the person's other keys: for the delay the key
+	// still works, any of the person's keys can cancel the removal, and the
+	// account page says so (account_removal.go).
+	PasskeyRemovalDelay string `hcl:"passkey_removal_delay,optional"`
+
+	store        *localStore
+	removalDelay time.Duration
 }
 
 // localEntityID is the identity source local accounts log in under. It is

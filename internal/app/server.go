@@ -89,6 +89,11 @@ type server struct {
 	accountSessions *ttl[*accountSession]
 	accountOpens    *ttl[*accountSession]
 	accountMu       sync.Mutex
+	// notifySlots bounds the webhook deliveries in flight, notifyWG waits for
+	// them (tests), and notifyClient replaces the default client (tests).
+	notifySlots  chan struct{}
+	notifyWG     sync.WaitGroup
+	notifyClient *http.Client
 
 	logMu sync.Mutex
 
@@ -188,7 +193,8 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.accountOpens = newTTL[*accountSession](now).capped(maxPending).evicting()
 	s.localLimit = newLocalThrottle(now)
 	if cfg.Local != nil {
-		s.passkeys = &passkeyStore{b: cfg.State, now: now}
+		s.passkeys = &passkeyStore{b: cfg.State, now: now, onRemoved: s.removalDone}
+		s.notifySlots = make(chan struct{}, 8)
 		s.ceremonies = newTTL[*ceremony](now).capped(maxPending).evicting()
 		cfg.Local.store.logf = s.logf
 	}
