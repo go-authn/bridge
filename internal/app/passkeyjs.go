@@ -12,6 +12,10 @@ package app
 // so it is in no log, and it is not in the history either.
 const passkeyJS = `"use strict";
 (function () {
+  // The page an institution's answer ends at carries one form, which this
+  // script posts from this origin (account.go, accountOpen).
+  var auto = document.getElementById("auto-submit");
+  if (auto) { auto.submit(); return; }
   var button = document.getElementById("passkey-button");
   var status = document.getElementById("passkey-status");
   var account = document.getElementById("account");
@@ -58,7 +62,7 @@ const passkeyJS = `"use strict";
     });
   }
 
-  if (!window.PublicKeyCredential || !navigator.credentials) {
+  if (button && (!window.PublicKeyCredential || !navigator.credentials)) {
     say("Ce navigateur ne gère pas les clés d'accès.", "This browser does not support passkeys.");
     return;
   }
@@ -175,21 +179,23 @@ const passkeyJS = `"use strict";
   }
 
   if (account) {
-    var removers = account.querySelectorAll("[data-remove]");
-    Array.prototype.forEach.call(removers, function (b) {
+    // Every other button names its endpoint (data-post), its body (data-json),
+    // and perhaps a field read from an input (data-from, data-field).
+    var posts = account.querySelectorAll("[data-post]");
+    Array.prototype.forEach.call(posts, function (b) {
       b.addEventListener("click", function () {
-        if (!window.confirm("Supprimer cette clé d'accès ? / Remove this passkey?")) { return; }
+        var q = b.getAttribute("data-confirm");
+        if (q && !window.confirm(q)) { return; }
+        var body = JSON.parse(b.getAttribute("data-json") || "{}");
+        body.csrf = csrf();
+        if (b.getAttribute("data-from")) {
+          body[b.getAttribute("data-field")] = document.getElementById(b.getAttribute("data-from")).value;
+        }
         b.disabled = true;
-        post("account/remove", { csrf: csrf(), key: b.getAttribute("data-remove") })
+        post(b.getAttribute("data-post"), body)
           .then(function () { location.reload(); }).catch(function (e) { b.disabled = false; failed(e); });
       });
     });
-    var out = document.getElementById("signout");
-    if (out) {
-      out.addEventListener("click", function () {
-        post("account/signout", { csrf: csrf() }).then(function () { location.reload(); }).catch(failed);
-      });
-    }
   }
 
   if (button) {

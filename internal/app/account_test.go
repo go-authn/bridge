@@ -66,7 +66,7 @@ func (f *fixture) accountReq(method, path, cookie string, body any, hdr ...strin
 // stepUpBegin returns the handle and the challenge.
 func (f *fixture) stepUpBegin() (string, []byte) {
 	f.t.Helper()
-	res := f.accountReq("POST", "/local/account/stepup/begin", "", struct{}{})
+	res := f.accountReq("POST", "/account/stepup/begin", "", struct{}{})
 	body := readBody(res)
 	if res.StatusCode != http.StatusOK {
 		f.t.Fatalf("stepup/begin: status %d: %s", res.StatusCode, body)
@@ -96,7 +96,7 @@ func (f *fixture) assertionBody(a *webauthntest.Authenticator, login, handle str
 func (f *fixture) stepUpRaw(a *webauthntest.Authenticator, login string, o webauthntest.Options) *http.Response {
 	f.t.Helper()
 	h, ch := f.stepUpBegin()
-	return f.accountReq("POST", "/local/account/stepup/finish", "", f.assertionBody(a, login, h, ch, o))
+	return f.accountReq("POST", "/account/stepup/finish", "", f.assertionBody(a, login, h, ch, o))
 }
 
 func accountCookieOf(res *http.Response) string {
@@ -127,7 +127,7 @@ func (f *fixture) signedIn(a *webauthntest.Authenticator, login string) *account
 
 func (f *fixture) accountPage(cookie string) (int, string) {
 	f.t.Helper()
-	res := f.accountReq("GET", "/local/account", cookie, nil)
+	res := f.accountReq("GET", "/account", cookie, nil)
 	return res.StatusCode, readBody(res)
 }
 
@@ -145,7 +145,7 @@ func (f *fixture) accountPageCSRF(cookie string) string {
 // status.
 func (f *fixture) addKey(s *accountSess, a *webauthntest.Authenticator, o webauthntest.Options) int {
 	f.t.Helper()
-	res := f.accountReq("POST", "/local/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
+	res := f.accountReq("POST", "/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
 	body := readBody(res)
 	if res.StatusCode != http.StatusOK {
 		return res.StatusCode
@@ -158,7 +158,7 @@ func (f *fixture) addKey(s *accountSess, a *webauthntest.Authenticator, o webaut
 		f.t.Fatalf("%v: %s", err, body)
 	}
 	cd, ao := a.Register(f.s.cfg.rpID(), f.s.cfg.origin(), decB64(f.t, b.PublicKey["challenge"].(string)), o)
-	res = f.accountReq("POST", "/local/account/add/finish", s.cookie, map[string]any{
+	res = f.accountReq("POST", "/account/add/finish", s.cookie, map[string]any{
 		"csrf": s.csrf, "handle": b.Handle, "id": b64(a.ID), "clientDataJSON": b64(cd), "attestationObject": b64(ao), "transports": []string{"internal"},
 	})
 	readBody(res)
@@ -167,7 +167,7 @@ func (f *fixture) addKey(s *accountSess, a *webauthntest.Authenticator, o webaut
 
 func (f *fixture) removeKey(s *accountSess, a *webauthntest.Authenticator, hdr ...string) (int, string) {
 	f.t.Helper()
-	res := f.accountReq("POST", "/local/account/remove", s.cookie, map[string]string{"csrf": s.csrf, "key": passkeyKey(a.ID)}, hdr...)
+	res := f.accountReq("POST", "/account/remove", s.cookie, map[string]string{"csrf": s.csrf, "key": passkeyKey(a.ID)}, hdr...)
 	return res.StatusCode, readBody(res)
 }
 
@@ -192,7 +192,7 @@ func (f *fixture) logs(into *bytes.Buffer) string {
 func TestAccountPageAsksForAStepUpFirst(t *testing.T) {
 	f := localFixture(t, "")
 	f.enrolled("alice", webauthn.AlgES256)
-	res := f.accountReq("GET", "/local/account", "", nil)
+	res := f.accountReq("GET", "/account", "", nil)
 	body := readBody(res)
 	if res.StatusCode != http.StatusOK || !strings.Contains(body, `data-mode="stepup"`) {
 		t.Fatalf("no session: status %d:\n%s", res.StatusCode, body)
@@ -214,15 +214,19 @@ func TestAccountPageAsksForAStepUpFirst(t *testing.T) {
 		t.Error("the page runs more than the one script of this provider")
 	}
 	// Methods other than GET are not the page.
-	if r := f.accountReq("POST", "/local/account", "", struct{}{}); r.StatusCode != http.StatusNotFound {
-		t.Errorf("POST /local/account: %d", r.StatusCode)
+	if r := f.accountReq("POST", "/account", "", struct{}{}); r.StatusCode != http.StatusNotFound {
+		t.Errorf("POST /account: %d", r.StatusCode)
+	}
+	// /local/account is where it was, and redirects.
+	if r := f.accountReq("GET", "/local/account", "", nil); r.StatusCode != http.StatusFound || r.Header.Get("Location") != f.s.cfg.Issuer+"/account" {
+		t.Errorf("GET /local/account: %d to %q", r.StatusCode, r.Header.Get("Location"))
 	}
 	// And the login page links to it.
 	b := newBrowser(t)
 	rp := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect)
 	f.openLocal(b, rp.authURL())
-	if page := readBody(b.get(f.s.cfg.Issuer + "/local/login")); !strings.Contains(page, `href="account"`) {
-		t.Error("the local login page does not link to /local/account")
+	if page := readBody(b.get(f.s.cfg.Issuer + "/local/login")); !strings.Contains(page, `href="/account"`) {
+		t.Error("the local login page does not link to /account")
 	}
 }
 
@@ -303,9 +307,9 @@ func TestAccountSelfServiceEndToEnd(t *testing.T) {
 
 	out := f.logs(&logs)
 	for _, want := range []string{
-		"local: audit: alice stepup key=" + passkeyKey(laptop.ID)[:16] + " from 127.0.0.1",
-		"local: audit: alice add key=" + passkeyKey(phone.ID)[:16] + " from 127.0.0.1",
-		"local: audit: alice remove key=" + passkeyKey(laptop.ID)[:16] + " from 127.0.0.1",
+		"account: audit: alice stepup " + passkeyKey(laptop.ID)[:16] + " from 127.0.0.1",
+		"account: audit: alice add " + passkeyKey(phone.ID)[:16] + " from 127.0.0.1",
+		"account: audit: alice remove " + passkeyKey(laptop.ID)[:16] + " from 127.0.0.1",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the audit log lacks %q:\n%s", want, out)
@@ -327,7 +331,7 @@ func TestStepUpAndLoginCeremoniesAreNotInterchangeable(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatal(status)
 	}
-	res := f.accountReq("POST", "/local/account/stepup/finish", "", f.assertionBody(alice, "alice", h, ch, webauthntest.Options{}))
+	res := f.accountReq("POST", "/account/stepup/finish", "", f.assertionBody(alice, "alice", h, ch, webauthntest.Options{}))
 	readBody(res)
 	if res.StatusCode != http.StatusUnauthorized || accountCookieOf(res) != "" {
 		t.Errorf("a login's assertion opened the account page: %d", res.StatusCode)
@@ -352,13 +356,13 @@ func TestStepUpAndLoginCeremoniesAreNotInterchangeable(t *testing.T) {
 	// An add's challenge answered at the step-up.
 	f.resetThrottle()
 	s := f.signedIn(alice, "alice")
-	res = f.accountReq("POST", "/local/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
+	res = f.accountReq("POST", "/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
 	var o struct {
 		Handle    string         `json:"handle"`
 		PublicKey map[string]any `json:"publicKey"`
 	}
 	json.Unmarshal([]byte(readBody(res)), &o)
-	res = f.accountReq("POST", "/local/account/stepup/finish", "", f.assertionBody(alice, "alice", o.Handle, decB64(t, o.PublicKey["challenge"].(string)), webauthntest.Options{}))
+	res = f.accountReq("POST", "/account/stepup/finish", "", f.assertionBody(alice, "alice", o.Handle, decB64(t, o.PublicKey["challenge"].(string)), webauthntest.Options{}))
 	readBody(res)
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("an add's challenge made a step-up: %d", res.StatusCode)
@@ -395,11 +399,11 @@ func TestStepUpRefusals(t *testing.T) {
 		{"another account's user handle", func() *http.Response { return f.stepUpRaw(alice, "bob", webauthntest.Options{}) }},
 		{"a handle that was never issued", func() *http.Response {
 			_, ch := f.stepUpBegin()
-			return f.accountReq("POST", "/local/account/stepup/finish", "", f.assertionBody(alice, "alice", "nope", ch, webauthntest.Options{}))
+			return f.accountReq("POST", "/account/stepup/finish", "", f.assertionBody(alice, "alice", "nope", ch, webauthntest.Options{}))
 		}},
 		{"a signature of another challenge", func() *http.Response {
 			h, _ := f.stepUpBegin()
-			return f.accountReq("POST", "/local/account/stepup/finish", "", f.assertionBody(alice, "alice", h, []byte("another challenge of 32 bytes...."), webauthntest.Options{}))
+			return f.accountReq("POST", "/account/stepup/finish", "", f.assertionBody(alice, "alice", h, []byte("another challenge of 32 bytes...."), webauthntest.Options{}))
 		}},
 		{"an assertion made by another account's key for this account's handle", func() *http.Response {
 			return f.stepUpRaw(bob, "alice", webauthntest.Options{})
@@ -418,10 +422,10 @@ func TestStepUpRefusals(t *testing.T) {
 	f.resetThrottle()
 	h, ch := f.stepUpBegin()
 	body := f.assertionBody(alice, "alice", h, ch, webauthntest.Options{})
-	if res := f.accountReq("POST", "/local/account/stepup/finish", "", body); res.StatusCode != http.StatusOK {
+	if res := f.accountReq("POST", "/account/stepup/finish", "", body); res.StatusCode != http.StatusOK {
 		t.Fatalf("control: %d", res.StatusCode)
 	}
-	if res := f.accountReq("POST", "/local/account/stepup/finish", "", body); res.StatusCode != http.StatusUnauthorized {
+	if res := f.accountReq("POST", "/account/stepup/finish", "", body); res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a replayed step-up: %d", res.StatusCode)
 	}
 
@@ -431,7 +435,7 @@ func TestStepUpRefusals(t *testing.T) {
 	body = f.assertionBody(alice, "alice", h, ch, webauthntest.Options{})
 	real := time.Now()
 	f.s.now = func() time.Time { return real.Add(ceremonyTTL + time.Second) }
-	res := f.accountReq("POST", "/local/account/stepup/finish", "", body)
+	res := f.accountReq("POST", "/account/stepup/finish", "", body)
 	f.s.now = time.Now
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("an assertion over a challenge older than five minutes: %d", res.StatusCode)
@@ -445,7 +449,7 @@ func TestStepUpRefusals(t *testing.T) {
 		"a form content type":      {"Content-Type", "application/x-www-form-urlencoded"},
 	} {
 		f.resetThrottle()
-		res := f.accountReq("POST", "/local/account/stepup/begin", "", struct{}{}, hdr...)
+		res := f.accountReq("POST", "/account/stepup/begin", "", struct{}{}, hdr...)
 		readBody(res)
 		if res.StatusCode < 400 {
 			t.Errorf("%s: status %d", name, res.StatusCode)
@@ -467,7 +471,7 @@ func TestAccountSessionExpiresAfterFiveMinutes(t *testing.T) {
 	if status, page := f.accountPage(s.cookie); status != http.StatusOK || !strings.Contains(page, `data-mode="stepup"`) || strings.Contains(page, "data-remove") {
 		t.Errorf("the page after five minutes:\n%s", page)
 	}
-	res := f.accountReq("POST", "/local/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
+	res := f.accountReq("POST", "/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf})
 	readBody(res)
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a change after five minutes: %d", res.StatusCode)
@@ -487,9 +491,9 @@ func TestAccountChangesRefuseWhatDidNotComeFromThePage(t *testing.T) {
 		body map[string]string
 	}
 	calls := []call{
-		{"/local/account/add/begin", map[string]string{"csrf": s.csrf}},
-		{"/local/account/remove", map[string]string{"csrf": s.csrf, "key": passkeyKey(alice.ID)}},
-		{"/local/account/signout", map[string]string{"csrf": s.csrf}},
+		{"/account/add/begin", map[string]string{"csrf": s.csrf}},
+		{"/account/remove", map[string]string{"csrf": s.csrf, "key": passkeyKey(alice.ID)}},
+		{"/account/signout", map[string]string{"csrf": s.csrf}},
 	}
 	// The controls first, on a call that changes nothing: add/begin from the
 	// page's origin, and from a form's "null" that the browser says is same-origin.
@@ -580,7 +584,7 @@ func TestAccountAddRefusals(t *testing.T) {
 	}
 	// Another session's ceremony.
 	f.resetThrottle()
-	res := f.accountReq("POST", "/local/account/add/begin", sb.cookie, map[string]string{"csrf": sb.csrf})
+	res := f.accountReq("POST", "/account/add/begin", sb.cookie, map[string]string{"csrf": sb.csrf})
 	var o struct {
 		Handle    string         `json:"handle"`
 		PublicKey map[string]any `json:"publicKey"`
@@ -588,7 +592,7 @@ func TestAccountAddRefusals(t *testing.T) {
 	json.Unmarshal([]byte(readBody(res)), &o)
 	a := mustAuth(t, webauthn.AlgES256)
 	cd, ao := a.Register(f.s.cfg.rpID(), f.s.cfg.origin(), decB64(t, o.PublicKey["challenge"].(string)), webauthntest.Options{})
-	res = f.accountReq("POST", "/local/account/add/finish", s.cookie, map[string]any{
+	res = f.accountReq("POST", "/account/add/finish", s.cookie, map[string]any{
 		"csrf": s.csrf, "handle": o.Handle, "id": b64(a.ID), "clientDataJSON": b64(cd), "attestationObject": b64(ao),
 	})
 	readBody(res)
@@ -602,7 +606,7 @@ func TestAccountAddRefusals(t *testing.T) {
 	f.resetThrottle()
 	sh, sch := f.stepUpBegin()
 	cd, ao = a.Register(f.s.cfg.rpID(), f.s.cfg.origin(), sch, webauthntest.Options{})
-	res = f.accountReq("POST", "/local/account/add/finish", s.cookie, map[string]any{
+	res = f.accountReq("POST", "/account/add/finish", s.cookie, map[string]any{
 		"csrf": s.csrf, "handle": sh, "id": b64(a.ID), "clientDataJSON": b64(cd), "attestationObject": b64(ao),
 	})
 	readBody(res)
@@ -668,7 +672,7 @@ func TestAccountRemoveRules(t *testing.T) {
 	}
 	// A prefix too short to be unique is refused, and removes nothing.
 	f.resetThrottle()
-	res := f.accountReq("POST", "/local/account/remove", s.cookie, map[string]string{"csrf": s.csrf, "key": passkeyKey(phone.ID)[:4]})
+	res := f.accountReq("POST", "/account/remove", s.cookie, map[string]string{"csrf": s.csrf, "key": passkeyKey(phone.ID)[:4]})
 	readBody(res)
 	if res.StatusCode != http.StatusNotFound {
 		t.Errorf("a four-character prefix: %d", res.StatusCode)
@@ -751,7 +755,7 @@ func TestAccountEndpointsAreThrottledPerHost(t *testing.T) {
 		}
 	}
 	// The eleventh is refused before anything is checked.
-	res := f.accountReq("POST", "/local/account/stepup/begin", "", struct{}{})
+	res := f.accountReq("POST", "/account/stepup/begin", "", struct{}{})
 	readBody(res)
 	if res.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("after %d failures from one host: %d, want 429", localHostMax, res.StatusCode)
@@ -764,22 +768,35 @@ func TestAccountEndpointsAreThrottledPerHost(t *testing.T) {
 	s := f.signedIn(alice, "alice")
 	f.resetThrottle()
 	for i := 0; i < localHostMax; i++ {
-		f.accountReq("POST", "/local/account/add/begin", s.cookie, map[string]string{"csrf": fmt.Sprint("wrong", i)})
+		f.accountReq("POST", "/account/add/begin", s.cookie, map[string]string{"csrf": fmt.Sprint("wrong", i)})
 	}
-	if res := f.accountReq("POST", "/local/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf}); res.StatusCode != http.StatusTooManyRequests {
+	if res := f.accountReq("POST", "/account/add/begin", s.cookie, map[string]string{"csrf": s.csrf}); res.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("a host that forged ten tokens: %d, want 429", res.StatusCode)
 	}
 }
 
 func TestAccountRoutesAreGoneWithoutALocalBlock(t *testing.T) {
 	f := newFixture(t, "")
-	for _, p := range []string{"/local/account", "/local/account/stepup/begin", "/local/account/add/begin", "/local/account/remove", "/local/account/signout"} {
-		for _, m := range []string{"GET", "POST"} {
-			res := f.accountReq(m, p, "", struct{}{})
-			readBody(res)
-			if res.StatusCode != http.StatusNotFound {
-				t.Errorf("%s %s without a local block: %d", m, p, res.StatusCode)
-			}
+	// The passkey routes belong to the local block.
+	for _, p := range []string{"/account/stepup/begin", "/account/stepup/finish", "/account/add/begin", "/account/add/finish", "/account/remove"} {
+		res := f.accountReq("POST", p, "", struct{}{})
+		readBody(res)
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("POST %s without a local block: %d", p, res.StatusCode)
+		}
+	}
+	// The account page is every person's: it offers the institution, no passkey.
+	res := f.accountReq("GET", "/account", "", nil)
+	body := readBody(res)
+	if res.StatusCode != http.StatusOK || !strings.Contains(body, `id="federation-link"`) || strings.Contains(body, "passkey-button") {
+		t.Errorf("/account without a local block: %d\n%s", res.StatusCode, body)
+	}
+	// And what changes something needs a confirmation.
+	for _, p := range []string{"/account/profile", "/account/apps/revoke", "/account/access/revoke", "/account/signout"} {
+		res := f.accountReq("POST", p, "", struct{}{})
+		readBody(res)
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Errorf("POST %s with no confirmation: %d, want 401", p, res.StatusCode)
 		}
 	}
 }

@@ -353,7 +353,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 	}
 
 	// 3. The step-up: the account page asks for a fresh assertion first.
-	p.goTo(issuer + "/local/account")
+	p.goTo(issuer + "/account")
 	if p.count("[data-remove]") != 0 || p.count(`#passkey-button[data-mode="stepup"]`) != 1 {
 		p.fatalf("the account page shows more than a confirmation before the step-up")
 	}
@@ -376,7 +376,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 		t.Errorf("the page can read the session (document.cookie=%q) or stores something (%d items)", visible, stored)
 	}
 	var rows []string
-	p.eval(`Array.from(document.querySelectorAll("#account li")).map(li => li.innerText)`, &rows)
+	p.eval(`Array.from(document.querySelectorAll("#keys li")).map(li => li.innerText)`, &rows)
 	if len(rows) != 1 || !strings.Contains(rows[0], key1[:16]) || !strings.Contains(rows[0], "this confirmation") {
 		t.Fatalf("the key list after the step-up: %q", rows)
 	}
@@ -396,7 +396,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 	if key2 == key1 {
 		t.Fatal("the second passkey is the first")
 	}
-	p.eval(`Array.from(document.querySelectorAll("#account li")).map(li => li.innerText)`, &rows)
+	p.eval(`Array.from(document.querySelectorAll("#keys li")).map(li => li.innerText)`, &rows)
 	for _, r := range rows {
 		if strings.Contains(r, key1[:16]) != strings.Contains(r, "this confirmation") {
 			t.Errorf("the current key is not the one the step-up was made with:\n%s", r)
@@ -413,7 +413,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 
 	// 6. Remove the first passkey from the page (its confirmation was made with
 	// it, so the confirmation ends with it).
-	p.goTo(issuer + "/local/account")
+	p.goTo(issuer + "/account")
 	p.waitFor("the key list", `!!document.getElementById("account")`)
 	p.eval(`(window.confirm = () => true, true)`, new(bool))
 	p.click(fmt.Sprintf(`[data-remove=%q]`, key1))

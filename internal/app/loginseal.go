@@ -74,9 +74,15 @@ func (s *server) loginAEAD() (cipher.AEAD, error) {
 
 // sealLogin is l as the cookie carries it.
 func (s *server) sealLogin(id string, l *login, expires time.Time) (string, error) {
+	// A login of kind "account" (account.go) has no client: it ends at the
+	// account page.
+	clientID := ""
+	if l.client != nil {
+		clientID = l.client.ID
+	}
 	plain, err := json.Marshal(sealedLogin{
 		ID: id, Expires: expires.Unix(), Kind: l.kind, DeviceCode: l.deviceCode,
-		Client: l.client.ID, RedirectURI: l.redirectURI, State: l.state, Nonce: l.nonce,
+		Client: clientID, RedirectURI: l.redirectURI, State: l.state, Nonce: l.nonce,
 		Challenge: l.challenge, Scopes: l.scopes, Resources: l.resources, Options: l.options, Pending: l.pending,
 		Started: l.started, MaxAge: maxAgePtr(l.maxAge),
 	})
@@ -124,13 +130,16 @@ func (s *server) openLogin(v string) (string, *login, time.Time, error) {
 	if !s.now().Before(expires) {
 		return "", nil, time.Time{}, errLoginExpired
 	}
-	client, ok := s.cfg.client(sl.Client)
-	if !ok {
-		return "", nil, time.Time{}, errLoginExpired
+	var client *clientBlock
+	if sl.Kind != "account" {
+		var ok bool
+		if client, ok = s.cfg.client(sl.Client); !ok {
+			return "", nil, time.Time{}, errLoginExpired
+		}
 	}
 	// What the configuration allowed when the login started must still be
 	// allowed when it ends -- a quarter of an hour later, or after a restart.
-	if sl.RedirectURI != "" && !redirectAllowed(client, sl.RedirectURI) {
+	if client != nil && sl.RedirectURI != "" && !redirectAllowed(client, sl.RedirectURI) {
 		return "", nil, time.Time{}, errLoginExpired
 	}
 	return sl.ID, &login{

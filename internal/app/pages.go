@@ -128,25 +128,48 @@ button{font:inherit;padding:.4rem 1rem}</style></head><body>{{end}}
 <input type="hidden" name="authenticatorData"><input type="hidden" name="signature"><input type="hidden" name="userHandle">
 <p><button id="passkey-button" type="button" disabled>Se connecter avec une clé d'accès / Sign in with a passkey</button></p>
 <p id="passkey-status" role="status"></p></form>
-<p><a href="account">Gérer mes clés d'accès / Manage my passkeys</a></p>
+<p><a href="/account">Gérer mes clés d'accès / Manage my passkeys</a></p>
 <noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
 <script src="passkey.js"></script></body></html>{{end}}
-{{define "localaccount"}}{{template "head" "Mes clés d'accès"}}
-{{if .Signed}}<h1>Mes clés d'accès</h1><p lang="en">My passkeys.</p>
+{{define "account"}}{{template "head" "Mon compte"}}
+{{if .Signed}}<h1>Mon compte</h1><p lang="en">My account.</p>
 <div id="account" data-csrf="{{.CSRF}}">
-<p>Compte / Account : <strong>{{.Login}}</strong></p>
-<ul>{{range .Keys}}<li><code>{{.Prefix}}</code> · créée / created {{.Created}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais utilisée / never used{{end}}{{if .Backup}} · synchronisable / backup-eligible{{end}}{{if .Current}} · <strong>clé de cette confirmation / this confirmation's key</strong>{{end}}
-<button type="button" data-remove="{{.Key}}">Supprimer / Remove</button></li>{{end}}</ul>
+<h2>Identité / Identity</h2>
+<ul id="identity">
+<li>Identifiant / Login : <strong>{{.Login}}</strong></li>
+<li>Nom / Name : <span id="shown-name">{{.Name}}</span></li>
+<li>Courriel / Mail : <span id="shown-mail">{{.Mail}}</span></li>
+<li>Groupes / Groups : {{range $i, $g := .Groups}}{{if $i}}, {{end}}<code>{{$g}}</code>{{else}}—{{end}}</li>
+<li>Source : {{.Source}}</li></ul>
+<p>Le courriel et les groupes sont modifiés par {{.ChangedBy}}, pas ici. / Mail and groups are changed by {{.ChangedBy}}, not here.</p>
+{{if .Local}}<p><label>Nom affiché / Display name <input id="name" value="{{.Name}}" maxlength="100" autocomplete="off"></label>
+<button type="button" data-post="account/profile" data-from="name" data-field="name">Enregistrer / Save</button></p>
+<h2>Clés d'accès / Passkeys</h2>
+<ul id="keys">{{range .Keys}}<li><code>{{.Prefix}}</code> · créée / created {{.Created}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais utilisée / never used{{end}}{{if .Backup}} · synchronisable / backup-eligible{{end}}{{if .Current}} · <strong>clé de cette confirmation / this confirmation's key</strong>{{end}}
+<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="Supprimer cette clé d'accès ? / Remove this passkey?">Supprimer / Remove</button></li>{{end}}</ul>
 {{if .Full}}<p>Un compte a au plus {{.Max}} clés : supprimez-en une pour en ajouter. / At most {{.Max}} passkeys: remove one to add another.</p>
-{{else}}<p><button id="passkey-button" type="button" data-mode="add" disabled>Ajouter une clé d'accès / Add a passkey</button></p>{{end}}
-<p><button id="signout" type="button">Terminer / Done</button></p>
+{{else}}<p><button id="passkey-button" type="button" data-mode="add" disabled>Ajouter une clé d'accès / Add a passkey</button></p>{{end}}{{end}}
+<h2>Applications et sessions / Applications and sessions</h2>
+<ul id="apps">{{range .Apps}}<li>{{.Client}} · {{if .Created}}ouverte / opened {{.Created}}{{else}}ouverte / opened —{{end}} · {{if .LastUsed}}dernière utilisation / last used {{.LastUsed}}{{else}}jamais renouvelée / never renewed{{end}}
+<button type="button" data-post="account/apps/revoke" data-json="{{.Arg}}" data-confirm="Mettre fin à cette session ? / End this session?">Révoquer / Revoke</button></li>{{else}}<li>Aucune. / None.</li>{{end}}</ul>
+{{if .Apps}}<p><button type="button" data-post="account/apps/revoke" data-json="{&#34;all&#34;:true}" data-confirm="Mettre fin à toutes les sessions ? / End all sessions?">Tout révoquer / Revoke all</button></p>{{end}}
+{{if .AccessOn}}<h2>Accès techniques / Technical access</h2>
+<ul id="access">{{range .Access}}<li>{{.What}}{{if .Detail}} <code>{{.Detail}}</code>{{end}} · expire / expires {{.Expires}}
+<button type="button" data-post="account/access/revoke" data-json="{{.Arg}}" data-confirm="Révoquer cet accès ? / Revoke this access?">Révoquer / Revoke</button></li>{{else}}<li>Aucun. / None.</li>{{end}}</ul>{{end}}
+<p><button id="signout" type="button" data-post="account/signout">Terminer / Done</button></p>
 <p id="passkey-status" role="status"></p></div>
-{{else}}<h1>Gérer mes clés d'accès</h1><p lang="en">Manage my passkeys.</p>
-<p>Confirmez que c'est vous avec une clé d'accès : la confirmation dure cinq minutes. / Confirm it is you with a passkey: the confirmation lasts five minutes.</p>
-<p><button id="passkey-button" type="button" data-mode="stepup" disabled>Confirmer avec ma clé d'accès / Confirm with my passkey</button></p>
+{{else}}<h1>Mon compte</h1><p lang="en">My account.</p>
+<p>Confirmez que c'est vous : la confirmation dure cinq minutes. / Confirm it is you: the confirmation lasts five minutes.</p>
+{{if .Passkey}}<p><button id="passkey-button" type="button" data-mode="stepup" disabled>Confirmer avec ma clé d'accès / Confirm with my passkey</button></p>{{end}}
+<p><a id="federation-link" href="account/federation">Confirmer avec mon établissement / Confirm with my institution</a></p>
 <p id="passkey-status" role="status"></p>{{end}}
-<noscript><p>Une clé d'accès demande JavaScript. / A passkey needs JavaScript.</p></noscript>
-<script src="passkey.js"></script></body></html>{{end}}
+<noscript><p>Cette page demande JavaScript. / This page needs JavaScript.</p></noscript>
+<script src="account/passkey.js"></script></body></html>{{end}}
+{{define "accountopen"}}{{template "head" "Mon compte"}}
+<h1>Mon compte</h1><p lang="en">My account.</p>
+<form id="auto-submit" method="post" action="/account/open"><input type="hidden" name="h" value="{{.Handle}}">
+<noscript><p><button>Continuer / Continue</button></p></noscript></form>
+<script src="/account/passkey.js"></script></body></html>{{end}}
 {{define "localenroll"}}{{template "head" "Enregistrer une clé d'accès"}}
 <h1>Enregistrer une clé d'accès</h1><p lang="en">Register a passkey.</p>
 <p>Vous avez reçu une invitation d'un administrateur. Votre appareil va vous demander de créer une clé d'accès et de la déverrouiller (empreinte, visage ou code).</p>

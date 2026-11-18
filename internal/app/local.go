@@ -249,7 +249,7 @@ func (s *server) loginMethod(w http.ResponseWriter, r *http.Request) {
 		s.page(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if l.started {
+	if l.started || l.kind == "account" {
 		s.page(w, http.StatusBadRequest, "This login has already gone to an institution; start again from the application.")
 		return
 	}
@@ -311,6 +311,10 @@ func (s *server) localPerson(id *directory.Identity, rec *passkeyRecord) *person
 	}
 	if n := id.Attributes().Get("displayName"); len(n) > 0 {
 		p.profile["name"] = n[0]
+	}
+	// The name its owner chose on the account page wins over the file's.
+	if n, ok := s.displayNameOf(login); ok {
+		p.profile["name"] = n
 	}
 	if m := id.Attributes().Get("mail"); len(m) > 0 {
 		p.email["email"] = m[0]

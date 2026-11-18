@@ -84,6 +84,7 @@ type server struct {
 	// accountSessions are the step-ups the account page (account.go) holds,
 	// and accountMu serialises the changes it makes to an account's keys.
 	accountSessions *ttl[*accountSession]
+	accountOpens    *ttl[*accountSession]
 	accountMu       sync.Mutex
 
 	logMu sync.Mutex
@@ -178,11 +179,13 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 	s.families = newTTL[[]string](now)
 	s.ssfStreams = newTTL[storedStream](now).capped(1000)
 	s.ssfEvents = newTTL[string](now)
+	// The account page is every person's, so these are not the local block's.
+	s.accountSessions = newTTL[*accountSession](now).capped(maxPending).evicting()
+	s.accountOpens = newTTL[*accountSession](now).capped(maxPending).evicting()
+	s.localLimit = newLocalThrottle(now)
 	if cfg.Local != nil {
-		s.localLimit = newLocalThrottle(now)
 		s.passkeys = &passkeyStore{b: cfg.State, now: now}
 		s.ceremonies = newTTL[*ceremony](now).capped(maxPending).evicting()
-		s.accountSessions = newTTL[*accountSession](now).capped(maxPending).evicting()
 		cfg.Local.store.logf = s.logf
 	}
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
@@ -232,8 +235,8 @@ func (s *server) handler() http.Handler {
 		mux.HandleFunc("/local/enroll/begin", s.limited(s.localEnrollBegin))
 		mux.HandleFunc("/local/enroll/finish", s.limited(s.localEnrollFinish))
 		mux.HandleFunc("/local/passkey.js", s.localScript)
-		s.accountRoutes(mux)
 	}
+	s.accountRoutes(mux)
 	mux.HandleFunc("GET /saml/choose", s.choose)
 	mux.HandleFunc("GET /saml/disco", s.disco)
 	mux.HandleFunc("POST /saml/acs", s.limited(s.acs))

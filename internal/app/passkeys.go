@@ -42,6 +42,9 @@ import (
 const (
 	kindPasskey = "passkey"
 	kindInvite  = "invite"
+	// kindProfile is a local account's display name, when its owner changed it
+	// (account.go): the one profile field that is theirs.
+	kindProfile = "profile"
 
 	// inviteDefaultTTL and inviteMaxTTL bound an invitation's life.
 	inviteDefaultTTL = 24 * time.Hour
@@ -714,7 +717,7 @@ func (s *server) localLoginState(w http.ResponseWriter, r *http.Request) (string
 	}
 	// One login, one way in: one that already went to an institution has an
 	// AuthnRequest out, whose response could still arrive.
-	if l.started {
+	if l.started || l.kind == "account" {
 		s.page(w, http.StatusBadRequest, "This login has already gone to an institution; start again from the application.")
 		return "", nil, false
 	}
