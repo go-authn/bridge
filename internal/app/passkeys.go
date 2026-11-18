@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,10 +84,20 @@ type passkeyRecord struct {
 
 func (r *passkeyRecord) key() string { return passkeyKey(r.ID) }
 
-// passkeyKey is the row key of a credential: the SHA-256 of its ID, which is
-// 43 characters whatever the ID's length (up to 1023 bytes), and is what the
-// CLI shows as the credential's ID.
-func passkeyKey(id []byte) string { return hashToken(string(id)) }
+// passkeyKey is the row key of a credential: the SHA-256 of its ID in
+// lowercase HEX, 64 characters whatever the ID's length (up to 1023 bytes), and
+// what the CLI shows as the credential's ID.
+//
+// ⛔ Hex, not base64url like hashToken: base64url's alphabet has '-', so one key
+// in 64 began with it, and `local-account remove-passkey alice -jvlq…` was read
+// by the command line as a flag. An administrator could not remove that key,
+// and removing a key is what the command exists for, typically a lost or
+// compromised one. TestLocalAccountCLIAgainstARunningProvider caught it at
+// random (7fd1ed1, coverage lane); TestPasskeyKeyIsNeverAFlag holds it now.
+func passkeyKey(id []byte) string {
+	sum := sha256.Sum256(id)
+	return hex.EncodeToString(sum[:])
+}
 
 func (r *passkeyRecord) credential() webauthn.Credential {
 	c := webauthn.Credential{ID: r.ID, PublicKeyCOSE: r.PublicKey, SignCount: r.SignCount, BackupEligible: r.BackupEligible, Transports: r.Transports}
