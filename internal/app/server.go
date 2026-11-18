@@ -255,6 +255,7 @@ func (s *server) handler() http.Handler {
 	s.ssfHandlers(mux)
 	mux.HandleFunc("POST /x509/cert", s.x509Certificate)
 	mux.HandleFunc("GET /x509/crl", s.x509CRL)
+	mux.HandleFunc("/kerberos/tgt", s.limited(s.kerberosTGT))
 	mux.HandleFunc("/app-password", s.appPassword)
 	mux.HandleFunc("/wireguard/key", s.limited(s.wireguardKey))
 	mux.HandleFunc("GET /wireguard/peers", s.wireguardPeers)

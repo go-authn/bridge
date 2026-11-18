@@ -687,6 +687,41 @@ Every certificate, SSH and X.509, is recorded in `certificates_file` before it
 is handed out: one that cannot be recorded is not issued, since it could
 never be revoked. The file is required with `ssh_ca` or `x509_ca`.
 
+## Kerberos tickets, for SMB without a password
+
+A person who logs in with a passkey has no password, so a KDC cannot give them
+a ticket by the usual means. With a `kerberos` block, a token with the
+`kerberos` scope (only for a client with `kerberos_tickets = true`) buys a
+TGT: `POST /kerberos/tgt` with the bearer token asks the realm's KDC
+(go-authn/kdc `Server.MintHandler`) over mutually authenticated TLS and returns
+the answer, a KRB-CRED (RFC 4120 5.8), for the person's machine to load into its
+credential cache (go-authn/kinit does it on Windows).
+
+```hcl
+kerberos {
+  kdc_url   = "https://kdc.internal.example.org:8443/mint"  # https only
+  ca_file   = "/etc/authn-bridge/kdc-ca.pem"                # signed the KDC's certificate
+  cert_file = "/etc/authn-bridge/bridge-client.pem"         # URI name = what the KDC lists
+  key_file  = "/etc/authn-bridge/bridge-client.key"
+  validity  = "10h"                                         # at most ten hours
+}
+client "kinit" {
+  device           = true
+  kerberos_tickets = true
+}
+```
+
+The principal is the person's scoped name, never a bare one: a federated
+person's `preferred_username` (their eppn, `user@domain`), and for a local
+account, whose login never holds an `@`, the login at the `local` block's scope
+(`alice@mesocentre.example`). The KDC's directory must hold that exact name. A machine with a registered key (`jwks`, see "Machines with a key and no
+secret") and `kerberos_tickets = true` may ask `client_credentials` for the
+`kerberos` scope by name (never part of its default scopes) and buys a TGT for
+itself: `<client id>@<issuer host>`, derived from the client the token was issued
+to; a client ID holding `@` or `/` gets none. The ticket never outlives the identity
+provider's session, nor `validity`, and nothing renews it: a longer day needs a
+new login. A person disabled while the KDC was answering gets nothing.
+
 ## Application passwords, for SMB and S3
 
 NTLMv2 and SigV4 prove a secret the server must already hold, so no token will

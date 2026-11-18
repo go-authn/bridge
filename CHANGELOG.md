@@ -14,6 +14,13 @@ Added:
   cache), `exp` within five minutes, `aud` = token endpoint or issuer. A
   machine client's token has `sub` and `azp` = the client ID and the client's
   `audience`; scope `machine`. See "Machines with a key and no secret".
+- **Kerberos TGTs after a passkey login.** A `kerberos` block and a
+  `kerberos_tickets` client flag: a token with the `kerberos` scope buys, at
+  `POST /kerberos/tgt`, a KRB-CRED the realm's KDC minted over mutual TLS, for
+  the token's scoped username, no longer than the session or ten hours. For SMB
+  without a password on non-domain Windows (go-authn/kinit). A machine with a
+  registered key and `kerberos_tickets` may ask `client_credentials` for the
+  `kerberos` scope by name and gets a TGT for `<client>@<issuer host>`.
 - **Designed pages, and a `branding` block.** Every page is now a template file
   drawn by one Tailwind CSS v4 stylesheet (compiled at build time by
   `go run ./internal/webbuild` with the standalone CLI, pinned by version and
