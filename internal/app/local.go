@@ -176,7 +176,20 @@ func (s *server) sameOrigin(r *http.Request) bool {
 	if v := r.Header.Get("Sec-Fetch-Site"); v != "" && v != "same-origin" && v != "none" {
 		return false
 	}
-	if o := r.Header.Get("Origin"); o != "" {
+	// ⛔ "null" from THIS origin is what a browser sends: this provider's pages
+	// send Referrer-Policy: no-referrer, and under that policy a browser
+	// serializes the Origin of a NAVIGATION (a form post) as "null" even from
+	// the same origin (Fetch, "serialize a request origin"). Comparing it to the
+	// issuer refused every passkey login in production (2026-11-18), the one
+	// post the login page makes with form.submit(). So "null" passes ONLY when
+	// the browser itself says same-origin; a "null" on its own (a sandboxed
+	// iframe, a data: page, anywhere) is still refused, and every post still
+	// needs the CSRF token.
+	o := r.Header.Get("Origin")
+	if o == "null" && r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+		return true
+	}
+	if o != "" {
 		u, err := url.Parse(s.cfg.Issuer)
 		if err != nil || o != u.Scheme+"://"+u.Host {
 			return false
