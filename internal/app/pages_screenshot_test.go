@@ -75,6 +75,11 @@ func TestPageScreenshots(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/assets/{name}", s.asset)
 	mux.HandleFunc("GET /ui.js", s.uiScript)
+	// The pages' relative script URLs resolve under /shot/: serve the passkey
+	// script there so the captures show what a person sees (the button
+	// enabled once the browser has WebAuthn).
+	mux.HandleFunc("GET /shot/account/passkey.js", s.localScript)
+	mux.HandleFunc("GET /shot/passkey.js", s.localScript)
 	samples := samplePages()
 	var names []string
 	for n := range samples {
@@ -206,6 +211,29 @@ func TestPageScreenshots(t *testing.T) {
 		if tn := templateOf(name); tn != "localenroll" && tn != "accountopen" {
 			if combo.Options != len(languages) || combo.Value != sh.lang || combo.GoShown || combo.Pressed != sh.theme {
 				p.fatalf("%s: combo %+v", label, combo)
+			}
+		}
+		// The passkey button, enabled by the script, reads at AA (4.5:1) in the
+		// shown theme and is not faded (opacity 1). The enrolment page's stays
+		// disabled without an invitation in the fragment, and is skipped.
+		if tn := templateOf(name); tn != "localenroll" && p.count("#passkey-button") == 1 {
+			var btnJSON string
+			// The button fades in (a 150 ms transition) once enabled.
+			p.waitFor("the passkey button to be enabled and opaque", `(() => { const b = document.getElementById("passkey-button"); return !b.disabled && getComputedStyle(b).opacity === "1"; })()`)
+			p.eval(`JSON.stringify((() => {
+				const rgb = (v) => { const c = document.createElement("canvas").getContext("2d"); c.fillStyle = v; c.fillRect(0, 0, 1, 1); return Array.from(c.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
+				const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+				const b = document.getElementById("passkey-button"); const cs = getComputedStyle(b);
+				const l1 = lum(rgb(cs.color)), l2 = lum(rgb(cs.backgroundColor));
+				return {disabled: b.disabled, opacity: cs.opacity, ratio: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)};
+			})())`, &btnJSON)
+			var btn struct {
+				Disabled bool
+				Opacity  string
+				Ratio    float64
+			}
+			if err := json.Unmarshal([]byte(btnJSON), &btn); err != nil || btn.Disabled || btn.Opacity != "1" || btn.Ratio < 4.5 {
+				p.fatalf("%s: the passkey button %+v (%v)", label, btn, err)
 			}
 		}
 		if !sh.save {
