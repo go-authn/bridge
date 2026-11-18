@@ -316,6 +316,58 @@ The tests drive the same HTTP routes the page's script does, with
 `webauthntest`'s software authenticator, whose output is checked against an
 independent verifier in go-authn/webauthn's judge.
 
+## The pages, and your branding
+
+Every page a person sees (the choice between the federation and a local
+account, the passkey sign-in with its help panel, enrolment from an invitation,
+`/account`, the device-code and confirmation pages, errors, the signed-out
+state) is a server-rendered `html/template` page, in French and English, in
+light or dark mode as the browser asks. They are drawn by one
+[Tailwind CSS](https://tailwindcss.com) v4 stylesheet compiled at build time and
+embedded in the binary, and by [Lucide](https://lucide.dev) icons (ISC licence,
+`internal/app/web/icons/LICENSE`) inlined as SVG. Nothing is fetched from a CDN
+or a third-party font: the stylesheet, the brand colour and the logo are served
+from the provider's own origin, under `/assets/<name>.<hash>.<ext>`, so they
+can be cached for good, and the content security policy of a page is
+`default-src 'none'; style-src 'self'; img-src 'self'` (plus `script-src 'self';
+connect-src 'self'` on the two pages that run the passkey script). There is no
+inline style and no `'unsafe-inline'`.
+
+The theme is neutral. A deployment gives it its own face with an optional
+`branding` block:
+
+```hcl
+branding {
+  name         = "Mésocentre de Calcul"            # the header and the page titles; 60 characters at most
+  logo_file    = "/etc/authn-bridge/logo.svg"      # SVG or PNG, 256 KiB at most (PNG: 2048 px at most)
+  accent_color = "#0b6e4f"                         # #rrggbb: buttons, links, focus ring
+  support_url  = "https://aide.example.org"        # https or mailto:, shown as "Aide / Help"
+}
+```
+
+Every field is optional; without the block the pages carry the go-authn mark
+and name and its cyan accent. A wrong value is refused when the configuration is
+loaded (`authn-bridge check`), naming the field. Nothing is written into a page
+as markup or style: the name and the link are escaped like any template value,
+the logo is a file served as an image (an SVG may hold shapes, groups and
+gradients and nothing else: no script, style sheet, `foreignObject`, text or
+reference to another file; it is also served with a sandboxing policy), and the
+colour becomes four CSS custom properties computed from its six hex digits. The
+accent is adjusted where it must be so text stays at WCAG AA contrast (4.5:1):
+the text on a button is white or black, whichever reads; the accent as a link or
+focus ring is darkened on light pages and lightened on dark ones until it does.
+
+The stylesheet and the icons are generated, not written by hand:
+`go run ./internal/webbuild` regenerates them with the Tailwind v4 standalone CLI
+(v4.3.5, `@tailwindcss/forms` bundled; its sha256 is pinned in the program) and
+the icons named in `internal/app/web/icons.txt` from `lucide-static` 1.75.0 (its
+sha512 pinned). Nothing is installed; a download whose digest is not the pinned
+one is refused. CI runs `go run ./internal/webbuild -check` and fails if what is
+committed differs. The `web` sources are `internal/app/web/input.css` and
+`internal/app/web/templates/`. Every CI run also draws each page, light and
+dark, in Chrome (`TestPageScreenshots`) and keeps the PNGs as the
+`page-screenshots` artifact, written outside the checkout.
+
 ## What it refuses
 
 | | why |

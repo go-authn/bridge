@@ -96,6 +96,31 @@ jobs:
           # The real-browser lane (browser_test.go) drives the Chrome the
           # runner image ships: where it is there, no Chrome is a failure.
           BRIDGE_REQUIRE_BROWSER: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
+          # TestPageScreenshots writes a PNG of every page, light and dark,
+          # here: under the runner's temp directory, never in the checkout.
+          BRIDGE_SCREENSHOT_DIR: ${{ runner.temp }}/bridge-pages
+      # For review: every page as the real Chrome draws it, in both colour
+      # schemes. A lane without Chrome writes none, and says so.
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: page-screenshots
+          path: ${{ runner.temp }}/bridge-pages
+          if-no-files-found: error
+          retention-days: 30
+
+  # The pages' stylesheet and icons are generated, not written: regenerate
+  # them with the pinned tools (Tailwind CSS standalone CLI by version and
+  # sha256, lucide-static by sha512) and fail on any difference from what is
+  # committed. No npm install anywhere.
+  web:
+    name: stylesheet and icons are what the pinned tools generate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, check-latest: true, cache: true }
+      - run: go run ./internal/webbuild -check
 
   # The state database on PostgreSQL, not only SQLite: placeholders, types
   # and transactions are the driver's, and SQLite forgives what PostgreSQL
@@ -194,7 +219,10 @@ jobs:
           # cmd/ is one line calling internal/app's Main, which is what the
           # root package's main() was before v0.20.0: the code measured is the
           # same, and so is the floor.
-          pkgs=$(go list ./... | grep -v -e /proto/ -e /cmd/ | paste -sd, -)
+          # internal/webbuild is the generator of the stylesheet, checked by its
+          # own job (it downloads the pinned tools): its network half is not
+          # what this floor is about.
+          pkgs=$(go list ./... | grep -v -e /proto/ -e /cmd/ -e /internal/webbuild | paste -sd, -)
           echo "measuring: $pkgs"
           go test -coverprofile=cover.out -coverpkg="$pkgs" ./... >/dev/null
           go tool cover -func=cover.out

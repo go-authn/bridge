@@ -235,6 +235,28 @@ does). A `password_hash` in an accounts file is refused: delete the line.
 The RP ID is the issuer's host, so the issuer URL must be the one people use in
 their browser, over HTTPS.
 
+### Branding (optional)
+
+The pages are neutral go-authn pages until a `branding` block gives them your
+institution's face. Add it to any file in `/etc/authn-bridge`:
+
+```hcl
+branding {
+  name         = "Mésocentre de Calcul"        # header and page titles
+  logo_file    = "/etc/authn-bridge/logo.svg"  # SVG or PNG, 256 KiB at most
+  accent_color = "#0b6e4f"                     # #rrggbb
+  support_url  = "https://aide.example.org"    # https or mailto:
+}
+```
+
+All four are optional. The logo file must be readable by the `authn-bridge`
+user; it is read once, at start, and served from the provider's own origin (no
+CDN, no font, no inline style). An SVG with a script, a style sheet, text or a
+reference to another file is refused, and so is a PNG over 2048 pixels, a colour
+that is not `#rrggbb`, and a support URL that is not `https:` or `mailto:`.
+`authn-bridge check --config /etc/authn-bridge` reports the field. A change
+needs a restart.
+
 ## 5. Start it, and check it
 
 ```sh
