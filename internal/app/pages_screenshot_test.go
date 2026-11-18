@@ -126,7 +126,7 @@ func TestPageScreenshots(t *testing.T) {
 		if tn := templateOf(n); tn == "choose" || tn == "locallogin" || tn == "account" {
 			for _, l := range languages {
 				if l.Code != langFR {
-					shots = append(shots, shot{n, l.Code, themeLight, "light", 900, true})
+					shots = append(shots, shot{n, l.Code, themeLight, "light", 900, true}, shot{n, l.Code, themeDark, "dark", 900, true})
 				}
 				shots = append(shots, shot{n, l.Code, themeLight, "light", 360, l.Code == langJA || l.Code == langKO || l.Code == langZH || l.Code == langDE})
 			}
