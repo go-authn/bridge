@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authn/webauthn"
+	"github.com/go-authn/webauthn/webauthntest"
 	"golang.org/x/oauth2"
 )
 
@@ -175,6 +177,68 @@ func TestKerberosTGT(t *testing.T) {
 	}
 	if len(k.caller) != 1 || k.caller[0] != "https://bridge.test" {
 		t.Errorf("the KDC saw %v", k.caller)
+	}
+}
+
+// The case the whole feature is for: a person with a passkey and no password.
+// Their preferred_username is the bare login (local accounts never carry an
+// "@"), and the principal is the login at the local scope.
+func TestKerberosTGTForAPasskeyOnlyAccount(t *testing.T) {
+	dir := t.TempDir()
+	k, kdcURL := newStubKDC(t, dir)
+	f := localFixture(t, `
+kerberos {
+  kdc_url   = "`+kdcURL+`"
+  ca_file   = "`+filepath.ToSlash(filepath.Join(dir, "kdc-ca.pem"))+`"
+  cert_file = "`+filepath.ToSlash(filepath.Join(dir, "bridge.pem"))+`"
+  key_file  = "`+filepath.ToSlash(filepath.Join(dir, "bridge.key"))+`"
+}
+client "kinit" {
+  redirect_uris    = ["http://127.0.0.1/callback"]
+  kerberos_tickets = true
+}
+`)
+	a := f.enrolled("alice", webauthn.AlgES256)
+	r := newRP(t, f, "kinit", "", "http://127.0.0.1/callback", "kerberos")
+	b := newBrowser(t)
+	csrf := f.openLocal(b, r.authURL())
+	back := location(t, f.passkeyLogin(b, a, "alice", csrf, webauthntest.Options{}))
+	tok, err := r.cfg.Exchange(t.Context(), back.Query().Get("code"), oauth2.VerifierOption(r.verifier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at := jwtClaims(t, tok.AccessToken); at["preferred_username"] != "alice" {
+		t.Fatalf("preferred_username %v: the premise of this test", at["preferred_username"])
+	}
+	status, body, _ := postTGT(t, f, tok.AccessToken)
+	if status != http.StatusOK || len(body) == 0 || body[0] != 0x76 {
+		t.Fatalf("%d %.40q", status, body)
+	}
+	if len(k.asked) != 1 || k.asked[0]["principal"] != "alice@"+localScope {
+		t.Errorf("the KDC was asked %v, want alice@%s", k.asked, localScope)
+	}
+}
+
+func TestKerberosPrincipal(t *testing.T) {
+	f := localFixture(t, "")
+	s := f.s
+	local := s.cfg.localEntityID()
+	for name, c := range map[string]struct {
+		claims map[string]any
+		want   string
+	}{
+		"a federated eppn":            {map[string]any{"preferred_username": "alice@univ.example", "idp": "https://idp.univ.example"}, "alice@univ.example"},
+		"a local login, scoped":       {map[string]any{"preferred_username": "alice", "idp": local}, "alice@" + localScope},
+		"a federated bare name":       {map[string]any{"preferred_username": "alice", "idp": "https://idp.univ.example"}, ""},
+		"no idp, bare":                {map[string]any{"preferred_username": "alice"}, ""},
+		"nobody":                      {map[string]any{"idp": local}, ""},
+		"a trailing @":                {map[string]any{"preferred_username": "alice@", "idp": "x"}, ""},
+		"a leading @":                 {map[string]any{"preferred_username": "@univ.example", "idp": "x"}, ""},
+		"a local login that has an @": {map[string]any{"preferred_username": "alice@evil.example", "idp": local}, ""},
+	} {
+		if got := s.kerberosPrincipal(c.claims); got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
 	}
 }
 

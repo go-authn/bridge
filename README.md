@@ -711,8 +711,10 @@ client "kinit" {
 }
 ```
 
-The principal is the token's `preferred_username` and must be scoped
-(`user@domain`), never a bare name. The ticket never outlives the identity
+The principal is the person's scoped name, never a bare one: a federated
+person's `preferred_username` (their eppn, `user@domain`), and for a local
+account, whose login never holds an `@`, the login at the `local` block's scope
+(`alice@mesocentre.example`). The KDC's directory must hold that exact name. The ticket never outlives the identity
 provider's session, nor `validity`, and nothing renews it: a longer day needs a
 new login. A person disabled while the KDC was answering gets nothing.
 

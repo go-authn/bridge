@@ -140,6 +140,29 @@ func (b *kerberosBlock) mint(ctx context.Context, principal string, seconds int6
 	return out, nil
 }
 
+// kerberosPrincipal is the scoped name the person's TGT is for, "" when there
+// is none to be had.
+//
+// A federated person's preferred_username is their eppn or subject-id, which
+// the institution scoped (user@domain). A LOCAL account's is its bare login,
+// deliberately never containing an "@" (localaccounts.go), so that no local
+// login can be taken for a federated name; its scoped name is the login at the
+// local block's scope, which is what eduperson_principal_name says for it. The
+// two cannot meet: a federated name has an "@" and a local login never does.
+func (s *server) kerberosPrincipal(claims map[string]any) string {
+	user, _ := claims["preferred_username"].(string)
+	if idp, _ := claims["idp"].(string); s.cfg.Local != nil && idp == s.cfg.localEntityID() {
+		if user == "" || strings.Contains(user, "@") {
+			return "" // cannot happen: a local login never holds an "@"
+		}
+		user += "@" + s.cfg.Local.Scope
+	}
+	if at := strings.LastIndex(user, "@"); at < 1 || at == len(user)-1 {
+		return ""
+	}
+	return user
+}
+
 // kerberosTGT answers POST /kerberos/tgt with a KRB-CRED for the person the
 // bearer token is about.
 func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
@@ -171,8 +194,8 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 		notAddressedHere(w)
 		return
 	}
-	user, _ := claims["preferred_username"].(string)
-	if at := strings.LastIndex(user, "@"); at < 1 || at == len(user)-1 {
+	user := s.kerberosPrincipal(claims)
+	if user == "" {
 		// A bare name is not a person across institutions.
 		http.Error(w, "the institution released no user@domain name to make a principal of", http.StatusForbidden)
 		return
@@ -209,7 +232,7 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 	// cannot be taken back once out; it is the same window every
 	// certificate here closes with withdrawn.)
 	jti, _ := claims["jti"].(string)
-	if it, live := s.issued.get(jti); !live || s.refused(&person{username: user, idp: it.idp}) != "" {
+	if it, live := s.issued.get(jti); !live || s.refused(&person{username: it.username, idp: it.idp, subject: it.subject}) != "" {
 		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 		http.Error(w, "the token is not valid", http.StatusUnauthorized)
 		return
