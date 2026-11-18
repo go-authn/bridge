@@ -109,6 +109,9 @@ type config struct {
 	// it: saml is still required.
 	Local *localBlock `hcl:"local,block"`
 
+	// Home is the optional title and list of links on the home page (home.go).
+	Home *homeBlock `hcl:"home,block"`
+
 	// Branding is the deployment's name, logo, accent colour and support link
 	// on the pages (branding.go). Absent: the neutral go-authn theme.
 	Branding *brandingBlock `hcl:"branding,block"`
@@ -635,6 +638,11 @@ func (c *config) check() error {
 	if c.Local != nil {
 		if err := c.Local.check(c); err != nil {
 			return fmt.Errorf("local: %w", err)
+		}
+	}
+	if c.Home != nil {
+		if err := c.Home.check(); err != nil {
+			return fmt.Errorf("home: %w", err)
 		}
 	}
 
