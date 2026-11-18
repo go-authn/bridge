@@ -56,7 +56,8 @@ func TestThemeIsDrawnByTheServer(t *testing.T) {
 			t.Errorf("theme cookie %q: %s, want %s", c.cookie, got, c.want)
 		}
 		// <html> is the page's first element: before any style or script.
-		if !strings.HasPrefix(body, "<!doctype html>\n<html") {
+		// (The templates may have CRLF line ends in a Windows checkout.)
+		if !strings.HasPrefix(strings.ReplaceAll(body, "\r\n", "\n"), "<!doctype html>\n<html") {
 			t.Errorf("theme cookie %q: the page does not start with <html>", c.cookie)
 		}
 	}
