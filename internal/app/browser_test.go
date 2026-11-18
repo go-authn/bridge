@@ -140,6 +140,21 @@ func (p *page) click(sel string) {
 	}
 }
 
+// fetchStatus makes the account page's own kind of request -- a fetch with the
+// page's CSRF token -- with the JSON object body (a JavaScript literal, without
+// the token), and returns "status text".
+func (p *page) fetchStatus(path, body string) string {
+	p.t.Helper()
+	p.eval(fmt.Sprintf(`(window.__r = undefined, fetch(%q, {method: "POST", credentials: "same-origin",
+		headers: {"Content-Type": "application/json"},
+		body: JSON.stringify(Object.assign(%s, {csrf: document.getElementById("account").getAttribute("data-csrf")}))
+	}).then(r => r.text().then(t => { window.__r = r.status + " " + t; })), true)`, path, body), new(bool))
+	p.waitFor("the response to "+path, `window.__r !== undefined`)
+	var out string
+	p.eval(`window.__r`, &out)
+	return out
+}
+
 func (p *page) count(sel string) int {
 	p.t.Helper()
 	var n int
@@ -260,7 +275,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 
 	fixtureAsLocalhost = true
 	defer func() { fixtureAsLocalhost = false }()
-	f := newFixture(t, localExtra(t)+fmt.Sprintf("client \"browser\" {\n  redirect_uris = [%q]\n}\n", redirect))
+	f := newFixture(t, localExtra(t)+fmt.Sprintf("client \"browser\" {\n  redirect_uris    = [%q]\n  refresh_lifetime = \"720h\"\n}\n", redirect))
 	issuer := f.s.cfg.Issuer
 	if !strings.HasPrefix(issuer, "http://localhost:") {
 		t.Fatalf("the provider is at %s: a browser takes only a name as an RP ID", issuer)
@@ -275,6 +290,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 	// signIn is an OIDC login through the pages: the choice between the
 	// federation and a local account, the passkey page, the form post that ends
 	// it. It returns the ID token's subject, or "" when the page refused.
+	var refreshTokens []string // by login, oldest first
 	signIn := func(wantRefused bool) string {
 		t.Helper()
 		for len(callbacks) > 0 {
@@ -306,6 +322,7 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the code exchange: %v", err)
 		}
+		refreshTokens = append(refreshTokens, tok.RefreshToken)
 		id := jwtClaims(t, tok.Extra("id_token").(string))
 		if id["acr"] != localACR || id["nonce"] != r.nonce {
 			t.Errorf("id token acr/nonce = %v/%v", id["acr"], id["nonce"])
@@ -381,6 +398,29 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 		t.Fatalf("the key list after the step-up: %q", rows)
 	}
 
+	// 3b. The identity section: read-only. The display name is the one field
+	// that is theirs, and it is changed through the page; the mail is not, and
+	// an attempt -- the page's own request, with its own token -- is refused.
+	var shown string
+	p.eval(`document.getElementById("shown-mail").innerText`, &shown)
+	if shown != "alice@mesocentre.example" || p.count(`#identity input`) != 0 {
+		p.fatalf("the mail on the page is %q, or the identity section has an input", shown)
+	}
+	got := p.fetchStatus("/account/profile", `{mail: "mallory@evil.example"}`)
+	if !strings.HasPrefix(got, "403 ") || !strings.Contains(got, "administrator") {
+		p.fatalf("editing the mail from the page: %q, want 403 naming the administrator", got)
+	}
+	p.eval(`document.getElementById("shown-mail").innerText`, &shown)
+	if shown != "alice@mesocentre.example" {
+		t.Errorf("a refused edit changed the mail to %q", shown)
+	}
+	p.eval(`(document.getElementById("name").value = "Alice du Mésocentre", true)`, new(bool))
+	p.click(`[data-from="name"]`)
+	p.waitFor("the new name", `document.getElementById("shown-name").innerText === "Alice du Mésocentre"`)
+	if n, ok := f.s.displayNameOf("alice"); !ok || n != "Alice du Mésocentre" {
+		t.Errorf("the stored name is %q", n)
+	}
+
 	// 4. Add a second passkey. The first device is taken away for it: its
 	// credential is excluded, so one device holds one key per account. The
 	// session is the browser's, and outlives the device.
@@ -409,6 +449,28 @@ func TestRealBrowserPasskeyLifecycle(t *testing.T) {
 	}
 	if rec, _, _ := f.s.passkeys.passkey(key2); rec == nil || rec.LastUsed.IsZero() {
 		t.Error("the second passkey's use was not recorded")
+	}
+
+	// 5b. Two application sessions are open now, one per login. End the newest
+	// from the page: its refresh token fails, the older one's still works.
+	p.goTo(issuer + "/account")
+	p.waitFor("the key list", `!!document.getElementById("account")`)
+	if n := p.count(`#apps li [data-post="account/apps/revoke"]`); n != 2 || len(refreshTokens) != 2 {
+		p.fatalf("the page lists %d application sessions after %d logins, want 2", n, len(refreshTokens))
+	}
+	p.eval(`(window.confirm = () => true, true)`, new(bool))
+	p.click(`#apps li:first-child [data-post="account/apps/revoke"]`)
+	p.waitFor("one session to remain", `document.querySelectorAll('#apps li [data-post="account/apps/revoke"]').length === 1`)
+	oc := oauth2.Config{ClientID: "browser", Endpoint: newRP(t, f, "browser", "", redirect).cfg.Endpoint}
+	renew := func(rt string) error {
+		_, err := oc.TokenSource(t.Context(), &oauth2.Token{RefreshToken: rt}).Token()
+		return err
+	}
+	if err := renew(refreshTokens[1]); err == nil {
+		t.Error("the refresh token of a session ended from the account page still works")
+	}
+	if err := renew(refreshTokens[0]); err != nil {
+		t.Errorf("control: ending the newest session ended the older one: %v", err)
 	}
 
 	// 6. Remove the first passkey from the page (its confirmation was made with

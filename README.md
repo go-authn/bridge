@@ -167,6 +167,50 @@ A `password_hash` (or `password`) in the file is **refused** when it is read,
 with a message that says local accounts are passkey-only: the file was written
 for a version that never shipped with them.
 
+**More passkeys, without an administrator.** A signed-in local person adds,
+lists and removes their own passkeys at `<issuer>/account` ("My account",
+below); the login page links to it. `authn-bridge local-account invite` stays
+the way to create an account and to recover one that lost every key.
+
+## My account (`/account`)
+
+Every signed-in person, federated or local, has a profile space at
+`<issuer>/account` (the login page links to it; `/local/account` redirects).
+There is no password in it and nothing is kept in the browser's storage.
+
+**Getting in takes a fresh authentication**, made for this page and at most
+five minutes old. A local account confirms with a passkey assertion (user
+verification required, a challenge of its own kind: an OIDC login's assertion
+does not open this page, nor the reverse). A federated person is sent to their
+institution with `ForceAuthn`; the `AuthnInstant` the institution answers with
+is checked as well, because an IdP may ignore `ForceAuthn`. What it buys is a
+random token in a `__Host-` cookie (`Secure`, `HttpOnly`, `SameSite=Strict`,
+no `Domain`), held in memory for five minutes, bound to the person, and judged
+again at every use: disabling the person, removing the account or removing the
+passkey it was made with ends it.
+
+| Section | Who | What |
+|---|---|---|
+| Identity | everyone | login or eppn, name, mail, groups, and the source (local, or the institution's entity ID and name), **read-only**. Only a local account may change its **display name** (it is then the name its next sign-in carries). Mail and groups are never editable here: the page says who changes them (the administrator, or the institution), and a request to change them is refused and logged. |
+| Passkeys | local accounts | add (`residentKey` and user verification required, existing keys excluded, at most 10), list (ID prefix, created, last used, backup-eligible, the one this confirmation was made with), remove. The last key is never removed; removing a key refuses the grants it bought (the #87 invariant), and ends the confirmation if it was made with that key. |
+| Applications and sessions | everyone | the live refresh-token families, per client, with when they started and when they last rotated; revoke one, or all. This is `revokeFamily` and `revokeMatching`, the pieces `RevokePerson` uses. |
+| Technical access | where configured | the application password, SSH and X.509 certificates and WireGuard keys this provider issued, listed and revocable in the stores they were issued into. Access tokens already handed out stay valid at their resource servers until they expire, as with `RevokePerson`. |
+
+Every change needs the page's CSRF token (derived from the session, under a
+label of its own), a same-origin request (a form post carries `Origin: null`
+with `Sec-Fetch-Site: same-origin`, a `fetch()` the real origin), room in the
+host's failure budget, and leaves one audit line:
+`account: audit: <login> <action> <what> from <address>`.
+
+The pages and the script are exercised in a real Chrome by
+`TestRealBrowserPasskeyLifecycle` (`BRIDGE_REQUIRE_BROWSER=1` turns "no Chrome"
+into a failure, as `BRIDGE_REQUIRE_JUDGE` does for the judges): enrolment from
+an invitation, an OIDC login, the step-up, an identity edit refused, a second
+passkey, a session ended from the page, a login with the second passkey, the
+first passkey removed, and its login refused. The browser is driven through the
+DevTools WebAuthn domain's virtual authenticator; no request is made on its
+behalf.
+
 **Adding a person, and the first administrator.** An administrator with access
 to the host (root, or the service's user) issues a one-time invitation:
 

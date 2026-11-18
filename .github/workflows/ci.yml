@@ -93,6 +93,9 @@ jobs:
           # Ubuntu installs xmlsec1 above, so a skipped test there is a lane
           # passing for the wrong reason.
           BRIDGE_REQUIRE_JUDGE: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
+          # The real-browser lane (browser_test.go) drives the Chrome the
+          # runner image ships: where it is there, no Chrome is a failure.
+          BRIDGE_REQUIRE_BROWSER: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
 
   # The state database on PostgreSQL, not only SQLite: placeholders, types
   # and transactions are the driver's, and SQLite forgives what PostgreSQL
@@ -156,6 +159,7 @@ jobs:
       - run: go test -race -count=1 ./...
         env:
           BRIDGE_REQUIRE_JUDGE: "1"
+          BRIDGE_REQUIRE_BROWSER: "1"
 
   coverage:
     name: coverage (the standard is 100%)
@@ -183,7 +187,7 @@ jobs:
       - name: pebble
         run: go install github.com/letsencrypt/pebble/v2/cmd/pebble@v2.10.1
       - run: |
-          export BRIDGE_REQUIRE_JUDGE=1
+          export BRIDGE_REQUIRE_JUDGE=1 BRIDGE_REQUIRE_BROWSER=1
           FLOOR=88.0
           # proto/ is protoc's output: measuring it measures the generator, and
           # it would pull the total under the floor by code nobody here wrote.

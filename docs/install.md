@@ -173,6 +173,15 @@ credential on their phone, laptop or security key, unlocked by a PIN or a
 biometric). Local accounts need a `state` block: the passkeys, their signature
 counters and the invitations are kept there.
 
+Once signed in, a person manages their own passkeys at
+`https://login.example.org/account` ("Mon compte"): add one, list them, remove
+one (never the last), after confirming with a passkey. That page is every
+person's, federated ones included (identity, application sessions, technical
+access); it needs no configuration. Behind a reverse proxy it needs the same
+things the login does: the issuer's `https` origin reaching the provider
+unchanged, and `X-Forwarded-For` trusted from the proxy only, since the
+per-host throttle and the audit line name the client address.
+
 Create the accounts file empty, owned by root and readable by the service's
 group, name it in the configuration together with the state database, then
 invite the first account:
