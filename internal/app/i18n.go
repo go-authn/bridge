@@ -122,6 +122,13 @@ var catalogue = map[string][2]string{
 
 	"msg.title": {"Connexion", "Sign in"},
 
+	"home.title":   {"Service de connexion", "Sign-in service"},
+	"home.p":       {"Ce service gère la connexion aux applications de %s : vous vous identifiez ici, une seule fois, puis vous retournez à l'application.", "This service signs you in to the applications of %s: you identify yourself here, once, then go back to the application."},
+	"home.p.local": {"Les comptes locaux se connectent avec une clé d'accès : aucun mot de passe n'est tapé ni conservé.", "Local accounts sign in with a passkey: no password is ever typed or stored."},
+	"home.account": {"Mon compte", "My account"},
+	"home.fed":     {"Les personnes des établissements de la fédération %s peuvent se connecter avec leur établissement.", "People from the institutions of the %s federation can sign in with their own institution."},
+	"home.links":   {"Applications", "Applications"},
+
 	"choose.title":  {"Choisissez votre établissement", "Choose your institution"},
 	"choose.ttl":    {"Choisir un établissement", "Choose an institution"},
 	"choose.q":      {"Nom ou domaine", "Name or domain"},

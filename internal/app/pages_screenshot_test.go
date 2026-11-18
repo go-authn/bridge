@@ -128,7 +128,7 @@ func TestPageScreenshots(t *testing.T) {
 			// A chosen theme beats the browser's scheme: asserted, not saved.
 			shot{n, langFR, themeLight, "dark", 900, false},
 			shot{n, langFR, themeDark, "light", 900, false})
-		if tn := templateOf(n); tn == "choose" || tn == "locallogin" || tn == "account" {
+		if tn := templateOf(n); tn == "choose" || tn == "locallogin" || tn == "account" || n == "home" {
 			for _, l := range languages {
 				if l.Code != langFR {
 					shots = append(shots, shot{n, l.Code, themeLight, "light", 900, true}, shot{n, l.Code, themeDark, "dark", 900, true})
@@ -186,7 +186,7 @@ func TestPageScreenshots(t *testing.T) {
 		p.eval(`JSON.stringify((() => {
 			const rgb = (v) => { const c = document.createElement("canvas").getContext("2d"); c.fillStyle = v; c.fillRect(0, 0, 1, 1); return Array.from(c.getImageData(0, 0, 1, 1).data.slice(0, 3)); };
 			const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
-			const a = document.querySelector("a[href]:not(.skip)"); if (!a) { return 21; }
+			const a = document.querySelector("a[href]:not(.skip):not(.btn-primary)"); if (!a) { return 21; }
 			const l1 = lum(rgb(getComputedStyle(a).color)), l2 = lum(rgb(getComputedStyle(document.body).backgroundColor));
 			return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 		})())`, &ratioJSON)

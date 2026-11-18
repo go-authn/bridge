@@ -232,6 +232,8 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("/assets/{name}", s.asset)
 	mux.HandleFunc("/lang/{code}", s.setLang)
 	mux.HandleFunc("/lang", s.setLang)
+	// Exactly "/": every other unknown path is still 404.
+	mux.HandleFunc("GET /{$}", s.homePage)
 	mux.HandleFunc("/theme", s.setTheme)
 	mux.HandleFunc("GET /ui.js", s.uiScript)
 	mux.HandleFunc("GET /.well-known/openid-configuration", s.discovery)

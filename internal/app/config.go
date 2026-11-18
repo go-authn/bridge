@@ -115,6 +115,9 @@ type config struct {
 	// Optional, and only with a local block.
 	Notify *notifyBlock `hcl:"notify,block"`
 
+	// Home is the optional title and list of links on the home page (home.go).
+	Home *homeBlock `hcl:"home,block"`
+
 	// Branding is the deployment's name, logo, accent colour and support link
 	// on the pages (branding.go). Absent: the neutral go-authn theme.
 	Branding *brandingBlock `hcl:"branding,block"`
@@ -649,6 +652,11 @@ func (c *config) check() error {
 		}
 		if err := c.Notify.check(); err != nil {
 			return fmt.Errorf("notify: %w", err)
+		}
+	}
+	if c.Home != nil {
+		if err := c.Home.check(); err != nil {
+			return fmt.Errorf("home: %w", err)
 		}
 	}
 
