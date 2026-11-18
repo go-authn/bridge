@@ -1,7 +1,7 @@
 {{define "head"}}<!doctype html>
-<html lang="{{.Lang}}"><head><meta charset="utf-8">
+<html lang="{{.Tag}}"{{if .ThemeClass}} class="{{.ThemeClass}}"{{end}}><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="{{if .ThemeClass}}{{.ThemeClass}}{{else}}light dark{{end}}">
 <title>{{.Title}} · {{.B.Name}}</title>
 <link rel="icon" href="{{.B.LogoURL}}">
 <link rel="stylesheet" href="{{.B.CSSURL}}">
@@ -10,12 +10,23 @@
 <body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-dark-bg dark:text-slate-100">
 <a href="#main" class="skip">{{t "skip"}}</a>
 <div class="mx-auto flex min-h-screen w-full flex-col px-4 {{if .Wide}}max-w-3xl{{else}}max-w-md{{end}}">
-<header class="flex items-center gap-3 py-6">
+<header class="flex flex-wrap items-center gap-x-3 gap-y-3 py-6">
 <img src="{{.B.LogoURL}}" alt="" width="36" height="36" class="size-9 rounded-lg object-contain">
-<span class="text-lg font-semibold tracking-tight">{{.B.Name}}</span>
-{{if .Switch}}<nav aria-label="{{t "lang.nav"}}" class="ml-auto flex items-center gap-1 text-sm">
-{{if eq .Lang "fr"}}<span aria-current="true" lang="fr" class="chip-brand">FR</span><a href="/lang/en?next={{.Next}}" hreflang="en" lang="en" rel="nofollow" class="chip-plain no-underline hover:underline" aria-label="English">EN</a>{{else}}<a href="/lang/fr?next={{.Next}}" hreflang="fr" lang="fr" rel="nofollow" class="chip-plain no-underline hover:underline" aria-label="Français">FR</a><span aria-current="true" lang="en" class="chip-brand">EN</span>{{end}}
-</nav>{{end}}
+<span class="min-w-0 text-lg font-semibold tracking-tight">{{.B.Name}}</span>
+{{if .Switch}}<div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+<form method="get" action="/lang" class="flex items-center gap-1.5">
+<input type="hidden" name="next" value="{{.Next}}">
+<label for="lang-select" class="sr-only">{{t "lang.nav"}}</label>
+<span class="relative inline-block"><select id="lang-select" name="lang" class="pick" autocomplete="off">{{range .Languages}}<option value="{{.Code}}" lang="{{.Tag}}"{{if eq .Code $.Lang}} selected{{end}}>{{.Name}}</option>{{end}}</select>{{icon "chevron-down" "pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-slate-500 dark:text-slate-400"}}</span>
+<button id="lang-go" class="btn-outline btn-sm">{{t "lang.go"}}</button>
+</form>
+<form method="get" action="/theme" role="group" aria-label="{{t "theme.nav"}}" class="seg">
+<input type="hidden" name="next" value="{{.Next}}">
+<button name="theme" value="light" title="{{t "theme.light"}}" aria-label="{{t "theme.light"}}" aria-pressed="{{if eq .Theme "light"}}true{{else}}false{{end}}">{{icon "sun" "size-4"}}</button>
+<button name="theme" value="dark" title="{{t "theme.dark"}}" aria-label="{{t "theme.dark"}}" aria-pressed="{{if eq .Theme "dark"}}true{{else}}false{{end}}">{{icon "moon" "size-4"}}</button>
+<button name="theme" value="system" title="{{t "theme.system"}}" aria-label="{{t "theme.system"}}" aria-pressed="{{if eq .Theme "system"}}true{{else}}false{{end}}">{{icon "monitor" "size-4"}}</button>
+</form>
+</div>{{end}}
 </header>
 <main id="main" class="flex-1 pb-8">
 {{end}}
@@ -26,6 +37,9 @@
 </footer>
 </div>
 </body></html>{{end}}
+
+{{/* The words the script says, in the page's language: it reads them from here. */}}
+{{define "jsmsgs"}}<div id="msgs" hidden data-unsupported="{{t "js.unsupported"}}" data-invite="{{t "js.invite"}}" data-cancelled="{{t "js.cancelled"}}" data-exists="{{t "js.exists"}}" data-failed="{{t "js.failed"}}" data-registered="{{t "js.registered"}}" data-waiting="{{t "js.waiting"}}"></div>{{end}}
 
 {{define "passkeyhelp"}}<details id="passkey-help" class="help mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/5">
 <summary>{{icon "key-round" "size-4 shrink-0"}}<span>{{t "ph.summary"}}</span>{{icon "chevron-down" "chev ml-auto size-4 shrink-0 transition-transform"}}</summary>

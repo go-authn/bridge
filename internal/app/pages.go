@@ -179,8 +179,20 @@ func (s *server) show(w http.ResponseWriter, name string, data map[string]any) {
 	}
 	lang, next := langOf(w)
 	data["B"] = s.cfg.brandView()
+	theme := themeOf(w)
 	data["Lang"] = lang
-	data["Title"] = catalogue[pageTitles[name]][langIndex(lang)]
+	data["Tag"] = langTag(lang)         // <html lang>
+	data["NameLang"] = langPrimary(lang) // the language of an institution's name
+	data["Languages"] = languages
+	data["Theme"] = theme
+	data["Themes"] = themes
+	// The class the server draws on <html>: dark or light when chosen, none for
+	// system (the media query decides).
+	data["ThemeClass"] = ""
+	if theme != themeSystem {
+		data["ThemeClass"] = theme
+	}
+	data["Title"], _ = lookup(lang, pageTitles[name])
 	data["Next"] = next // escaped by the template, in its query context
 	// The enrolment page keeps its invitation in the URL's fragment, which a
 	// reload through the switch would lose; the auto-submitting page has

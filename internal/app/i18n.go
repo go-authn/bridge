@@ -13,17 +13,88 @@ import (
 )
 
 // A page is shown in ONE language: the one in the lang cookie, else the one
-// Accept-Language prefers among fr and en, else French. Every string a page
-// shows is in the catalogue below, in both languages; the templates name a key
-// ({{t "key"}}), and a key that is missing is an error the tests catch, not a
-// blank. The FR | EN switch in the header is a plain link to /lang/<code>,
-// which sets the cookie and goes back: no script.
+// Accept-Language prefers among the seven below, else French. Every string a
+// page shows is in the catalogue, in all seven languages; the templates name a
+// key ({{t "key"}}), and a key that is missing is an error the tests catch, not
+// a blank. The language combo in the header is a form (GET /lang) that sets the
+// cookie and goes back: it works without script.
+//
+// The languages are those of the fleet's documentation sites (Hugo/hextra:
+// content/{fr,en,de,es,ja,ko,zh-cn}); the words for light, dark and system
+// are the ones hextra's own i18n files use. The German, Spanish, Japanese,
+// Korean and Chinese texts were written without a native review.
 const (
 	langFR = "fr"
 	langEN = "en"
+	langDE = "de"
+	langES = "es"
+	langJA = "ja"
+	langKO = "ko"
+	langZH = "zh-cn"
 	// langCookie is not a session and carries nothing but the choice.
 	langCookie = "lang"
 )
+
+// language is a language a page can be in: the code of the cookie and of the
+// /lang route, the BCP 47 tag of <html lang>, and its name in itself.
+type language struct{ Code, Tag, Name string }
+
+var languages = []language{
+	{langFR, "fr", "Français"},
+	{langEN, "en", "English"},
+	{langDE, "de", "Deutsch"},
+	{langES, "es", "Español"},
+	{langJA, "ja", "日本語"},
+	{langKO, "ko", "한국어"},
+	{langZH, "zh-CN", "简体中文"},
+}
+
+func isLang(code string) bool {
+	for _, l := range languages {
+		if l.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+// langTag is the <html lang> of a language code.
+func langTag(code string) string {
+	for _, l := range languages {
+		if l.Code == code {
+			return l.Tag
+		}
+	}
+	return "fr"
+}
+
+// langPrimary is the primary subtag, the language a federation's metadata
+// names an institution in ("zh" for zh-cn).
+func langPrimary(code string) string {
+	p, _, _ := strings.Cut(code, "-")
+	return p
+}
+
+// lookup is the text of a key in a language.
+func lookup(lang, key string) (string, bool) {
+	switch lang {
+	case langFR, langEN:
+		s, ok := catalogue[key]
+		i := 0
+		if lang == langEN {
+			i = 1
+		}
+		return s[i], ok && s[i] != ""
+	}
+	s, ok := translations[lang][key]
+	return s, ok && s != ""
+}
+
+// translations are the texts of the languages after French and English, which
+// are the columns of the catalogue: one file each (i18n_de.go ...).
+var translations = map[string]map[string]string{
+	langDE: catDE, langES: catES, langJA: catJA, langKO: catKO, langZH: catZH,
+}
 
 // catalogue is key -> {French, English}. Keys that start with "h." hold
 // markup written here (never data): they are shown with th, the others are
@@ -33,6 +104,21 @@ var catalogue = map[string][2]string{
 	"help": {"Aide", "Help"},
 
 	"lang.nav": {"Langue", "Language"},
+	"lang.go":  {"Valider", "Apply"},
+
+	"theme.nav":    {"Thème d'affichage", "Colour theme"},
+	"theme.light":  {"Clair", "Light"},
+	"theme.dark":   {"Sombre", "Dark"},
+	"theme.system": {"Système", "System"},
+
+	// Said by the script (passkey.js), which reads them from the page.
+	"js.unsupported": {"Ce navigateur ne gère pas les clés d'accès.", "This browser does not support passkeys."},
+	"js.invite":      {"Ouvrez le lien d'invitation en entier.", "Open the whole invitation link."},
+	"js.cancelled":   {"Annulé, ou le délai est dépassé.", "Cancelled, or timed out."},
+	"js.exists":      {"Cet appareil a déjà une clé d'accès pour ce compte.", "This device already has a passkey for this account."},
+	"js.failed":      {"Échec : %s", "Failed: %s"},
+	"js.registered":  {"Clé d'accès enregistrée. Vous pouvez fermer cette page.", "Passkey registered. You can close this page."},
+	"js.waiting":     {"En attente de votre appareil…", "Waiting for your device…"},
 
 	"msg.title": {"Connexion", "Sign in"},
 
@@ -156,26 +242,24 @@ func dynamicKeys() []string {
 	return k
 }
 
-func langIndex(lang string) int {
-	if lang == langEN {
-		return 1
-	}
-	return 0
-}
-
 // tmplFor is the template set of a language: the same files, with t, th and
 // tf bound to it.
-var tmplByLang = map[string]*template.Template{langFR: templatesFor(langFR), langEN: templatesFor(langEN)}
+var tmplByLang = func() map[string]*template.Template {
+	m := map[string]*template.Template{}
+	for _, l := range languages {
+		m[l.Code] = templatesFor(l.Code)
+	}
+	return m
+}()
 
 func templatesFor(l string) *template.Template {
 	{
-		i := langIndex(l)
 		text := func(key string) (string, error) {
-			s, ok := catalogue[key]
-			if !ok || s[i] == "" {
+			s, ok := lookup(l, key)
+			if !ok {
 				return "", fmt.Errorf("no %s text for %q", l, key)
 			}
-			return s[i], nil
+			return s, nil
 		}
 		return template.Must(template.New("").Funcs(template.FuncMap{
 			"icon": icon,
@@ -183,8 +267,8 @@ func templatesFor(l string) *template.Template {
 			// tor is the text of a key, or the word itself when it is not one
 			// (a certificate kind this page has no name for).
 			"tor": func(key string) string {
-				if s, ok := catalogue[key]; ok {
-					return s[i]
+				if s, ok := lookup(l, key); ok {
+					return s
 				}
 				return key
 			},
@@ -210,35 +294,50 @@ func templatesFor(l string) *template.Template {
 
 // ---- choosing the language ----
 
-// langWriter carries the language chosen for the request, and the URL to come
-// back to from the switch, to wherever a page is shown. It wraps the writer;
-// Unwrap keeps http.ResponseController working.
+// langWriter carries the language and the theme chosen for the request, and
+// the URL to come back to from the switches, to wherever a page is shown. It
+// wraps the writer; Unwrap keeps http.ResponseController working. An empty
+// theme is "system".
 type langWriter struct {
 	http.ResponseWriter
-	lang, next string
+	lang, next, theme string
 }
 
 func (l *langWriter) Unwrap() http.ResponseWriter { return l.ResponseWriter }
 
 func withLang(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(&langWriter{ResponseWriter: w, lang: chooseLang(r), next: r.URL.RequestURI()}, r)
+		h.ServeHTTP(&langWriter{ResponseWriter: w, lang: chooseLang(r), next: r.URL.RequestURI(), theme: chooseTheme(r)}, r)
 	})
 }
 
 // langOf is the language of the request a writer answers; French when there is
 // none (a handler called without the middleware).
 func langOf(w http.ResponseWriter) (lang, next string) {
-	if l, ok := w.(*langWriter); ok {
+	if l, ok := w.(*langWriter); ok && l.lang != "" {
 		return l.lang, l.next
 	}
 	return langFR, "/"
 }
 
+// matchLang is the language of an Accept-Language range (lower case): the
+// seven languages by their primary subtag, Chinese (zh, zh-CN, zh-Hans and the
+// other zh-* tags, the only written Chinese there is here) as zh-cn.
+func matchLang(tag string) (string, bool) {
+	primary, _, _ := strings.Cut(tag, "-")
+	if primary == "zh" {
+		return langZH, true
+	}
+	if primary != langZH && isLang(primary) {
+		return primary, true
+	}
+	return "", false
+}
+
 // chooseLang: the cookie, then Accept-Language (RFC 9110 12.5.4: the highest
-// q, the first on a tie, among fr and en), then French.
+// q, the first on a tie), then French.
 func chooseLang(r *http.Request) string {
-	if c, err := r.Cookie(langCookie); err == nil && (c.Value == langFR || c.Value == langEN) {
+	if c, err := r.Cookie(langCookie); err == nil && isLang(c.Value) {
 		return c.Value
 	}
 	h := r.Header.Get("Accept-Language")
@@ -249,8 +348,8 @@ func chooseLang(r *http.Request) string {
 	for _, part := range strings.Split(h, ",") {
 		tag, params, _ := strings.Cut(strings.TrimSpace(part), ";")
 		tag = strings.ToLower(strings.TrimSpace(tag))
-		primary, _, _ := strings.Cut(tag, "-")
-		if primary != langFR && primary != langEN {
+		primary, ok := matchLang(tag)
+		if !ok {
 			continue
 		}
 		q := 1.0
@@ -268,22 +367,75 @@ func chooseLang(r *http.Request) string {
 	return best
 }
 
-// setLang is GET /lang/{code}?next=/path: it sets the cookie and goes back to a
-// path of this origin. The cookie is the choice and nothing else (SameSite=Lax,
-// HttpOnly, a year); a next that is not a plain path on this origin is "/".
+// setLang is GET /lang?lang=<code>&next=/path (the combo's form) and GET
+// /lang/{code}?next=/path: it sets the cookie and goes back to a path of this
+// origin. The cookie is the choice and nothing else (SameSite=Lax, HttpOnly, a
+// year); a next that is not a plain path on this origin is "/".
 func (s *server) setLang(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
-	if r.Method != http.MethodGet || (code != langFR && code != langEN) {
+	if code == "" {
+		code = r.URL.Query().Get("lang")
+	}
+	if r.Method != http.MethodGet || !isLang(code) {
 		http.NotFound(w, r)
 		return
 	}
+	s.setPref(w, r, langCookie, code)
+}
+
+// setPref sets a preference cookie and goes back.
+func (s *server) setPref(w http.ResponseWriter, r *http.Request, name, value string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: langCookie, Value: code, Path: "/", MaxAge: 365 * 24 * 3600,
+		Name: name, Value: value, Path: "/", MaxAge: 365 * 24 * 3600,
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: strings.HasPrefix(s.cfg.Issuer, "https://"),
 	})
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	http.Redirect(w, r, safeNext(r.URL.Query().Get("next")), http.StatusSeeOther)
+}
+
+// ---- the theme ----
+
+// The theme is light, dark or system (the default: the browser's
+// prefers-color-scheme). It is chosen in the header, kept in the theme cookie
+// (the choice and nothing else) and drawn by the SERVER: <html class="dark">
+// or "light" is in the first byte of the page, so nothing flashes, and the
+// buttons are a form (GET /theme) that works without script.
+const (
+	themeCookie = "theme"
+	themeLight  = "light"
+	themeDark   = "dark"
+	themeSystem = "system"
+)
+
+var themes = []string{themeLight, themeDark, themeSystem}
+
+func isTheme(v string) bool { return v == themeLight || v == themeDark || v == themeSystem }
+
+// chooseTheme is the theme cookie when it is one of the three, else system.
+func chooseTheme(r *http.Request) string {
+	if c, err := r.Cookie(themeCookie); err == nil && isTheme(c.Value) {
+		return c.Value
+	}
+	return themeSystem
+}
+
+// themeOf is the theme of the request a writer answers.
+func themeOf(w http.ResponseWriter) string {
+	if l, ok := w.(*langWriter); ok && isTheme(l.theme) {
+		return l.theme
+	}
+	return themeSystem
+}
+
+// setTheme is GET /theme?theme=light|dark|system&next=/path.
+func (s *server) setTheme(w http.ResponseWriter, r *http.Request) {
+	v := r.URL.Query().Get("theme")
+	if r.Method != http.MethodGet || !isTheme(v) {
+		http.NotFound(w, r)
+		return
+	}
+	s.setPref(w, r, themeCookie, v)
 }
 
 // safeNext is next when it is a path on this origin ("/x?y"), else "/".
