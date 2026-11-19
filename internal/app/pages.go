@@ -161,6 +161,7 @@ func icon(name, class string) (template.HTML, error) {
 // pageTitles are the <title>s, and which pages are the wide ones.
 var pageTitles = map[string]string{
 	"message":     "msg.title",
+	"home":        "home.title",
 	"choose":      "choose.ttl",
 	"method":      "method.title",
 	"locallogin":  "login.title",

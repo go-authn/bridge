@@ -341,6 +341,22 @@ terms follow the documentation sites' (the theme words are hextra's own). CJK
 text uses system fonts only (PingFang, Hiragino, Noto Sans CJK, Microsoft
 YaHei, Yu Gothic, Malgun Gothic) and wraps between characters on narrow screens.
 
+`GET /` is a **home page**: what the service is, a "My account" button to
+`/account`, what a passkey is (when there is a `local` block), and the
+federation people can sign in through. An optional block lists the
+deployment's own applications; every URL must be `https` (anything else stops
+the start) and is escaped on the page:
+
+```hcl
+home {
+  title = "Mésocentre de Saclay"                     # optional heading
+  link "Fileshare" { url = "https://files.example.org" }
+}
+```
+
+It shows nothing about clients, users or keys, and every other unknown path
+stays 404.
+
 The **theme** is light, dark or system (the default: the browser's
 `prefers-color-scheme`), as on the docs: three buttons next to the combo, a form
 (`GET /theme?theme=light|dark|system&next=<path>`) that works without script.

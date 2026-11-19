@@ -39,7 +39,10 @@ func samplePages() map[string]map[string]any {
 		return m
 	}
 	return map[string]map[string]any{
-		"message":            {"Msg": "Cette connexion est expirée ; recommencez depuis l'application. / This login has expired; start again from the application."},
+		"message": {"Msg": "Cette connexion est expirée ; recommencez depuis l'application. / This login has expired; start again from the application."},
+		"home": {"Passkeys": true, "Federation": "RENATER", "HomeTitle": "Mésocentre de Saclay",
+			"Links": []homeLink{{"Fileshare", "https://files.mesocentre.example/"}, {"Calcul", "https://calcul.mesocentre.example/"}}},
+		"home-bare":          {"Passkeys": false, "Federation": ""},
 		"choose":             {"IdPs": idps, "Q": "", "More": 12},
 		"choose-empty":       {"IdPs": []*saml.IdP(nil), "Q": "zzz", "More": 0},
 		"method":             {"Federation": "/saml/choose"},
@@ -61,6 +64,8 @@ func samplePages() map[string]map[string]any {
 // templateOf is the template a sample is shown with.
 func templateOf(sample string) string {
 	switch sample {
+	case "home-bare":
+		return "home"
 	case "choose-empty":
 		return "choose"
 	case "locallogin-error":

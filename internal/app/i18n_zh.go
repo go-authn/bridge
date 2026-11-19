@@ -26,6 +26,14 @@ var catZH = map[string]string{
 
 	"msg.title": "登录",
 
+	"home.title":   "登录服务",
+	"home.p":       "此服务让您登录“%s”的应用：您在这里验证一次身份，然后返回应用。",
+	"home.p.site":  "此服务让您登录本站点的应用：您在这里验证一次身份，然后返回应用。",
+	"home.p.local": "本地账户使用通行密钥登录：从不输入也不保存密码。",
+	"home.account": "我的账户",
+	"home.fed":     "%s 联盟成员机构的人员可以使用所属机构登录。",
+	"home.links":   "应用",
+
 	"choose.title":  "请选择您所属的机构",
 	"choose.ttl":    "选择机构",
 	"choose.q":      "名称或域名",
