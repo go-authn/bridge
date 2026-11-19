@@ -97,14 +97,14 @@ func (s *server) spMetadata() ([]byte, error) {
 func headers(w http.ResponseWriter) { pageHeaders(w, "'self'") }
 
 // pageHeaders is headers with the form-action sources a page needs. No script
-// anywhere, no base URI, and nothing loaded but this origin's own stylesheet
-// and images (style-src and img-src 'self'): no inline style, no 'unsafe-inline',
-// no font, no frame. The strictest policy that still draws the page and lets
-// a form post.
+// inline script, no base URI, and nothing loaded but this origin's own
+// stylesheet, images and the header's static script (style-src, img-src and
+// script-src 'self'): no inline style, no 'unsafe-inline', no font, no frame.
+// The strictest policy that still draws the page and lets a form post.
 func pageHeaders(w http.ResponseWriter, formAction string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-Frame-Options", "DENY")
 	h.Set("Referrer-Policy", "no-referrer")
@@ -179,8 +179,20 @@ func (s *server) show(w http.ResponseWriter, name string, data map[string]any) {
 	}
 	lang, next := langOf(w)
 	data["B"] = s.cfg.brandView()
+	theme := themeOf(w)
 	data["Lang"] = lang
-	data["Title"] = catalogue[pageTitles[name]][langIndex(lang)]
+	data["Tag"] = langTag(lang)          // <html lang>
+	data["NameLang"] = langPrimary(lang) // the language of an institution's name
+	data["Languages"] = languages
+	data["Theme"] = theme
+	data["Themes"] = themes
+	// The class the server draws on <html>: dark or light when chosen, none for
+	// system (the media query decides).
+	data["ThemeClass"] = ""
+	if theme != themeSystem {
+		data["ThemeClass"] = theme
+	}
+	data["Title"], _ = lookup(lang, pageTitles[name])
 	data["Next"] = next // escaped by the template, in its query context
 	// The enrolment page keeps its invitation in the URL's fragment, which a
 	// reload through the switch would lose; the auto-submitting page has

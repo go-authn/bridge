@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package app
+
+// catJA is Japanese. Written without a native review: corrections are welcome.
+var catJA = map[string]string{
+	"skip": "本文へスキップ",
+	"help": "ヘルプ",
+
+	"lang.nav": "言語",
+	"lang.go":  "適用",
+
+	"theme.nav":    "テーマを変更",
+	"theme.light":  "ライト",
+	"theme.dark":   "ダーク",
+	"theme.system": "システム",
+
+	"js.unsupported": "このブラウザーはパスキーに対応していません。",
+	"js.invite":      "招待リンクを最後まで開いてください。",
+	"js.cancelled":   "キャンセルされたか、時間切れです。",
+	"js.exists":      "このデバイスには、このアカウントのパスキーがすでにあります。",
+	"js.failed":      "失敗しました: %s",
+	"js.registered":  "パスキーを登録しました。このページを閉じて構いません。",
+	"js.waiting":     "デバイスの応答を待っています…",
+
+	"msg.title": "サインイン",
+
+	"choose.title":  "所属機関を選択してください",
+	"choose.ttl":    "所属機関を選択",
+	"choose.q":      "名前またはドメイン",
+	"choose.search": "検索",
+	"choose.none":   "一致する所属機関はありません。",
+	"choose.more":   "ほか %d 件: 検索条件を絞り込んでください。",
+
+	"method.title":     "サインイン",
+	"method.fed":       "所属機関のアカウントで",
+	"method.fed.sub":   "職場または大学のアカウントです。",
+	"method.local":     "ローカルアカウントで",
+	"method.local.sub": "招待から作成したパスキーを使います。",
+
+	"login.title":  "ローカルアカウント",
+	"login.button": "パスキーでサインイン",
+	"login.manage": "パスキーを管理する",
+
+	"nojs.passkey": "パスキーには JavaScript が必要です。",
+	"nojs.page":    "このページには JavaScript が必要です。",
+
+	"enroll.title":  "パスキーを登録",
+	"enroll.p":      "管理者から招待が届いています。お使いのデバイスがパスキーの作成とロック解除(指紋、顔、または PIN)を求めます。",
+	"enroll.button": "パスキーを作成",
+
+	"device.title":    "デバイスを接続",
+	"device.code":     "デバイスに表示されたコード",
+	"device.err.rate": "試行回数が多すぎます。数分後にもう一度お試しください。",
+	"device.err.code": "このコードは無効か、期限が切れています。",
+	"continue":        "続ける",
+
+	"confirm.ttl":    "確認",
+	"confirm.title":  "%s があなたに代わってサインインしようとしています",
+	"confirm.code":   "コード",
+	"h.confirm.warn": "<strong>ご自身のデバイスで、ご自身が開始したサインインの場合にのみ続けてください。</strong>このコードを他の人から渡された場合は拒否してください。その人があなたの代わりにアクセスできてしまいます。",
+	"confirm.yes":    "はい、私です",
+	"confirm.no":     "いいえ",
+
+	"open.wait": "しばらくお待ちください…",
+
+	"acct.title":      "マイアカウント",
+	"acct.done":       "終了",
+	"acct.identity":   "本人情報",
+	"acct.login":      "ログイン ID",
+	"acct.name":       "名前",
+	"acct.mail":       "メールアドレス",
+	"acct.groups":     "グループ",
+	"acct.source":     "取得元",
+	"acct.src":        "ローカルアカウント",
+	"acct.note.local": "メールアドレスとグループはサービスの管理者が変更します。ここでは変更できません。",
+	"acct.note.fed":   "メールアドレスとグループは所属機関が変更します。ここでは変更できません。",
+	"acct.dispname":   "表示名",
+	"save":            "保存",
+
+	"keys.title":    "パスキー",
+	"keys.sub":      "パスキーはデバイスごとに保存されます。紛失したデバイスのパスキーは削除してください。",
+	"keys.created":  "作成",
+	"keys.lastused": "最終使用",
+	"keys.never":    "未使用",
+	"keys.backup":   "同期可能",
+	"keys.current":  "今回の確認に使ったパスキー",
+	"keys.confirm":  "このパスキーを削除しますか?",
+	"keys.full":     "1 つのアカウントに登録できるパスキーは最大 %d 個です。追加するには 1 つ削除してください。",
+	"keys.add":      "パスキーを追加",
+	"remove":        "削除",
+
+	"apps.title":      "アプリケーションとセッション",
+	"apps.opened":     "開始",
+	"apps.never":      "更新なし",
+	"apps.none":       "なし",
+	"apps.confirm":    "このセッションを終了しますか?",
+	"apps.revokeall":  "すべて取り消す",
+	"apps.confirmall": "すべてのセッションを終了しますか?",
+	"revoke":          "取り消す",
+
+	"access.kind.app_password": "アプリパスワード",
+	"access.kind.ssh":          "SSH 証明書",
+	"access.kind.x509":         "X.509 証明書",
+	"access.kind.wireguard":    "WireGuard 鍵",
+	"access.title":             "技術的なアクセス",
+	"access.expires":           "有効期限",
+	"access.none":              "なし",
+	"access.confirm":           "このアクセスを取り消しますか?",
+
+	"step.done.title": "セッションを終了しました",
+	"step.done.p":     "アカウント画面を閉じました。このページを閉じるか、もう一度サインインできます。",
+	"step.p":          "ご本人であることを確認してください。確認の有効時間は 5 分です。",
+	"step.passkey":    "パスキーで確認",
+	"step.fed":        "所属機関で確認",
+
+	"ph.summary":   "パスキーのヘルプ",
+	"ph.what.h":    "パスキーとは?",
+	"ph.what.p":    "何も入力せずにサインインできる方法です。デバイスが指紋、顔、または PIN でロックを解除します。パスキーはデバイスの外に出ず、このサービスでのみ使えます。",
+	"ph.dev.h":     "スマートフォン、パソコン、セキュリティキー",
+	"h.ph.dev.1":   "<strong>パソコンまたはスマートフォン:</strong>デバイスの指紋、顔、または PIN で確認します。パスキーがスマートフォンにある場合は、ブラウザーの画面で「スマートフォン」を選び、QR コードを読み取ってください。",
+	"h.ph.dev.2":   "<strong>セキュリティキー(USB、NFC):</strong>差し込み、ブラウザーの指示に従って<strong>キーに触れて</strong>ください。PIN が設定されている場合は入力を求められます。",
+	"ph.fail.h":    "拒否された場合",
+	"ph.fail.1":    "「キャンセル」または「時間切れ」: もう一度試し、デバイスの確認にすぐ応答してください。",
+	"ph.fail.2":    "デバイスのロックを解除し、キーを差し込むか近づけてください。スマートフォンでは Bluetooth をオンにします。",
+	"ph.fail.3":    "最新の別のブラウザー、またはパスキーを作成したデバイスでお試しください。",
+	"ph.fail.pre":  "解決しない場合は、",
+	"ph.support":   "サポートに連絡",
+	"ph.admin":     "サービスの管理者に連絡",
+	"ph.fail.post": "して、新しい招待を受け取ってください。",
+}

@@ -210,7 +210,7 @@ func TestAccountPageAsksForAStepUpFirst(t *testing.T) {
 	if csp := h.Get("Content-Security-Policy"); !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "frame-ancestors 'none'") || strings.Contains(csp, "unsafe-eval") {
 		t.Errorf("CSP: %q", csp)
 	}
-	if strings.Count(body, "<script") != 1 {
+	if strings.Count(strings.ReplaceAll(body, `<script src="/ui.js"></script>`, ""), "<script") != 1 {
 		t.Error("the page runs more than the one script of this provider")
 	}
 	// Methods other than GET are not the page.

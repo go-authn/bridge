@@ -135,7 +135,7 @@ func TestDefaultLogoIsValid(t *testing.T) {
 	}
 }
 
-var onlyHexVars = regexp.MustCompile(`^(?::root\{(?:--brand(?:-on|-hover|-ink)?:#[0-9a-f]{6};?){4}\}\n|@media \(prefers-color-scheme:dark\)\{\n|\}\n)+$`)
+var onlyHexVars = regexp.MustCompile(`^(?::root(?::not\(\.light\)|\.dark)?\{(?:--brand(?:-on|-hover|-ink)?:#[0-9a-f]{6};?){4}\}\n|@media \(prefers-color-scheme:dark\)\{\n|\}\n)+$`)
 
 func TestBrandCSSIsAccessibleAndOnlyHex(t *testing.T) {
 	step := []float64{0, 51, 102, 153, 204, 255}
@@ -300,8 +300,9 @@ func TestPagesCarryTheBrandAndNothingInline(t *testing.T) {
 				t.Errorf("%s lacks %q", name, want)
 			}
 		}
-		if strings.Count(body, "<script") > 1 {
-			t.Errorf("%s runs more than one script", name)
+		// The passkey script, and the header's static one (/ui.js).
+		if strings.Count(strings.ReplaceAll(body, `<script src="/ui.js"></script>`, ""), "<script") > 1 {
+			t.Errorf("%s runs more than one script besides /ui.js", name)
 		}
 		if !strings.Contains(body, "<h1") || !strings.Contains(body, `<main id="main"`) || !strings.Contains(body, `href="#main"`) {
 			t.Errorf("%s lacks its heading, landmark or skip link", name)
@@ -332,8 +333,9 @@ func TestPagesCarryTheBrandAndNothingInline(t *testing.T) {
 	w = httptest.NewRecorder()
 	headers(w)
 	csp = w.Header().Get("Content-Security-Policy")
-	if strings.Contains(csp, "unsafe-inline") || strings.Contains(w.Header().Get("Content-Security-Policy"), "script-src") || !strings.Contains(csp, "style-src 'self'") {
-		t.Errorf("CSP of a page without script: %q", csp)
+	// Only the header's static same-origin script (ui.js): no connect-src, no inline.
+	if strings.Contains(csp, "unsafe") || strings.Contains(csp, "connect-src") || !strings.Contains(csp, "script-src 'self';") || !strings.Contains(csp, "style-src 'self'") {
+		t.Errorf("CSP of a page without the passkey script: %q", csp)
 	}
 }
 

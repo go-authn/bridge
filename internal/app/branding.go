@@ -411,9 +411,12 @@ func brandCSS(accent rgb) string {
 		fmt.Fprintf(&sb, "%s{--brand:%s;--brand-on:%s;--brand-hover:%s;--brand-ink:%s}\n", sel, f.hex(), o.hex(), h.hex(), i.hex())
 	}
 	w(":root", fill, on, hover, lightInk)
+	// Dark when the server wrote class="dark" on <html>, or when the browser
+	// asks for it and the page was not forced light: both give the dark variants.
 	sb.WriteString("@media (prefers-color-scheme:dark){\n")
-	w(":root", fill, on, darkHover, darkInk)
+	w(":root:not(.light)", fill, on, darkHover, darkInk)
 	sb.WriteString("}\n")
+	w(":root.dark", fill, on, darkHover, darkInk)
 	return sb.String()
 }
 

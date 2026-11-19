@@ -25,8 +25,13 @@ const passkeyJS = `"use strict";
   var mode = button ? (button.getAttribute("data-mode") || "login") : "account";
   var enroll = mode === "enroll";
 
-  // One language, the page's (<html lang>, set from the person's choice).
-  function say(fr, en) { status.textContent = document.documentElement.lang === "en" ? en : fr; }
+  // The words are the page's, in its language: the server wrote them into
+  // #msgs (data-*), so this script knows no language.
+  var msgs = document.getElementById("msgs");
+  function say(key, arg) {
+    var s = msgs ? (msgs.getAttribute("data-" + key) || "") : "";
+    status.textContent = arg === undefined ? s : s.replace("%s", arg);
+  }
 
   function dec(s) {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -64,7 +69,7 @@ const passkeyJS = `"use strict";
   }
 
   if (button && (!window.PublicKeyCredential || !navigator.credentials)) {
-    say("Ce navigateur ne gère pas les clés d'accès.", "This browser does not support passkeys.");
+    say("unsupported");
     return;
   }
 
@@ -73,7 +78,7 @@ const passkeyJS = `"use strict";
     token = location.hash.replace(/^#/, "");
     history.replaceState(null, "", location.pathname);
     if (!token) {
-      say("Ouvrez le lien d'invitation en entier.", "Open the whole invitation link.");
+      say("invite");
       return;
     }
   }
@@ -86,11 +91,11 @@ const passkeyJS = `"use strict";
     var help = document.getElementById("passkey-help");
     if (help) { help.open = true; }
     if (e && e.name === "NotAllowedError") {
-      say("Annulé, ou le délai est dépassé.", "Cancelled, or timed out.");
+      say("cancelled");
     } else if (e && e.name === "InvalidStateError") {
-      say("Cet appareil a déjà une clé d'accès pour ce compte.", "This device already has a passkey for this account.");
+      say("exists");
     } else {
-      say("Échec : " + (e && e.message ? e.message : e), "Failed: " + (e && e.message ? e.message : e));
+      say("failed", String(e && e.message ? e.message : e));
     }
   }
 
@@ -112,7 +117,7 @@ const passkeyJS = `"use strict";
       });
     }).then(function () {
       button.disabled = true;
-      say("Clé d'accès enregistrée. Vous pouvez fermer cette page.", "Passkey registered. You can close this page.");
+      say("registered");
     });
   }
 
@@ -210,7 +215,7 @@ const passkeyJS = `"use strict";
   if (button) {
     button.addEventListener("click", function () {
       button.disabled = true;
-      say("En attente de votre appareil…", "Waiting for your device…");
+      say("waiting");
       var run = mode === "enroll" ? register : mode === "stepup" ? stepUp : mode === "add" ? addKey : signIn;
       run().catch(failed);
     });

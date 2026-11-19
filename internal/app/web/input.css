@@ -12,8 +12,26 @@
 @source "./templates";
 @plugin "@tailwindcss/forms";
 
+/* Dark follows the class the server writes on <html> (the theme cookie:
+   "dark" or "light"); with neither class (system) it follows the browser's
+   prefers-color-scheme. */
+@custom-variant dark {
+	&:where(.dark, .dark *) {
+		@slot;
+	}
+	@media (prefers-color-scheme: dark) {
+		&:where(:not(.light, .light *)) {
+			@slot;
+		}
+	}
+}
+
 @theme {
-	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	/* System fonts only; the CJK families come after the Latin ones so that
+	   Japanese, Korean and Chinese text finds a face on every platform. */
+	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+		"PingFang SC", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK SC", "Noto Sans CJK JP",
+		"Noto Sans CJK KR", "Microsoft YaHei", "Yu Gothic UI", "Malgun Gothic", sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
 	/* The accent: brand.css overrides --brand* per deployment and per colour
@@ -34,6 +52,16 @@
 		-webkit-font-smoothing: antialiased;
 		text-rendering: optimizeLegibility;
 		color-scheme: light dark;
+		/* Long CJK labels break between characters; Latin words never mid-word. */
+		overflow-wrap: break-word;
+		line-break: auto;
+		word-break: normal;
+	}
+	html.light {
+		color-scheme: light;
+	}
+	html.dark {
+		color-scheme: dark;
 	}
 	/* One focus ring for every interactive element, in the accent, and visible
 	   on both surfaces. */
@@ -97,6 +125,22 @@
 	}
 	.chip-brand {
 		@apply chip bg-brand-ink/10 text-brand-ink;
+	}
+	/* The language combo: a native <select>, drawn like a field. */
+	.pick {
+		@apply h-8 appearance-none rounded-lg border-slate-300 bg-white py-0 pl-3 pr-8 text-sm text-slate-800 shadow-sm
+			focus:border-brand-ink focus:ring-2 focus:ring-brand-ink/30
+			dark:border-white/20 dark:bg-dark-surface dark:text-slate-100;
+	}
+	/* The theme switch: three buttons in one group, one pressed. */
+	.seg {
+		@apply inline-flex overflow-hidden rounded-lg border border-slate-300 bg-white dark:border-white/20 dark:bg-dark-surface;
+	}
+	.seg > button {
+		@apply inline-flex h-8 w-9 items-center justify-center text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10;
+	}
+	.seg > button[aria-pressed="true"] {
+		@apply bg-brand-ink/10 text-brand-ink;
 	}
 	/* The skip link is the first thing a keyboard reaches. */
 	.skip {

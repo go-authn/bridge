@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
+package app
+
+// catKO is Korean. Written without a native review: corrections are welcome.
+var catKO = map[string]string{
+	"skip": "본문으로 건너뛰기",
+	"help": "도움말",
+
+	"lang.nav": "언어",
+	"lang.go":  "적용",
+
+	"theme.nav":    "테마 변경",
+	"theme.light":  "밝은 테마",
+	"theme.dark":   "어두운 테마",
+	"theme.system": "시스템",
+
+	"js.unsupported": "이 브라우저는 패스키를 지원하지 않습니다.",
+	"js.invite":      "초대 링크를 전체 주소로 여세요.",
+	"js.cancelled":   "취소되었거나 시간이 초과되었습니다.",
+	"js.exists":      "이 기기에는 이 계정의 패스키가 이미 있습니다.",
+	"js.failed":      "실패: %s",
+	"js.registered":  "패스키가 등록되었습니다. 이 페이지를 닫아도 됩니다.",
+	"js.waiting":     "기기의 응답을 기다리는 중…",
+
+	"msg.title": "로그인",
+
+	"choose.title":  "소속 기관을 선택하세요",
+	"choose.ttl":    "소속 기관 선택",
+	"choose.q":      "이름 또는 도메인",
+	"choose.search": "검색",
+	"choose.none":   "일치하는 기관이 없습니다.",
+	"choose.more":   "%d개 더 있음: 검색어를 좁혀 주세요.",
+
+	"method.title":     "로그인",
+	"method.fed":       "소속 기관 계정으로",
+	"method.fed.sub":   "직장 또는 대학 계정입니다.",
+	"method.local":     "로컬 계정으로",
+	"method.local.sub": "초대로 만든 패스키를 사용합니다.",
+
+	"login.title":  "로컬 계정",
+	"login.button": "패스키로 로그인",
+	"login.manage": "내 패스키 관리",
+
+	"nojs.passkey": "패스키를 사용하려면 JavaScript가 필요합니다.",
+	"nojs.page":    "이 페이지에는 JavaScript가 필요합니다.",
+
+	"enroll.title":  "패스키 등록",
+	"enroll.p":      "관리자가 초대장을 보냈습니다. 기기가 패스키를 만들고 잠금을 해제하도록(지문, 얼굴 또는 PIN) 요청합니다.",
+	"enroll.button": "내 패스키 만들기",
+
+	"device.title":    "기기 연결",
+	"device.code":     "기기에 표시된 코드",
+	"device.err.rate": "시도 횟수가 너무 많습니다. 몇 분 후에 다시 시도하세요.",
+	"device.err.code": "이 코드는 유효하지 않거나 만료되었습니다.",
+	"continue":        "계속",
+
+	"confirm.ttl":    "확인",
+	"confirm.title":  "%s이(가) 회원님 대신 로그인하려고 합니다",
+	"confirm.code":   "코드",
+	"h.confirm.warn": "<strong>회원님의 기기에서 직접 시작한 로그인인 경우에만 계속하세요.</strong> 누군가 이 코드를 전달했다면 거부하세요. 그 사람이 회원님 대신 접근 권한을 얻게 됩니다.",
+	"confirm.yes":    "예, 본인입니다",
+	"confirm.no":     "아니요",
+
+	"open.wait": "잠시만 기다려 주세요…",
+
+	"acct.title":      "내 계정",
+	"acct.done":       "마치기",
+	"acct.identity":   "신원 정보",
+	"acct.login":      "로그인 ID",
+	"acct.name":       "이름",
+	"acct.mail":       "이메일",
+	"acct.groups":     "그룹",
+	"acct.source":     "출처",
+	"acct.src":        "로컬 계정",
+	"acct.note.local": "이메일과 그룹은 서비스 관리자가 변경하며, 여기서는 변경할 수 없습니다.",
+	"acct.note.fed":   "이메일과 그룹은 소속 기관이 변경하며, 여기서는 변경할 수 없습니다.",
+	"acct.dispname":   "표시 이름",
+	"save":            "저장",
+
+	"keys.title":    "패스키",
+	"keys.sub":      "기기마다 자체 키를 보관합니다. 분실한 기기의 키는 삭제하세요.",
+	"keys.created":  "생성",
+	"keys.lastused": "마지막 사용",
+	"keys.never":    "사용한 적 없음",
+	"keys.backup":   "동기화 가능",
+	"keys.current":  "이번 확인에 사용한 키",
+	"keys.confirm":  "이 패스키를 삭제할까요?",
+	"keys.full":     "계정당 패스키는 최대 %d개입니다. 새로 추가하려면 하나를 삭제하세요.",
+	"keys.add":      "패스키 추가",
+	"remove":        "삭제",
+
+	"apps.title":      "애플리케이션 및 세션",
+	"apps.opened":     "시작",
+	"apps.never":      "갱신한 적 없음",
+	"apps.none":       "없음",
+	"apps.confirm":    "이 세션을 종료할까요?",
+	"apps.revokeall":  "모두 해지",
+	"apps.confirmall": "모든 세션을 종료할까요?",
+	"revoke":          "해지",
+
+	"access.kind.app_password": "앱 비밀번호",
+	"access.kind.ssh":          "SSH 인증서",
+	"access.kind.x509":         "X.509 인증서",
+	"access.kind.wireguard":    "WireGuard 키",
+	"access.title":             "기술적 접근",
+	"access.expires":           "만료",
+	"access.none":              "없음",
+	"access.confirm":           "이 접근 권한을 해지할까요?",
+
+	"step.done.title": "세션이 종료되었습니다",
+	"step.done.p":     "계정 공간이 닫혔습니다. 이 페이지를 닫거나 다시 로그인할 수 있습니다.",
+	"step.p":          "본인임을 확인하세요. 확인은 5분 동안 유효합니다.",
+	"step.passkey":    "패스키로 확인",
+	"step.fed":        "소속 기관으로 확인",
+
+	"ph.summary":   "패스키 도움말",
+	"ph.what.h":    "패스키란 무엇인가요?",
+	"ph.what.p":    "아무것도 입력하지 않고 로그인하는 방법입니다. 기기가 지문, 얼굴 또는 PIN으로 잠금을 해제합니다. 패스키는 기기를 떠나지 않으며 이 서비스에서만 사용됩니다.",
+	"ph.dev.h":     "휴대폰, 컴퓨터 또는 보안 키",
+	"h.ph.dev.1":   "<strong>컴퓨터 또는 휴대폰:</strong> 기기의 지문, 얼굴 또는 PIN으로 확인하세요. 패스키가 휴대폰에 있다면 브라우저 창에서 '휴대폰'을 선택하고 QR 코드를 스캔하세요.",
+	"h.ph.dev.2":   "<strong>보안 키(USB, NFC):</strong> 키를 꽂고 브라우저가 요청하면 <strong>키를 터치</strong>하세요. PIN이 설정되어 있으면 입력을 요청합니다.",
+	"ph.fail.h":    "거부된 경우",
+	"ph.fail.1":    "'취소됨' 또는 '시간 초과': 다시 시도하고 기기의 요청에 바로 응답하세요.",
+	"ph.fail.2":    "기기의 잠금을 해제하고 키를 꽂거나 가까이 대세요. 휴대폰은 Bluetooth를 켜세요.",
+	"ph.fail.3":    "최신 버전의 다른 브라우저나 패스키를 만든 기기에서 시도해 보세요.",
+	"ph.fail.pre":  "계속 해결되지 않나요?",
+	"ph.support":   "지원팀에 문의",
+	"ph.admin":     "서비스 관리자에게 문의",
+	"ph.fail.post": "하여 새 초대를 받으세요.",
+}
