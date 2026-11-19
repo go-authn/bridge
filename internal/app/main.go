@@ -227,6 +227,9 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 		return fmt.Errorf("the federation's metadata: %w", err)
 	}
 	go s.refreshLoop(ctx)
+	if s.passkeys != nil {
+		go s.sweepLoop(ctx)
+	}
 	admin, err := s.openAdmin()
 	if err != nil {
 		return err

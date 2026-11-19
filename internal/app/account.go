@@ -26,7 +26,8 @@ import (
 //	POST /account/open                   the end of that confirmation (its one-time handle)
 //	POST /account/stepup/begin|finish    confirm with a passkey (local accounts)
 //	POST /account/add/begin|finish       add a passkey (local accounts)
-//	POST /account/remove                 remove one passkey (never the last)
+//	POST /account/remove                 remove one passkey (never the last; deferred unless it is the session's own)
+//	POST /account/removal/cancel         cancel a pending removal (any of the account's keys)
 //	POST /account/profile                the display name (local accounts); mail and groups are refused
 //	POST /account/apps/revoke            end one application session, or all
 //	POST /account/access/revoke          revoke an application password, SSH certificate, WireGuard key
@@ -91,6 +92,7 @@ func (s *server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/account/add/begin", s.limited(s.accountAddBegin))
 	mux.HandleFunc("/account/add/finish", s.limited(s.accountAddFinish))
 	mux.HandleFunc("/account/remove", s.limited(s.accountRemove))
+	mux.HandleFunc("/account/removal/cancel", s.limited(s.accountRemovalCancel))
 	mux.HandleFunc("/account/profile", s.limited(s.accountProfile))
 	mux.HandleFunc("/account/apps/revoke", s.limited(s.accountAppsRevoke))
 	mux.HandleFunc("/account/access/revoke", s.limited(s.accountAccessRevoke))
@@ -169,6 +171,9 @@ func (s *server) accountCSRF(k string) string {
 type accountKey struct {
 	Key, Prefix, Created, LastUsed, Arg string
 	Backup, Current                     bool
+	// Pending is a removal waiting on this key; RemoveAt says when it takes effect.
+	Pending  bool
+	RemoveAt string
 }
 
 type accountApp struct {
@@ -228,8 +233,14 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 			if !p.LastUsed.IsZero() {
 				row.LastUsed = p.LastUsed.UTC().Format(accountTimeLayout)
 			}
+			if p.pending() {
+				row.Pending, row.RemoveAt = true, p.RemoveAt.UTC().Format(accountTimeLayout)
+			}
 			keys = append(keys, row)
 		}
+		// Deferred says the page's remove buttons for another key ask for a
+		// delayed removal (the confirmation question tells the person so).
+		view["Deferred"], view["Delay"] = s.cfg.Local.removalDelay > 0, delayText(s.cfg.Local.removalDelay)
 		view["Keys"], view["Max"], view["Full"] = keys, maxPasskeys, len(keys) >= maxPasskeys
 	}
 
@@ -731,51 +742,8 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(sess, "add", rec.key(), r)
+	s.keyEvent("key.added", login, rec, time.Time{}, addr)
 	writeJSONNoStore(w, http.StatusOK, map[string]any{"added": rec.key()[:16]})
-}
-
-// accountRemove removes one passkey of the signed-in local account. It refuses
-// the last one (the account would be locked out of its own page, and every
-// grant bought without a passkey would end). Removing the key the session was
-// made with is allowed while another remains, and ends the session: its
-// credential is gone. The grants the removed key bought stop at once
-// (localAccountGone, #87): this deletes the same row the administrator's
-// command does.
-func (s *server) accountRemove(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		CSRF string `json:"csrf"`
-		Key  string `json:"key"`
-	}
-	k, sess, ok := s.localSession(w, r, &req, func() string { return req.CSRF })
-	if !ok {
-		return
-	}
-	login := sess.who.username
-	s.accountMu.Lock()
-	defer s.accountMu.Unlock()
-	have, err := s.passkeys.passkeys(login)
-	if err != nil {
-		s.logf("local: reading passkeys: %v", err)
-		http.Error(w, "the passkeys could not be read", http.StatusInternalServerError)
-		return
-	}
-	if len(have) <= 1 {
-		http.Error(w, "this is your last passkey: add another before removing it", http.StatusConflict)
-		return
-	}
-	rec, err := s.passkeys.removePasskey(login, req.Key)
-	if err != nil {
-		s.localLimit.failed(s.clientAddr(r), "")
-		http.Error(w, "no such passkey", http.StatusNotFound)
-		return
-	}
-	ended := rec.key() == sess.credential
-	if ended {
-		s.accountSessions.take(k)
-		http.SetCookie(w, s.accountCookie("", -1))
-	}
-	s.audit(sess, "remove", rec.key(), r)
-	writeJSONNoStore(w, http.StatusOK, map[string]any{"removed": rec.key()[:16], "signedOut": ended})
 }
 
 // ---- profile ----

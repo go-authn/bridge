@@ -6,6 +6,12 @@
 <button id="signout" type="button" data-post="account/signout" data-after="/account?done=1" class="btn-outline shrink-0">{{icon "log-out" "size-4"}}<span>{{t "acct.done"}}</span></button>
 </div>
 
+{{range .Keys}}{{if .Pending}}<section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100" role="alert" data-pending="{{.Prefix}}">
+<h2 class="flex items-center gap-2 text-base font-semibold">{{icon "circle-alert" "size-5 shrink-0"}}<span>{{t "rm.banner.title"}}</span></h2>
+<p class="mt-2 text-sm">{{tf "rm.banner.p" .Prefix .RemoveAt}}</p>
+<button type="button" data-post="account/removal/cancel" data-json="{{.Arg}}" class="btn-primary btn-sm mt-3">{{t "rm.cancel"}}</button>
+</section>{{end}}{{end}}
+
 <section class="surface p-5 sm:p-6" aria-labelledby="h-identity">
 <h2 id="h-identity" class="flex items-center gap-2 text-lg font-semibold">{{icon "user-round" "size-5 text-brand-ink"}}<span>{{t "acct.identity"}}</span></h2>
 <dl id="identity" class="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[10rem_1fr]">
@@ -36,10 +42,11 @@
 <div class="min-w-0 text-sm">
 <div><code>{{.Prefix}}</code></div>
 <div class="muted mt-1">{{t "keys.created"}} {{.Created}} · {{if .LastUsed}}{{t "keys.lastused"}} {{.LastUsed}}{{else}}{{t "keys.never"}}{{end}}</div>
-<div class="mt-1.5 flex flex-wrap gap-1.5">{{if .Backup}}<span class="chip-plain">{{t "keys.backup"}}</span>{{end}}{{if .Current}}<span class="chip-brand">{{icon "check" "size-3"}}{{t "keys.current"}}</span>{{end}}</div>
+<div class="mt-1.5 flex flex-wrap gap-1.5">{{if .Backup}}<span class="chip-plain">{{t "keys.backup"}}</span>{{end}}{{if .Current}}<span class="chip-brand">{{icon "check" "size-3"}}{{t "keys.current"}}</span>{{end}}{{if .Pending}}<span class="chip bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-100">{{t "rm.pending"}} · {{.RemoveAt}}</span>{{end}}</div>
 </div>
 </div>
-<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="{{t "keys.confirm"}}" class="btn-danger btn-sm shrink-0">{{icon "trash-2" "size-3.5"}}<span>{{t "remove"}}</span></button>
+{{if .Pending}}<button type="button" data-post="account/removal/cancel" data-json="{{.Arg}}" class="btn-outline btn-sm shrink-0">{{t "rm.cancel"}}</button>
+{{else}}<button type="button" data-remove="{{.Key}}" data-post="account/remove" data-json="{{.Arg}}" data-confirm="{{if and $.Deferred (not .Current)}}{{tf "keys.confirm.delay" $.Delay}}{{else}}{{t "keys.confirm"}}{{end}}" class="btn-danger btn-sm shrink-0">{{icon "trash-2" "size-3.5"}}<span>{{t "remove"}}</span></button>{{end}}
 </li>{{end}}</ul>
 <div class="border-t border-slate-200/80 p-5 sm:p-6 dark:border-white/[0.07]">
 {{if .Full}}<p class="muted">{{tf "keys.full" .Max}}</p>

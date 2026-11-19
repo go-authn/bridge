@@ -21,6 +21,17 @@ Added:
   without a password on non-domain Windows (go-authn/kinit). A machine with a
   registered key and `kerberos_tickets` may ask `client_credentials` for the
   `kerberos` scope by name and gets a TGT for `<client>@<issuer host>`.
+- **Guardrails on removing a passkey from `/account`.** Removing a key other
+  than the one the page was opened with is deferred for `local {
+  passkey_removal_delay }` (default `24h`, `"0"` = immediate as before): the key
+  keeps working, any of the person's keys can cancel (`/account/removal/cancel`,
+  a banner on every visit), and it is removed at its time. The session's own key
+  still goes at once; the last key, and any removal that would leave only keys
+  on their way out, is refused. Key added / removal requested / cancelled / done
+  go to the audit log and, with `notify { url, secret_file, include_address }`,
+  to an HMAC-SHA-256 signed webhook (`X-Bridge-Signature: sha256=<hex>`; client
+  address family only unless `include_address`); the bridge has no mail facility,
+  so the webhook feeds whatever sends the mail. Strings in all seven languages.
 - **Seven languages and a theme switcher.** Pages now speak `fr`, `en`, `de`,
   `es`, `ja`, `ko` and `zh-cn` (the languages of the docs sites), chosen by the
   `lang` cookie, then `Accept-Language` with q-values (`zh-CN`/`zh-Hans` give
