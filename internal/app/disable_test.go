@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -130,7 +131,13 @@ func TestAdminDisablePerson(t *testing.T) {
 	if r.Revoked.RefreshFamilies != 1 || r.Revoked.AccessTokens < 1 {
 		t.Errorf("revoked %+v", r.Revoked)
 	}
-	if !strings.HasPrefix(r.Disabled.By, "uid=") || r.Disabled.Reason != "compromised laptop" || r.Disabled.Until != nil {
+	// The admin socket names its caller by peer uid; Windows has no peer
+	// credentials on AF_UNIX, and the caller is the network's name.
+	by := "uid="
+	if runtime.GOOS == "windows" {
+		by = "unix"
+	}
+	if !strings.HasPrefix(r.Disabled.By, by) || r.Disabled.Reason != "compromised laptop" || r.Disabled.Until != nil {
 		t.Errorf("disabling %+v", r.Disabled)
 	}
 

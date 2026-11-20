@@ -5,6 +5,15 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+Tests (no change to the program):
+
+- The SAML side of the test suite is go-authn/saml/samltest by default
+  (#81), so the suite runs where xmlsec1 is not installed: on a machine
+  without it, 297 tests pass and 17 skip, where 88 passed and 226 skipped.
+  xmlsec1 stays the independent judge for the attack documents, for the
+  assertion options samltest does not offer, and for a second run of the
+  whole login (`TestLoginEndToEnd/xmlsec1`).
+
 Removed (breaking, v0.30.0):
 
 - **Application passwords, completely.** This provider issues no password of

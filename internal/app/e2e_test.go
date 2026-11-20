@@ -76,8 +76,19 @@ var alice = assertionOpts{
 	entitlement: []string{"urn:mace:univ-ex.example:fileshare:photos"},
 }
 
+// The whole login, once with samltest as the federation and the IdP and once
+// with xmlsec1: the second is the independent judge, an implementation
+// nobody here wrote, of what the first stands in for everywhere else.
 func TestLoginEndToEnd(t *testing.T) {
-	f := newFixture(t, "")
+	for _, p := range []struct {
+		name string
+		mk   func(*testing.T, string) *fixture
+	}{{"samltest", newFixture}, {"xmlsec1", newFixtureJudged}} {
+		t.Run(p.name, func(t *testing.T) { loginEndToEnd(t, p.mk(t, "")) })
+	}
+}
+
+func loginEndToEnd(t *testing.T, f *fixture) {
 	r := newRP(t, f, "web", "a-secret-long-enough-to-pass", f.redirect, "profile", "email", "eduperson", "groups")
 	back := f.login(newBrowser(t), r.authURL(), alice)
 

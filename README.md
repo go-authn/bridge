@@ -455,9 +455,16 @@ together with RENATER's discovery service (which cannot be restricted).
 
 ## Verified against things this repository did not write
 
-- The **federation and the IdP are xmlsec1**: it signs the federation's
-  metadata and signs and encrypts every response (AES-128-GCM, RSA-OAEP,
-  Response signed -- a Shibboleth IdP v5's defaults).
+- The **federation and the IdP are xmlsec1** where it matters that an
+  implementation nobody here wrote is read correctly: it signs the
+  federation's metadata and signs and encrypts the response (AES-128-GCM,
+  RSA-OAEP, Response signed -- a Shibboleth IdP v5's defaults) for a whole
+  login, for every hand-built attack document (signature wrapping, comments,
+  entities, another audience), and for a non-Success status, an ePTID or a
+  NameID given as XML. Everywhere else they are
+  [go-authn/saml/samltest](https://pkg.go.dev/github.com/go-authn/saml/samltest),
+  pure Go, itself checked against xmlsec1 in its own module, so the suite also
+  runs on macOS and Windows, where xmlsec1 is not installed.
 - The **relying party is golang.org/x/oauth2 and coreos/go-oidc**: they
   discover the provider, build the request with PKCE, exchange the code,
   verify the ID token with its nonce and `at_hash`, and ask `/userinfo`.

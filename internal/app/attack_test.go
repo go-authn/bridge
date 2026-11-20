@@ -70,9 +70,10 @@ func (f *fixture) signedAssertion(requestID, eppn string, o assertionOpts) strin
 	f.t.Helper()
 	id := "_a" + token()[:20]
 	a := f.assertionXML(requestID, id, eppn, fmt.Sprintf(sigTemplate, id), "", o)
-	signed := f.x.run("--sign", "--privkey-pem", f.idp.keyFile+","+f.idp.certFile,
+	x := f.judged()
+	signed := x.run("--sign", "--privkey-pem", f.idp.keyFile+","+f.idp.certFile,
 		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:assertion:Assertion", "--output", "/dev/stdout",
-		f.x.file("assertion.xml", f.responseXML(requestID, "_r"+token()[:20], a)))
+		x.file("assertion.xml", f.responseXML(requestID, "_r"+token()[:20], a)))
 	i := strings.Index(signed, "<saml:Assertion")
 	j := strings.LastIndex(signed, "</saml:Assertion>")
 	if i < 0 || j < 0 {
@@ -143,7 +144,7 @@ func (f *fixture) begin(t *testing.T) (b *browser, reqID, relay string) {
 // the clear is accepted, as mallory. Without it, every refusal below could be
 // the shape being refused rather than the attack.
 func TestSignedAssertionInTheClearIsAccepted(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	b, reqID, relay := f.begin(t)
 	a := f.signedAssertion(reqID, mallory, assertionOpts{})
 	if who, st := f.post(t, b, relay, f.responseXML(reqID, "_r1", a)); who != mallory {
@@ -160,7 +161,7 @@ func TestSignedAssertionInTheClearIsAccepted(t *testing.T) {
 // XSW3-XSW8 and their kin: the signed assertion about mallory is kept, an
 // unsigned one about alice is added where a reader might pick it.
 func TestAssertionWrappingAtTheACS(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	for _, c := range []struct {
 		name string
 		// build gets the signed assertion (a), its signature (sig) and an
@@ -272,7 +273,7 @@ func TestResponseWrappingAtTheACS(t *testing.T) {
 // signature still verifies; a reader that takes only the first text node then
 // reads a prefix of what was signed. The value read must be all of it.
 func TestCommentInSignedTextIsNotATruncation(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	// mallory's eppn, with a comment where a truncating reader would stop
 	// at a name that is somebody else's.
 	const signedAs = "alice.mallory@" + idpScope
@@ -298,7 +299,7 @@ func TestCommentInSignedTextIsNotATruncation(t *testing.T) {
 // ACS, another request. Each must be refused, or an assertion obtained at
 // any SP of the federation would open this one.
 func TestSignedForSomebodyElse(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	for _, c := range []struct {
 		name string
 		o    assertionOpts
@@ -330,7 +331,7 @@ func TestSignedForSomebodyElse(t *testing.T) {
 // The same signed response, delivered twice to two logins of the same
 // browser session flow: the second must not log anybody in.
 func TestResponseReplayedIntoANewLogin(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	b, reqID, relay := f.begin(t)
 	a := f.signedAssertion(reqID, mallory, assertionOpts{})
 	doc := f.responseXML(reqID, "_r1", a)
@@ -346,7 +347,7 @@ func TestResponseReplayedIntoANewLogin(t *testing.T) {
 // XML that asks its reader to expand entities, or to fetch something: a
 // DOCTYPE is refused before anything is read (billion laughs, XXE).
 func TestEntityExpansionRefused(t *testing.T) {
-	f := newFixture(t, "")
+	f := newFixtureJudged(t, "")
 	for _, c := range []struct{ name, prolog, eppn string }{
 		{"billion laughs", `<!DOCTYPE r [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"><!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">]>`, "&c;"},
 		{"external entity", `<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>`, "&x;"},

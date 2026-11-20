@@ -25,15 +25,29 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/go-authn/saml/samltest"
 )
 
-// The world these tests run in: a federation whose metadata xmlsec1 signs,
-// an IdP whose responses xmlsec1 signs and encrypts, and this provider
-// between them. Nothing on the SAML side is produced by go-authn/saml, which
-// only reads.
+// The world these tests run in: a federation that signs its metadata, an IdP
+// that signs its responses and encrypts their assertions, and this provider
+// between them.
+//
+// Two producers make the SAML side (go-authn/bridge#81):
+//
+//   - go-authn/saml/samltest, pure Go, by default. Every lane runs these
+//     tests, macOS and Windows included, where xmlsec1 is not installed.
+//     samltest is itself judged by xmlsec1 in its own module.
+//   - xmlsec1, which nobody here wrote, for the tests whose point is that an
+//     independent implementation's XML is read correctly
+//     (newFixtureJudged), for the hand-built attack documents
+//     (attack_test.go), and for the assertion options samltest does not offer
+//     (a non-Success status, an ePTID or NameID given as an element, an
+//     AuthnInstant other than now: see needsJudge).
 //
 // BRIDGE_REQUIRE_JUDGE=1 makes a missing xmlsec1 a failure rather than a
 // skip, in the CI lanes that install it.
@@ -54,8 +68,25 @@ type party struct {
 	certFile string
 }
 
-func newParty(t *testing.T, dir, name string) *party {
+// partyKeys holds one RSA key and certificate per party name for the whole
+// package run. Every fixture used to generate four 2048-bit keys; once the
+// fixture tests stopped skipping without xmlsec1, that alone took the 386
+// lane past go test's ten minutes, and the emulated lanes with it. Names stay
+// distinct within a fixture (federation, idp, other-idp, sp), so no test sees
+// one role signing for another; fixtures run separate servers, so sharing a
+// role's key between them shares nothing a test observes.
+var partyKeys = struct {
+	sync.Mutex
+	m map[string]*party
+}{m: map[string]*party{}}
+
+func partyKey(t *testing.T, name string) *party {
 	t.Helper()
+	partyKeys.Lock()
+	defer partyKeys.Unlock()
+	if p := partyKeys.m[name]; p != nil {
+		return p
+	}
 	k, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -66,12 +97,26 @@ func newParty(t *testing.T, dir, name string) *party {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _ := x509.ParseCertificate(der)
-	p := &party{key: k, cert: c, keyFile: filepath.Join(dir, name+".key"), certFile: filepath.Join(dir, name+".crt")}
-	os.WriteFile(p.keyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}), 0o600)
-	os.WriteFile(p.certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+	c, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &party{key: k, cert: c}
+	partyKeys.m[name] = p
 	return p
 }
+
+func newParty(t *testing.T, dir, name string) *party {
+	t.Helper()
+	kc := partyKey(t, name)
+	p := &party{key: kc.key, cert: kc.cert, keyFile: filepath.Join(dir, name+".key"), certFile: filepath.Join(dir, name+".crt")}
+	os.WriteFile(p.keyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(p.key)}), 0o600)
+	os.WriteFile(p.certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.cert.Raw}), 0o644)
+	return p
+}
+
+// samltest is the same key and certificate, for samltest to sign with.
+func (p *party) samltest() *samltest.Party { return &samltest.Party{Key: p.key, Cert: p.cert} }
 
 func fingerprint(c *x509.Certificate) string {
 	s := sha256.Sum256(c.Raw)
@@ -131,10 +176,12 @@ const sigTemplate = `<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
 type fixture struct {
 	t        *testing.T
 	dir      string
-	x        *xmlsec
-	fedKey   *party // signs the federation's metadata
-	idp      *party // the university's IdP
-	sp       *party // this provider's SAML key
+	x        *xmlsec // nil until judged() is first asked
+	judgeAll bool    // newFixtureJudged: xmlsec1 makes every SAML document
+	fedKey   *party  // signs the federation's metadata
+	idp      *party  // the university's IdP
+	other    *party  // the other university's IdP, also in the federation
+	sp       *party  // this provider's SAML key
 	metadata *httptest.Server
 	srv      *httptest.Server
 	s        *server
@@ -153,15 +200,31 @@ func newFixture(t *testing.T, extra string) *fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	f := &fixture{t: t, dir: dir}
-	f.x = judge(t, dir)
+	f := &fixture{t: t, dir: dir, judgeAll: fixtureJudged}
+	if f.judgeAll {
+		f.judged() // skips now, before anything is started, when xmlsec1 is missing
+	}
 	f.fedKey = newParty(t, dir, "federation")
 	f.idp = newParty(t, dir, "idp")
+	f.other = newParty(t, dir, "other-idp")
 	f.sp = newParty(t, dir, "sp")
 
-	md := f.x.run("--sign", "--privkey-pem", f.fedKey.keyFile+","+f.fedKey.certFile,
-		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:metadata:EntitiesDescriptor", "--output", "/dev/stdout",
-		f.x.file("md.xml", f.federationMetadata()))
+	var md string
+	if f.judgeAll {
+		md = f.x.run("--sign", "--privkey-pem", f.fedKey.keyFile+","+f.fedKey.certFile,
+			"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:metadata:EntitiesDescriptor", "--output", "/dev/stdout",
+			f.x.file("md.xml", f.federationMetadata()))
+	} else {
+		fed := &samltest.Federation{Signer: f.fedKey.samltest(), IdPs: []*samltest.IdP{
+			{EntityID: idpEntity, Scope: idpScope, SSO: "https://" + idpScope + "/SSO", Name: idpScope, Signer: f.idp.samltest()},
+			{EntityID: otherIdP, Scope: "other-univ.example", SSO: "https://other-univ.example/SSO", Name: "other-univ.example", Signer: f.other.samltest()},
+		}}
+		b, err := fed.Metadata(24 * time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		md = string(b)
+	}
 	f.metadata = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, md)
 	}))
@@ -266,10 +329,9 @@ func (f *fixture) federationMetadata() string {
 			`<md:KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>` + base64.StdEncoding.EncodeToString(key.cert.Raw) + `</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>` +
 			`<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://` + scope + `/SSO"/></md:IDPSSODescriptor></md:EntityDescriptor>`
 	}
-	other := newParty(f.t, f.dir, "other-idp")
 	return `<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:shibmd="urn:mace:shibboleth:metadata:1.0" xmlns:mdui="urn:oasis:names:tc:SAML:metadata:ui" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" ID="_fed" validUntil="` +
 		time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339) + `">` + fmt.Sprintf(sigTemplate, "_fed") +
-		idp(idpEntity, idpScope, f.idp) + idp("https://idp.other-univ.example/idp", "other-univ.example", other) +
+		idp(idpEntity, idpScope, f.idp) + idp(otherIdP, "other-univ.example", f.other) +
 		`</md:EntitiesDescriptor>`
 }
 
@@ -359,11 +421,62 @@ type assertionOpts struct {
 	audience, recipient string
 }
 
-// respond has the IdP (xmlsec1) answer a request: the assertion encrypted
-// to the provider's key with AES-128-GCM, the Response signed -- a
-// Shibboleth IdP v5's defaults.
+// judged is xmlsec1, found on first use; a test that reaches it on a machine
+// without xmlsec1 skips there (or fails, under BRIDGE_REQUIRE_JUDGE).
+func (f *fixture) judged() *xmlsec {
+	f.t.Helper()
+	if f.x == nil {
+		f.x = judge(f.t, f.dir)
+	}
+	return f.x
+}
+
+// needsJudge reports an assertion samltest cannot express: a Response that is
+// not Success, an ePTID or a NameID given as XML, an AuthnInstant other than
+// the IssueInstant. samltest escapes values and makes NameID a value, so
+// these stay with xmlsec1 until samltest offers them.
+func (o assertionOpts) needsJudge() bool {
+	return o.status != "" || o.eptid != "" || o.nameID != "" || !o.authnAt.IsZero()
+}
+
+// respond has the IdP answer a request: the assertion encrypted to the
+// provider's key with AES-128-GCM, the Response signed -- a Shibboleth IdP
+// v5's defaults. samltest makes it, or xmlsec1 (see the top of this file).
 func (f *fixture) respond(requestID string, o assertionOpts) string {
 	f.t.Helper()
+	if f.judgeAll || o.needsJudge() {
+		return f.respondJudged(requestID, o)
+	}
+	issuer, signer := idpEntity, f.idp
+	if o.issuer != "" {
+		issuer, signer = o.issuer, o.signer
+	}
+	var attrs []samltest.Attribute
+	add := func(name string, vals ...string) {
+		if len(vals) == 0 || vals[0] == "" {
+			return
+		}
+		attrs = append(attrs, samltest.Attribute{Name: name, Values: vals})
+	}
+	add(samltest.EPPN, o.eppn)
+	add(samltest.SubjectID, o.subjectID)
+	add("urn:oid:1.3.6.1.4.1.25178.1.2.9", o.schac)
+	add(samltest.Entitlement, o.entitlement...)
+	add(samltest.DisplayName, "Alice Martin")
+	add(samltest.Mail, "alice@"+idpScope)
+	idp := &samltest.IdP{EntityID: issuer, Signer: signer.samltest()}
+	r, err := idp.Response(samltest.Assertion{InResponseTo: requestID, SP: f.s.cfg.SAML.EntityID,
+		ACS: f.s.cfg.Issuer + "/saml/acs", Attributes: attrs, AuthnContext: o.acr, EncryptTo: f.sp.cert})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return r
+}
+
+// respondJudged is respond made by xmlsec1.
+func (f *fixture) respondJudged(requestID string, o assertionOpts) string {
+	f.t.Helper()
+	f.judged()
 	issuer, signer := idpEntity, f.idp
 	if o.issuer != "" {
 		issuer, signer = o.issuer, o.signer
@@ -430,6 +543,19 @@ var fixtureOverTLS bool
 
 // fixtureAsLocalhost makes newFixture name the provider http://localhost:PORT.
 var fixtureAsLocalhost bool
+
+// fixtureJudged makes newFixture have xmlsec1 make every SAML document.
+var fixtureJudged bool
+
+// newFixtureJudged is newFixture with xmlsec1 as the federation and the IdP,
+// for a test whose point is that what an independent implementation wrote is
+// read correctly.
+func newFixtureJudged(t *testing.T, extra string) *fixture {
+	t.Helper()
+	fixtureJudged = true
+	defer func() { fixtureJudged = false }()
+	return newFixture(t, extra)
+}
 
 // newFixtureTLS is newFixture with an https issuer.
 func newFixtureTLS(t *testing.T, extra string) *fixture {

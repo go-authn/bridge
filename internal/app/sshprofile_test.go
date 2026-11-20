@@ -104,7 +104,8 @@ func keygenL(t *testing.T, line []byte) string {
 	if err != nil {
 		t.Fatalf("ssh-keygen -L: %v\n%s", err, out)
 	}
-	return string(out)
+	// OpenSSH for Windows ends its lines with CRLF.
+	return strings.ReplaceAll(string(out), "\r\n", "\n")
 }
 
 var keygenValid = regexp.MustCompile(`Valid: from (\S+) to (\S+)`)
@@ -373,7 +374,8 @@ func TestSSHConfigEndpoint(t *testing.T) {
 		cmd := exec.Command(jq, "-r", ".PublicKey")
 		cmd.Stdin = bytes.NewReader(body)
 		out, err := cmd.Output()
-		if err != nil || string(out) != want+"\n" {
+		// jq on Windows ends its line with CRLF.
+		if err != nil || strings.TrimSuffix(strings.TrimSuffix(string(out), "\n"), "\r") != want {
 			t.Errorf("jq -r .PublicKey: %v %q", err, out)
 		}
 		// ssh-keygen reads what jq wrote as a key.
