@@ -12,6 +12,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"math/big"
 	"net/http"
@@ -328,7 +329,29 @@ func TestKerberosConfigRefusals(t *testing.T) {
 	}
 	// The control: the same block, unaltered, with a client that may use it.
 	ok := block("") + "client \"k\" {\n  device = true\n  kerberos_tickets = true\n}\n"
-	if _, err := c.load(t, c.hcl(nil)+ok); err != nil {
-		t.Errorf("the control: %v", err)
+	cfg, err := c.load(t, c.hcl(nil)+ok)
+	if err != nil {
+		t.Fatalf("the control: %v", err)
+	}
+
+	// #108: a machine is <client id>@<issuer host> and a local person
+	// <login>@<local scope>; the two must never be able to be the same name.
+	// (Case and spaces need no case of their own: a scope that is not a
+	// lowercase domain is refused before this check.)
+	host := cfg.rpID()
+	// An account with no groups, so the scope is judged on its own.
+	accounts := filepath.ToSlash(writeAccountsFile(t, "account \"alice\" {\n  name = \"Alice\"\n}\n"))
+	local := func(scope string) string {
+		return fmt.Sprintf("local {\n  accounts_file = %q\n  scope = %q\n}\n", accounts, scope) + stateExtra(t)
+	}
+	if _, err := c.load(t, c.hcl(nil)+ok+local(host)); err == nil || !strings.Contains(err.Error(), "issuer's host") {
+		t.Errorf("local scope %q (the issuer's host) with kerberos: err = %v, want the #108 refusal", host, err)
+	}
+	// Controls: another scope with kerberos, and the issuer's host without it.
+	if _, err := c.load(t, c.hcl(nil)+ok+local("accounts."+host)); err != nil {
+		t.Errorf("another local scope with kerberos was refused: %v", err)
+	}
+	if _, err := c.load(t, c.hcl(nil)+local(host)); err != nil {
+		t.Errorf("the issuer's host as local scope WITHOUT kerberos was refused: %v", err)
 	}
 }

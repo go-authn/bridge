@@ -857,6 +857,17 @@ func (c *config) check() error {
 			cl.Name = cl.ID
 		}
 	}
+	// ⛔ Two sources of Kerberos principals must never meet (#108): a machine
+	// is `<client id>@<issuer host>` (machineName, kerberos.go), a local person
+	// `<login>@<local scope>` (kerberosPrincipal). With the local scope set to
+	// the issuer's host, client "alice" and local person "alice" would both be
+	// alice@<host>, and one could be handed a ticket the realm treats as the
+	// other's.
+	// (The scope is already a lowercase domain, checked with the local block.)
+	if c.Kerberos != nil && c.Local != nil && c.Local.Scope == c.rpID() {
+		return fmt.Errorf("local scope %q is the issuer's host: with a kerberos block, a machine client and a local account "+
+			"would share principals (<id>@%s) -- use another scope for local accounts", c.Local.Scope, c.rpID())
+	}
 	// A gateway reads the keys of the clients it names, and only of clients
 	// that register keys: a name that is not one would be a gateway that
 	// admits nobody and looks configured.
