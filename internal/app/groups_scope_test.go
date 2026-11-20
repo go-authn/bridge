@@ -5,7 +5,6 @@ package app
 import (
 	"io"
 	"net/url"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -67,7 +66,7 @@ func strs(v any) []string {
 // Its own namespace it keeps.
 func TestAGroupIsKeptOnlyFromTheIdPThatOwnsIt(t *testing.T) {
 	f := newFixture(t, "")
-	other := &party{keyFile: filepath.Join(f.dir, "other-idp.key"), certFile: filepath.Join(f.dir, "other-idp.crt")}
+	other := f.other
 	mallory := assertionOpts{
 		eppn:   "mallory@other-univ.example",
 		issuer: otherIdP, signer: other,
