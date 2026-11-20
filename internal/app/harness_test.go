@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -67,8 +68,25 @@ type party struct {
 	certFile string
 }
 
-func newParty(t *testing.T, dir, name string) *party {
+// partyKeys holds one RSA key and certificate per party name for the whole
+// package run. Every fixture used to generate four 2048-bit keys; once the
+// fixture tests stopped skipping without xmlsec1, that alone took the 386
+// lane past go test's ten minutes, and the emulated lanes with it. Names stay
+// distinct within a fixture (federation, idp, other-idp, sp), so no test sees
+// one role signing for another; fixtures run separate servers, so sharing a
+// role's key between them shares nothing a test observes.
+var partyKeys = struct {
+	sync.Mutex
+	m map[string]*party
+}{m: map[string]*party{}}
+
+func partyKey(t *testing.T, name string) *party {
 	t.Helper()
+	partyKeys.Lock()
+	defer partyKeys.Unlock()
+	if p := partyKeys.m[name]; p != nil {
+		return p
+	}
 	k, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -79,10 +97,21 @@ func newParty(t *testing.T, dir, name string) *party {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _ := x509.ParseCertificate(der)
-	p := &party{key: k, cert: c, keyFile: filepath.Join(dir, name+".key"), certFile: filepath.Join(dir, name+".crt")}
-	os.WriteFile(p.keyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}), 0o600)
-	os.WriteFile(p.certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+	c, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &party{key: k, cert: c}
+	partyKeys.m[name] = p
+	return p
+}
+
+func newParty(t *testing.T, dir, name string) *party {
+	t.Helper()
+	kc := partyKey(t, name)
+	p := &party{key: kc.key, cert: kc.cert, keyFile: filepath.Join(dir, name+".key"), certFile: filepath.Join(dir, name+".crt")}
+	os.WriteFile(p.keyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(p.key)}), 0o600)
+	os.WriteFile(p.certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.cert.Raw}), 0o644)
 	return p
 }
 
