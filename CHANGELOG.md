@@ -10,9 +10,18 @@ Tests (no change to the program):
 - The SAML side of the test suite is go-authn/saml/samltest by default
   (#81), so the suite runs where xmlsec1 is not installed: on a machine
   without it, 297 tests pass and 17 skip, where 88 passed and 226 skipped.
-  xmlsec1 stays the independent judge for the attack documents, for the
-  assertion options samltest does not offer, and for a second run of the
-  whole login (`TestLoginEndToEnd/xmlsec1`).
+  xmlsec1 stays the independent judge for the attack documents and for a
+  second run of the whole login (`TestLoginEndToEnd/xmlsec1`).
+- With go-authn/saml v0.7.0, samltest also writes a non-Success status, a
+  NameID subject, an ePTID given as a NameID and an AuthnInstant of its own
+  (go-authn/saml#28), so those tests no longer fall back to xmlsec1: 301 pass
+  and 13 skip without it. `TestASubjectKeepsItsShape` now runs each shape
+  under both producers. The declined-authentication case of the account page
+  sent `AuthnFailed` as bare text inside `samlp:Status`, with no StatusCode
+  element; it now sends `Responder` / `AuthnFailed`, so the refusal it checks
+  is the IdP's answer, not a malformed document. The parser the program
+  links is unchanged by the go-authn/saml bump (v0.6.1 added fuzz targets
+  and tests, v0.7.0 changed only samltest).
 
 Removed (breaking, v0.30.0):
 
