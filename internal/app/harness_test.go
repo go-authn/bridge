@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"html"
 	"io"
 	"math/big"
 	"net/http"
@@ -44,10 +45,10 @@ import (
 //     samltest is itself judged by xmlsec1 in its own module.
 //   - xmlsec1, which nobody here wrote, for the tests whose point is that an
 //     independent implementation's XML is read correctly
-//     (newFixtureJudged), for the hand-built attack documents
-//     (attack_test.go), and for the assertion options samltest does not offer
-//     (a non-Success status, an ePTID or NameID given as an element, an
-//     AuthnInstant other than now: see needsJudge).
+//     (newFixtureJudged), and for the hand-built attack documents
+//     (attack_test.go). Every assertionOpts is written by both producers
+//     (samltest v0.7.0 added status, NameID elements and AuthnInstant,
+//     go-authn/saml#28).
 //
 // BRIDGE_REQUIRE_JUDGE=1 makes a missing xmlsec1 a failure rather than a
 // skip, in the CI lanes that install it.
@@ -402,7 +403,7 @@ type assertionOpts struct {
 	subjectID   string
 	schac       string // schacHomeOrganization
 	entitlement []string
-	status      string // raw StatusCode, Success when empty
+	status      []string // the StatusCode then nested codes; Success when empty
 	acr         string
 	// issuer and signer, when set, are another IdP of the federation
 	// answering in place of the university's.
@@ -411,11 +412,12 @@ type assertionOpts struct {
 	// authnAt, when set, is the AuthnInstant: when the IdP says the person
 	// authenticated (now by default).
 	authnAt time.Time
-	// eptid, when set, is released as eduPersonTargetedID: the
-	// AttributeValue's content, a string or a saml:NameID element.
-	eptid string
+	// eptid and eptidNameID, when set, are released as eduPersonTargetedID:
+	// a string value, or a value that is a saml:NameID element.
+	eptid       string
+	eptidNameID *samltest.NameID
 	// nameID, when set, replaces the transient NameID of the Subject.
-	nameID string
+	nameID *samltest.NameID
 	// audience and recipient, when set, replace this SP's entity ID and
 	// ACS in an assertion built by assertionXML (attack_test.go).
 	audience, recipient string
@@ -431,20 +433,15 @@ func (f *fixture) judged() *xmlsec {
 	return f.x
 }
 
-// needsJudge reports an assertion samltest cannot express: a Response that is
-// not Success, an ePTID or a NameID given as XML, an AuthnInstant other than
-// the IssueInstant. samltest escapes values and makes NameID a value, so
-// these stay with xmlsec1 until samltest offers them.
-func (o assertionOpts) needsJudge() bool {
-	return o.status != "" || o.eptid != "" || o.nameID != "" || !o.authnAt.IsZero()
-}
+// eptidOID is eduPersonTargetedID.
+const eptidOID = "urn:oid:1.3.6.1.4.1.5923.1.1.1.10"
 
 // respond has the IdP answer a request: the assertion encrypted to the
 // provider's key with AES-128-GCM, the Response signed -- a Shibboleth IdP
 // v5's defaults. samltest makes it, or xmlsec1 (see the top of this file).
 func (f *fixture) respond(requestID string, o assertionOpts) string {
 	f.t.Helper()
-	if f.judgeAll || o.needsJudge() {
+	if f.judgeAll {
 		return f.respondJudged(requestID, o)
 	}
 	issuer, signer := idpEntity, f.idp
@@ -462,11 +459,16 @@ func (f *fixture) respond(requestID string, o assertionOpts) string {
 	add(samltest.SubjectID, o.subjectID)
 	add("urn:oid:1.3.6.1.4.1.25178.1.2.9", o.schac)
 	add(samltest.Entitlement, o.entitlement...)
+	add(eptidOID, o.eptid)
+	if o.eptidNameID != nil {
+		attrs = append(attrs, samltest.Attribute{Name: eptidOID, NameIDs: []samltest.NameID{*o.eptidNameID}})
+	}
 	add(samltest.DisplayName, "Alice Martin")
 	add(samltest.Mail, "alice@"+idpScope)
 	idp := &samltest.IdP{EntityID: issuer, Signer: signer.samltest()}
 	r, err := idp.Response(samltest.Assertion{InResponseTo: requestID, SP: f.s.cfg.SAML.EntityID,
-		ACS: f.s.cfg.Issuer + "/saml/acs", Attributes: attrs, AuthnContext: o.acr, EncryptTo: f.sp.cert})
+		ACS: f.s.cfg.Issuer + "/saml/acs", Attributes: attrs, AuthnContext: o.acr, EncryptTo: f.sp.cert,
+		Subject: o.nameID, AuthnInstant: o.authnAt, Status: o.status})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -501,12 +503,27 @@ func (f *fixture) respondJudged(requestID string, o assertionOpts) string {
 		}
 		return s + `</saml:Attribute>`
 	}
-	nameID := `<saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">t1</saml:NameID>`
-	if o.nameID != "" {
-		nameID = o.nameID
+	nameID := nameIDXML(samltest.NameID{Value: "t1"})
+	if o.nameID != nil {
+		nameID = nameIDXML(*o.nameID)
+	}
+	eptid := attr(eptidOID, o.eptid)
+	if o.eptidNameID != nil {
+		eptid += `<saml:Attribute Name="` + eptidOID + `" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri"><saml:AttributeValue>` +
+			nameIDXML(*o.eptidNameID) + `</saml:AttributeValue></saml:Attribute>`
+	}
+	status := `<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>`
+	if len(o.status) > 0 {
+		status = ""
+		for _, c := range o.status {
+			status += `<samlp:StatusCode Value="` + html.EscapeString(c) + `">`
+		}
+		for range o.status {
+			status += `</samlp:StatusCode>`
+		}
 	}
 	body := ""
-	if o.status == "" {
+	if len(o.status) == 0 || o.status[0] == "urn:oasis:names:tc:SAML:2.0:status:Success" {
 		assertion := `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a` + token()[:20] + `" Version="2.0" IssueInstant="` + ts + `">` +
 			`<saml:Issuer>` + issuer + `</saml:Issuer>` +
 			`<saml:Subject>` + nameID +
@@ -518,7 +535,7 @@ func (f *fixture) respondJudged(requestID string, o assertionOpts) string {
 			attr("urn:oasis:names:tc:SAML:attribute:subject-id", o.subjectID) +
 			attr("urn:oid:1.3.6.1.4.1.25178.1.2.9", o.schac) +
 			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.7", o.entitlement...) +
-			attr("urn:oid:1.3.6.1.4.1.5923.1.1.1.10", o.eptid) +
+			eptid +
 			attr("urn:oid:2.16.840.1.113730.3.1.241", "Alice Martin") +
 			attr("urn:oid:0.9.2342.19200300.100.1.3", "alice@"+idpScope) +
 			`</saml:AttributeStatement></saml:Assertion>`
@@ -526,16 +543,30 @@ func (f *fixture) respondJudged(requestID string, o assertionOpts) string {
 		data := f.x.file("data.xml", `<saml:EncryptedAssertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">`+assertion+`</saml:EncryptedAssertion>`)
 		body = f.x.run("--encrypt", "--pubkey-cert-pem", f.sp.certFile, "--session-key", "aes-128",
 			"--xml-data", data, "--node-name", "urn:oasis:names:tc:SAML:2.0:assertion:Assertion", "--output", "/dev/stdout", tmpl)
-		o.status = `<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>`
 	}
 	resp := `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_r` + token()[:20] + `" Version="2.0" IssueInstant="` + ts + `" Destination="` + acs + `" InResponseTo="` + requestID + `">` +
-		`<saml:Issuer>` + issuer + `</saml:Issuer>` + fmt.Sprintf(sigTemplate, "_rID") + `<samlp:Status>` + o.status + `</samlp:Status>` + body + `</samlp:Response>`
+		`<saml:Issuer>` + issuer + `</saml:Issuer>` + fmt.Sprintf(sigTemplate, "_rID") + `<samlp:Status>` + status + `</samlp:Status>` + body + `</samlp:Response>`
 	id := resp[strings.Index(resp, ` ID="`)+5:]
 	id = id[:strings.Index(id, `"`)]
 	resp = strings.Replace(resp, "#_rID", "#"+id, 1)
 	signed := f.x.run("--sign", "--privkey-pem", signer.keyFile+","+signer.certFile,
 		"--id-attr:ID", "urn:oasis:names:tc:SAML:2.0:protocol:Response", "--output", "/dev/stdout", f.x.file("resp.xml", resp))
 	return base64.StdEncoding.EncodeToString([]byte(signed))
+}
+
+// nameIDXML is n as xmlsec1's input: the same element samltest writes.
+func nameIDXML(n samltest.NameID) string {
+	if n.Format == "" {
+		n.Format = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"
+	}
+	s := `<saml:NameID Format="` + html.EscapeString(n.Format) + `"`
+	if n.NameQualifier != "" {
+		s += ` NameQualifier="` + html.EscapeString(n.NameQualifier) + `"`
+	}
+	if n.SPNameQualifier != "" {
+		s += ` SPNameQualifier="` + html.EscapeString(n.SPNameQualifier) + `"`
+	}
+	return s + `>` + html.EscapeString(n.Value) + `</saml:NameID>`
 }
 
 // fixtureOverTLS makes newFixture serve the provider over https.

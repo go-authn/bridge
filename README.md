@@ -460,8 +460,8 @@ together with RENATER's discovery service (which cannot be restricted).
   federation's metadata and signs and encrypts the response (AES-128-GCM,
   RSA-OAEP, Response signed -- a Shibboleth IdP v5's defaults) for a whole
   login, for every hand-built attack document (signature wrapping, comments,
-  entities, another audience), and for a non-Success status, an ePTID or a
-  NameID given as XML. Everywhere else they are
+  entities, another audience), and for each subject shape whose `sub` must not
+  change. Everywhere else they are
   [go-authn/saml/samltest](https://pkg.go.dev/github.com/go-authn/saml/samltest),
   pure Go, itself checked against xmlsec1 in its own module, so the suite also
   runs on macOS and Windows, where xmlsec1 is not installed.

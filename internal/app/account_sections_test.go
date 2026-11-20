@@ -350,7 +350,7 @@ func TestAccountThroughTheInstitution(t *testing.T) {
 	}
 	// An institution that declines.
 	declined := alice
-	declined.status = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed"
+	declined.status = []string{"urn:oasis:names:tc:SAML:2.0:status:Responder", "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed"}
 	if _, res := f.federatedConfirm(declined); res.StatusCode < 400 {
 		t.Errorf("a declined authentication: %d", res.StatusCode)
 	}

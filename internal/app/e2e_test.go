@@ -412,7 +412,7 @@ func TestPromptNone(t *testing.T) {
 	next := location(t, b.get(f.s.cfg.Issuer+"/saml/disco?entityID="+url.QueryEscape(idpEntity)))
 	reqID, relay := authnRequest(t, next)
 	back := location(t, b.post(f.s.cfg.Issuer+"/saml/acs", url.Values{
-		"SAMLResponse": {f.respond(reqID, assertionOpts{status: `<samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder"><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:NoPassive"/></samlp:StatusCode>`})},
+		"SAMLResponse": {f.respond(reqID, assertionOpts{status: []string{"urn:oasis:names:tc:SAML:2.0:status:Responder", "urn:oasis:names:tc:SAML:2.0:status:NoPassive"}})},
 		"RelayState":   {relay},
 	}))
 	if back.Query().Get("error") != "login_required" || back.Query().Get("state") != r.state {
