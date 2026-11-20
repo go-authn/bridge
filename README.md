@@ -71,7 +71,7 @@ on its metadata page; the one above is the 2026 certificate's.
 |---|---|
 | **flow** | authorization code, with **PKCE S256 required for every client** |
 | **ID token** | RS256, `aud` = the client, `nonce`, `auth_time`, `acr` (the IdP's authentication context), `at_hash`, and **nothing about the person**: what the scopes release is at `/userinfo` (OIDC Core §5.4, since an access token is always issued). A client whose ID token is itself the credential, such as opkssh, sets `id_token_claims = true` to have them copied in |
-| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, or the one resource it asked for ([RFC 8707](#several-resource-servers-a-token-for-one-at-a-time)), with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody -- `groups` unless the client sets `access_token_groups = false` ([ssh-oidc](#ssh-oidc-kit-oidc-agent-mccli-motley-cue-pam-ssh-oidc)). A token carrying `ssh`, `nfs`, `app_password`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
+| **access token** | RS256, `typ: at+jwt` (RFC 9068), `aud` = the client's `audience`, or the one resource it asked for ([RFC 8707](#several-resource-servers-a-token-for-one-at-a-time)), with `preferred_username`, `groups` and `idp` (the entity ID of the IdP that vouched) so that a resource server can decide without asking anybody -- `groups` unless the client sets `access_token_groups = false` ([ssh-oidc](#ssh-oidc-kit-oidc-agent-mccli-motley-cue-pam-ssh-oidc)). A token carrying `ssh`, `nfs`, `kerberos`, `wireguard` or `wireguard_peers` is addressed to **this provider alone** (`aud` = the issuer), and those endpoints refuse any other: a token a resource server received cannot be replayed here |
 | **`sub`** | an HMAC of the institution's identifier under the salt: stable, not reversible, not an address. `public` (the same for every client) or `pairwise` per client (OIDC Core 8.1) |
 | **scopes** | `profile` (name, given_name, family_name, preferred_username), `email`, `eduperson` (AARC-G056 names: `eduperson_principal_name`, `eduperson_scoped_affiliation`, `eduperson_entitlement`, `entitlements`, `schac_home_organization`, `voperson_id`...), `groups` |
 
@@ -197,7 +197,7 @@ passkey it was made with ends it.
 | Identity | everyone | login or eppn, name, mail, groups, and the source (local, or the institution's entity ID and name), **read-only**. Only a local account may change its **display name** (it is then the name its next sign-in carries). Mail and groups are never editable here: the page says who changes them (the administrator, or the institution), and a request to change them is refused and logged. |
 | Passkeys | local accounts | add (`residentKey` and user verification required, existing keys excluded, at most 10), list (ID prefix, created, last used, backup-eligible, the one this confirmation was made with), remove. The last key is never removed; removing a key refuses the grants it bought (the #87 invariant), and ends the confirmation if it was made with that key. |
 | Applications and sessions | everyone | the live refresh-token families, per client, with when they started and when they last rotated; revoke one, or all. This is `revokeFamily` and `revokeMatching`, the pieces `RevokePerson` uses. |
-| Technical access | where configured | the application password, SSH and X.509 certificates and WireGuard keys this provider issued, listed and revocable in the stores they were issued into. Access tokens already handed out stay valid at their resource servers until they expire, as with `RevokePerson`. |
+| Technical access | where configured | the SSH and X.509 certificates and WireGuard keys this provider issued, listed and revocable in the stores they were issued into. Access tokens already handed out stay valid at their resource servers until they expire, as with `RevokePerson`. |
 
 Every change needs the page's CSRF token (derived from the session, under a
 label of its own), a same-origin request (a form post carries `Origin: null`
@@ -294,7 +294,7 @@ right key included. These counters are per process, in memory.
 
 **Held to the configuration, like every grant.** Local accounts go through
 `refused()` and `configuredIdP` as an IdP does: authorization codes, refresh
-tokens, device grants, application passwords and SSH certificates bought with a
+tokens, device grants, Kerberos tickets and SSH certificates bought with a
 local account are refused as soon as the `local` block leaves the
 configuration -- as soon as the account leaves the file -- and as soon as the
 **passkey** it was bought with is removed ("account removed"): a token carries
@@ -763,40 +763,36 @@ to; a client ID holding `@` or `/` gets none. The ticket never outlives the iden
 provider's session, nor `validity`, and nothing renews it: a longer day needs a
 new login. A person disabled while the KDC was answering gets nothing.
 
-## Application passwords, for SMB and S3
+## No passwords: application passwords are gone (v0.30.0)
 
-NTLMv2 and SigV4 prove a secret the server must already hold, so no token will
-do. `authn-bridge app-password --issuer ... --client files` sets one, generated,
-shown once, into a database go-fileshare reads with a `users "sql"` block:
+This provider issues no password of any kind. Application passwords, which let
+a person who logged in through their institution set a generated password for
+SMB (an NT hash) and S3, were removed in v0.30.0, completely: there is no
+issuance path, no configuration option and no way to turn them back on.
 
-```hcl
-client "files" {
-  device        = true
-  app_passwords = true         # its tokens, with the app_password scope, may set one
-}
+- SMB: use a Kerberos ticket (the previous section). The server needs no
+  secret of the person's, and with `ntlm = false` in go-fileshare none can be
+  presented.
+- S3: temporary credentials from an STS (go-authn/awscred), not a password.
 
-app_passwords {
-  driver   = "sqlite"          # or postgres, mysql
-  dsn_file = "/etc/authn-bridge/apppw.dsn"
-  store    = ["nt_hash"]       # SMB only: the default. Add "password" for S3.
-  lifetime = "2160h"
-}
-```
+What changed for a deployment that used them:
 
-What is stored is what the protocols need: the NT hash for SMB, the password
-itself only when S3 is asked for.
-
-The table is `login, password, nt_hash, expires, idp` (`idp`, the institution
-that vouched, since v0.4.0). Name the columns in go-fileshare's query, never
-`*`: go-authn/directory's sqldir reads them by position and refuses more than
-it knows, so a `*` breaks at the first restart after a column is added:
-
-```sql
--- sqlite; PostgreSQL: expires > extract(epoch from now())
-select login, password, nt_hash from app_passwords where expires > strftime('%s','now')
-```
-
-(This is the query the tests run through sqldir.)
+- A configuration with an `app_passwords` block, or `app_passwords = true` in a
+  client, is refused at start (`Unsupported block type`, `Unsupported
+  argument`): delete them.
+- A client asking for the `app_password` scope is refused, `invalid_scope`, at
+  `/authorize` and `/device_authorization` (a client credentials grant never
+  had it). `POST` and `DELETE /app-password` answer 404 and `authn-bridge
+  app-password` is not a command. The account page no longer lists or revokes
+  one, and the admin API's `Client` and `Revoked` messages lost their
+  `app_passwords` fields (the numbers are reserved).
+- bridge no longer opens, reads, writes or deletes the table. A password
+  already stored is not touched by bridge, which can no longer revoke it
+  (disabling a person or an institution does not reach it): it stops working
+  where it is checked, so remove the `users "sql"` block from go-fileshare's
+  configuration (with `ntlm = false` it could not answer anything anyway: an NT
+  hash is only good for NTLM) and drop the `app_passwords` table and its DSN
+  file.
 
 ## WireGuard keys, for a VPN such as claimward
 
@@ -1269,7 +1265,7 @@ with `grpc.health.v1` beside it:
 | `Status` | version, the federation's metadata (IdPs, valid until, last refresh, last error), what is held in memory |
 | `RefreshMetadata` | fetch the federation's metadata now |
 | `ListIdPs`, `ListClients` | what the institution list shows, and the configured relying parties |
-| `RevokePerson` | end somebody's refresh token families, the access tokens they bought, their device grants in progress and their application password, and revoke everything the certificate store holds for them: SSH and X.509 certificates (into the next KRL and CRL) and WireGuard keys |
+| `RevokePerson` | end somebody's refresh token families, the access tokens they bought and their device grants in progress, and revoke everything the certificate store holds for them: SSH and X.509 certificates (into the next KRL and CRL) and WireGuard keys |
 | `DisablePerson`, `EnablePerson` | refuse somebody here -- at login and at every token, whatever their institution says -- and revoke what they hold; optionally until a given time |
 | `DisableIdP`, `EnableIdP` | the same for everybody one institution vouches for: when its IdP is compromised, say. A metadata refresh does not lift it |
 | `ListDisabled` | who is disabled, why, by whom, until when |
@@ -1288,8 +1284,7 @@ identity of everybody known under that name, so another spelling from their
 IdP does not let them back in, and a person whose IdP releases no username
 is disabled by the `sub` a relying party knows them by -- public or pairwise,
 matched at every login, whether or not anything of theirs is still live here.
-Their application password and their SSF events reach every spelling of their
-name the provider handed out.
+Their SSF events reach every spelling of their name the provider handed out.
 
 Disabling is kept in a file, and refused without one -- somebody disabled
 until the next restart would be let back in by the next deployment:
@@ -1299,17 +1294,14 @@ disabled_file = "/var/lib/authn-bridge/disabled.json"   # written whole, mode 06
 ```
 
 A file that cannot be read stops the provider from starting, for the same
-reason. Disabling an institution also removes its people's application
-passwords: those set from this version on carry the IdP that vouched for
-them, and older ones are found by their scope when the username is scoped
-(eppn, subject-id).
+reason.
 
-⛔ A removed application password stops working in go-fileshare when it next
-reads its directory: at its `reload` interval, on SIGHUP, or when asked
-(`fileshare.admin.v1.AdminService/ReloadDirectory`, since fileshare v0.10.0),
-which also closes that person's open SMB, WebDAV and S3 sessions. Call it
-after `DisablePerson` for the effect to be immediate. Everything that comes
-back to this provider is refused at once.
+⛔ A person's SMB session is closed by go-fileshare, not here: the SSF event
+reaches it (`ssf_receiver`), or it is asked
+(`fileshare.admin.v1.AdminService/ReloadDirectory`, since fileshare v0.10.0).
+Call it after `DisablePerson` for the effect to be immediate, and note that a
+Kerberos ticket already issued is good until it expires (at most `validity`,
+ten hours). Everything that comes back to this provider is refused at once.
 
 SSH and X.509 certificates already issued are revoked with their person or
 institution: they are listed in **`GET /ssh/krl`** (an OpenSSH KRL, what
@@ -1359,7 +1351,7 @@ between bind and chmod, and never taken from an instance still running.
 ⛔ **What `RevokePerson` cannot end**: an access token already handed out is a
 signed statement a resource server checks on its own, valid there until it
 expires (an hour by default). Everything that comes back to this provider --
-a refresh, `/userinfo`, an SSH certificate or an application password asked
+a refresh, `/userinfo`, an SSH certificate or a Kerberos ticket asked
 with that token -- is refused at once; an SSH certificate already issued lasts
 its validity, which is why that is short.
 
@@ -1369,7 +1361,7 @@ go-fileshare: `/healthz` is up while the process answers; `/readyz` is ready
 while the federation's metadata is loaded and still valid (a provider past
 its `validUntil` knows no IdP); `/metrics` is Prometheus text 0.0.4 with
 `bridge_*` families -- logins by outcome, tokens by grant, SSH certificates,
-application passwords, metadata validity and refreshes, what is held in
+metadata validity and refreshes, what is held in
 memory. **No label names a person or an institution**: which universities'
 people use the service, and when, is not this provider's to publish.
 
@@ -1445,7 +1437,7 @@ identifier `sub` is derived from:
 
 subject-id, pairwise-id, eppn and correctly qualified identifiers are
 unchanged. A person in the two rows above is **a new person** to every relying
-party: their refresh grants, application passwords, WireGuard keys and
+party: their refresh grants, WireGuard keys and
 disable-by-sub entries no longer match. The change cannot be undone after the
 fact, since two old identifiers can map to one new one. Before upgrading, find
 the IdPs that release only those shapes (a log line `login: ... via <idp>` and

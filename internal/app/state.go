@@ -53,6 +53,8 @@ type stateBlock struct {
 	db *sql.DB
 }
 
+var sqlDrivers = map[string]string{"sqlite": "sqlite", "postgres": "pgx", "mysql": "mysql"}
+
 func (b *stateBlock) check() error {
 	if _, ok := sqlDrivers[b.Driver]; !ok {
 		return fmt.Errorf("driver %q: sqlite, postgres or mysql", b.Driver)

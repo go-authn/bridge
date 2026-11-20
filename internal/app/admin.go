@@ -174,7 +174,7 @@ func (a *adminServer) ListClients(ctx context.Context, _ *adminv1.ListClientsReq
 	for _, c := range a.s.cfg.Clients {
 		out.Clients = append(out.Clients, &adminv1.Client{
 			Id: c.ID, Name: c.Name, Public: c.public(), Subject: c.Subject, Audience: c.Audience,
-			Device: c.Device, SshCertificates: c.SSHCertificates, AppPasswords: c.AppPasswords,
+			Device: c.Device, SshCertificates: c.SSHCertificates,
 			RefreshLifetimeSeconds: int64(c.refreshTTL.Seconds()),
 		})
 	}
@@ -266,7 +266,7 @@ func disabledPB(username, entityID string, e disabledEntry) *adminv1.Disabled {
 func revokedPB(r revoked) *adminv1.Revoked {
 	return &adminv1.Revoked{
 		RefreshFamilies: int32(r.families), AccessTokens: int32(r.tokens),
-		Logins: int32(r.logins), AppPasswords: int32(r.appPasswords), Certificates: int32(r.certificates),
+		Logins: int32(r.logins), Certificates: int32(r.certificates),
 	}
 }
 

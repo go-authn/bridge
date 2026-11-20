@@ -459,7 +459,7 @@ func accountSubject(username string) map[string]any {
 }
 
 // peopleOf is every username this provider has a trace of for an IdP:
-// refresh families, honoured tokens, certificates, application passwords.
+// refresh families, honoured tokens, certificates.
 func (s *server) peopleOf(entityID string) []string {
 	seen := map[string]bool{}
 	s.refresh.each(func(_ string, g *refreshGrant) {
@@ -479,17 +479,6 @@ func (s *server) peopleOf(entityID string) []string {
 		}
 	}
 	s.certs.mu.Unlock()
-	if ap := s.cfg.AppPasswords; ap != nil {
-		if rows, err := ap.db.Query(`SELECT login FROM `+ap.Table+` WHERE idp = `+ap.arg(1), entityID); err == nil {
-			for rows.Next() {
-				var l string
-				if rows.Scan(&l) == nil {
-					seen[l] = true
-				}
-			}
-			rows.Close()
-		}
-	}
 	out := make([]string, 0, len(seen))
 	for u := range seen {
 		out = append(out, u)

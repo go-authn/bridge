@@ -46,35 +46,6 @@ func (f *fixture) drive(args ...string) (string, error) {
 	return "", nil
 }
 
-func TestAppPasswordCommand(t *testing.T) {
-	f, dsn := appFixture(t, `["nt_hash"]`)
-	cache := t.TempDir()
-	out, err := f.drive("app-password", "--issuer", f.s.cfg.Issuer, "--client", "files", "--cache", cache)
-	if err != nil || !strings.Contains(out, "username  alice@"+idpScope) || !strings.Contains(out, "shown once") {
-		t.Fatalf("%v\n%s", err, out)
-	}
-	if _, ok := people(t, dsn)["alice@"+idpScope]; !ok {
-		t.Fatal("the command did not set a password")
-	}
-	// Removed, from the cached login: no second code.
-	var buf bytes.Buffer
-	cmd := newRootCmd(&buf)
-	cmd.SetArgs([]string{"app-password", "--issuer", f.s.cfg.Issuer, "--client", "files", "--cache", cache, "--remove"})
-	if err := cmd.Execute(); err != nil || !strings.Contains(buf.String(), "removed") {
-		t.Fatalf("--remove: %v %s", err, buf.String())
-	}
-	if _, ok := people(t, dsn)["alice@"+idpScope]; ok {
-		t.Error("--remove left the password")
-	}
-	if _, err := runCmd(t, "app-password"); err == nil {
-		t.Error("app-password with no issuer")
-	}
-	// A client that may not set one: refused by the provider.
-	if _, err := f.drive("app-password", "--issuer", f.s.cfg.Issuer, "--client", "rclone", "--cache", t.TempDir()); err == nil {
-		t.Error("a client without app_passwords set one")
-	}
-}
-
 func TestTokenAndSSHCertCommands(t *testing.T) {
 	f, _ := sshFixture(t)
 	cache := t.TempDir()

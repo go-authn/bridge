@@ -5,7 +5,6 @@
 package app
 
 import (
-	"database/sql"
 	"errors"
 	"io"
 	"net/http"
@@ -24,23 +23,15 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// disableFixture is a provider with an admin socket, application passwords,
-// a device client and, unless noFile, a disabled file.
-func disableFixture(t *testing.T, noFile bool) (*fixture, adminv1.AdminServiceClient, string, string) {
+// disableFixture is a provider with an admin socket, a device client and,
+// unless noFile, a disabled file.
+func disableFixture(t *testing.T, noFile bool) (*fixture, adminv1.AdminServiceClient, string) {
 	t.Helper()
 	dir := t.TempDir()
-	dsn := filepath.ToSlash(filepath.Join(dir, "dsn"))
-	db := "file:" + filepath.ToSlash(filepath.Join(dir, "app.db"))
-	os.WriteFile(dsn, []byte(db), 0o600)
 	file := filepath.ToSlash(filepath.Join(dir, "disabled.json"))
 	extra := `
-app_passwords {
-  driver   = "sqlite"
-  dsn_file = "` + dsn + `"
-}
 client "files" {
   device           = true
-  app_passwords    = true
   refresh_lifetime = "720h"
 }
 client "plain" {
@@ -51,7 +42,7 @@ client "plain" {
 		extra += "disabled_file = \"" + file + "\"\n"
 	}
 	f, c, _, _ := adminFixture(t, extra)
-	return f, c, db, file
+	return f, c, file
 }
 
 // deviceStart takes a device grant as far as choosing an institution.
@@ -115,14 +106,11 @@ func (f *fixture) userinfoWorks(tok *oauth2.Token) bool {
 var bob = assertionOpts{eppn: "bob@" + idpScope}
 
 func TestAdminDisablePerson(t *testing.T) {
-	f, c, db, file := disableFixture(t, false)
+	f, c, file := disableFixture(t, false)
 	aliceName := "alice@" + idpScope
-	tok, err := f.deviceLogin(alice, "app_password")
+	tok, err := f.deviceLogin(alice)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if s, _ := setPassword(t, f, tok.AccessToken, http.MethodPost); s != http.StatusOK {
-		t.Fatalf("setting a password: %d", s)
 	}
 	// A client without refresh tokens: its access token is revoked on its
 	// own, not with a family.
@@ -139,7 +127,7 @@ func TestAdminDisablePerson(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Revoked.RefreshFamilies != 1 || r.Revoked.AccessTokens < 1 || r.Revoked.AppPasswords != 1 {
+	if r.Revoked.RefreshFamilies != 1 || r.Revoked.AccessTokens < 1 {
 		t.Errorf("revoked %+v", r.Revoked)
 	}
 	if !strings.HasPrefix(r.Disabled.By, "uid=") || r.Disabled.Reason != "compromised laptop" || r.Disabled.Until != nil {
@@ -149,9 +137,6 @@ func TestAdminDisablePerson(t *testing.T) {
 	// What she held is gone; what bob holds is not.
 	if f.refreshWorks(tok) || f.userinfoWorks(tok) {
 		t.Error("a disabled person's tokens still work")
-	}
-	if _, ok := people(t, db)[aliceName]; ok {
-		t.Error("a disabled person's application password is still there")
 	}
 	if !f.refreshWorks(bobTok) {
 		t.Error("disabling alice broke bob's refresh token")
@@ -209,7 +194,7 @@ func TestAdminDisablePerson(t *testing.T) {
 }
 
 func TestAdminDisableLapses(t *testing.T) {
-	f, c, _, _ := disableFixture(t, false)
+	f, c, _ := disableFixture(t, false)
 	until := time.Now().Add(time.Hour)
 	if _, err := c.DisablePerson(t.Context(), &adminv1.DisablePersonRequest{Username: "alice@" + idpScope, Until: timestamppb.New(until)}); err != nil {
 		t.Fatal(err)
@@ -241,7 +226,7 @@ func TestAdminDisableLapses(t *testing.T) {
 // With no file to keep it in, a disabling is refused, not kept in memory
 // until the next restart.
 func TestAdminDisableNeedsAFile(t *testing.T) {
-	f, c, _, _ := disableFixture(t, true)
+	f, c, _ := disableFixture(t, true)
 	_, err := c.DisablePerson(t.Context(), &adminv1.DisablePersonRequest{Username: "alice@" + idpScope})
 	if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "disabled_file") {
 		t.Errorf("%v, want FailedPrecondition naming disabled_file", err)
@@ -255,42 +240,21 @@ func TestAdminDisableNeedsAFile(t *testing.T) {
 }
 
 func TestAdminDisableIdP(t *testing.T) {
-	f, c, db, _ := disableFixture(t, false)
-	tok, err := f.deviceLogin(alice, "app_password")
+	f, c, _ := disableFixture(t, false)
+	tok, err := f.deviceLogin(alice)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if s, _ := setPassword(t, f, tok.AccessToken, http.MethodPost); s != http.StatusOK {
-		t.Fatalf("setting a password: %d", s)
-	}
-	// Two rows from before the idp column: one in the university's scope,
-	// one in another IdP's.
-	sq, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sq.Close()
-	for _, l := range []string{"carol@" + idpScope, "dave@other-univ.example"} {
-		if _, err := sq.Exec(`INSERT INTO app_passwords (login, nt_hash, expires) VALUES (?, ?, ?)`, l, strings.Repeat("0", 32), time.Now().Add(time.Hour).Unix()); err != nil {
-			t.Fatal(err)
-		}
 	}
 
 	r, err := c.DisableIdP(t.Context(), &adminv1.DisableIdPRequest{EntityId: idpEntity, Reason: "IdP compromised"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Revoked.RefreshFamilies != 1 || r.Revoked.AppPasswords != 2 {
+	if r.Revoked.RefreshFamilies != 1 {
 		t.Errorf("revoked %+v", r.Revoked)
 	}
 	if f.refreshWorks(tok) || f.userinfoWorks(tok) {
 		t.Error("tokens from a disabled IdP still work")
-	}
-	left := people(t, db)
-	for l, want := range map[string]bool{"alice@" + idpScope: false, "carol@" + idpScope: false, "dave@other-univ.example": true} {
-		if _, ok := left[l]; ok != want {
-			t.Errorf("%s's application password: present %v, want %v", l, ok, want)
-		}
 	}
 
 	// Its people cannot log in, nor even be sent to it; the institution
@@ -349,7 +313,7 @@ func TestDisabledFileUnreadable(t *testing.T) {
 // A device grant approved at the IdP and not yet collected is a login in
 // progress: disabling ends it, and the device gets nothing.
 func TestAdminDisableEndsPendingDevice(t *testing.T) {
-	f, c, _, _ := disableFixture(t, false)
+	f, c, _ := disableFixture(t, false)
 	b, cfg, da, next := f.deviceStart("files")
 	if strings.HasSuffix(next.Path, "/saml/choose") {
 		next = location(t, b.get(f.s.cfg.Issuer+"/saml/disco?entityID="+idpEntity))
@@ -369,7 +333,7 @@ func TestAdminDisableEndsPendingDevice(t *testing.T) {
 // An institution the metadata does not list can be disabled ahead of the
 // metadata that brings it; it is listed with its end.
 func TestAdminDisableUnknownIdP(t *testing.T) {
-	_, c, _, _ := disableFixture(t, false)
+	_, c, _ := disableFixture(t, false)
 	until := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 	if _, err := c.DisableIdP(t.Context(), &adminv1.DisableIdPRequest{EntityId: "https://idp.not-yet.example/idp", Until: timestamppb.New(until)}); err != nil {
 		t.Fatal(err)
@@ -391,7 +355,7 @@ func TestAdminDisableUnknownIdP(t *testing.T) {
 // A disabled_file that cannot be written: the admin API says so, and nothing
 // is in force.
 func TestAdminDisableFileUnwritable(t *testing.T) {
-	f, c, _, file := disableFixture(t, false)
+	f, c, file := disableFixture(t, false)
 	if _, err := c.DisablePerson(t.Context(), &adminv1.DisablePersonRequest{Username: "alice@" + idpScope}); err != nil {
 		t.Fatal(err)
 	}
@@ -430,47 +394,5 @@ func TestNormUsername(t *testing.T) {
 		if got := s.normUsername(c.in); got != c.want {
 			t.Errorf("%s %q: %q, want %q", c.attr, c.in, got, c.want)
 		}
-	}
-}
-
-// A table from before the idp column gets it, keeps its rows, and a
-// password set afterwards records its IdP.
-func TestAppPasswordsTableGainsIdP(t *testing.T) {
-	dir := t.TempDir()
-	db := "file:" + filepath.ToSlash(filepath.Join(dir, "app.db"))
-	dsn := filepath.Join(dir, "dsn")
-	os.WriteFile(dsn, []byte(db), 0o600)
-	sq, err := sql.Open("sqlite", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sq.Close()
-	if _, err := sq.Exec(`CREATE TABLE app_passwords (login VARCHAR(255) NOT NULL PRIMARY KEY, password VARCHAR(255), nt_hash VARCHAR(32), expires BIGINT NOT NULL)`); err != nil {
-		t.Fatal(err)
-	}
-	sq.Exec(`INSERT INTO app_passwords (login, expires) VALUES ('old@` + idpScope + `', 1)`)
-	b := &appPasswordsBlock{Driver: "sqlite", DSNFile: dsn}
-	if err := b.check(); err != nil {
-		t.Fatal(err)
-	}
-	defer b.db.Close()
-	// A second start, the column already there. Its own handle, closed: on
-	// Windows an open handle keeps the file from being removed.
-	again := &appPasswordsBlock{Driver: "sqlite", DSNFile: dsn}
-	if err := again.check(); err != nil {
-		t.Fatalf("a second start, the column already there: %v", err)
-	}
-	again.db.Close()
-	if err := b.set("new@"+idpScope, idpEntity, "pw", time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	var idp sql.NullString
-	sq.QueryRow(`SELECT idp FROM app_passwords WHERE login = 'new@` + idpScope + `'`).Scan(&idp)
-	if idp.String != idpEntity {
-		t.Errorf("idp recorded %q", idp.String)
-	}
-	n, err := b.removeIdP(idpEntity, []string{idpScope})
-	if err != nil || n != 2 {
-		t.Errorf("removed %d %v, want the new row by its IdP and the old by its scope", n, err)
 	}
 }

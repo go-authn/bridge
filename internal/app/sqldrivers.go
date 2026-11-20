@@ -2,7 +2,7 @@
 
 package app
 
-// The database drivers the app_passwords block can use, imported by the
+// The database drivers the state block can use, imported by the
 // program and not by a library, as in go-authn/authnd: a driver is a choice a
 // deployment makes.
 import (

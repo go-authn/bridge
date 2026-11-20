@@ -349,16 +349,21 @@ func audience(aud []string) any {
 const spentFamily = "family:"
 
 // bridgeScopes are the scopes that open an endpoint of this provider's own:
-// an SSH certificate, an NFS certificate, an application password, a
-// WireGuard key, the list of WireGuard keys.
-var bridgeScopes = []string{"ssh", "nfs", "kerberos", "app_password", "wireguard", "wireguard_peers"}
+// an SSH certificate, an NFS certificate, a Kerberos ticket, a WireGuard key,
+// the list of WireGuard keys.
+var bridgeScopes = []string{"ssh", "nfs", "kerberos", "wireguard", "wireguard_peers"}
+
+// appPasswordsGone is what a client asking for the scope "app_password" is
+// told: this provider has no passwords of any kind to give (v0.30.0).
+const appPasswordsGone = "application passwords no longer exist: this provider issues no password; SMB uses a Kerberos ticket (scope kerberos)"
 
 // accessAudience is who an access token is for (RFC 9068 3: aud names the
 // resource). A token carrying a bridge scope is for THIS provider alone:
 // addressed to the client's resource servers as well, any of them could
 // replay it here -- measured, a token for fileshare reset the person's
-// application password -- and one a resource server receives never names
-// this provider.
+// application password (then a thing; since v0.30.0 an SSH certificate or a
+// ticket is what one would buy) -- and one a resource server receives never
+// names this provider.
 func (s *server) accessAudience(client *clientBlock, scopes []string) any {
 	for _, sc := range bridgeScopes {
 		if slices.Contains(scopes, sc) {

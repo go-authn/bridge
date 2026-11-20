@@ -95,7 +95,6 @@ func (s *server) ready() bool { return s.fed.Metadata() != nil }
 // revoked is what revokePerson ended.
 type revoked struct {
 	families, tokens, logins int
-	appPasswords             int64
 	certificates             int
 }
 
@@ -106,7 +105,7 @@ type revoked struct {
 // resource server checks on its own, and one already handed out stays valid
 // there until it expires (an hour by default). What ends here is everything
 // that comes back to THIS provider -- a refresh, /userinfo, an SSH
-// certificate or an application password asked with that token -- so the
+// certificate or a Kerberos ticket asked with that token -- so the
 // person gets nothing new; and an SSH certificate already issued lasts its
 // validity, which is why that is short.
 func (s *server) revokePerson(username string, subjects ...string) (revoked, error) {
@@ -115,8 +114,8 @@ func (s *server) revokePerson(username string, subjects ...string) (revoked, err
 		return revoked{}, nil
 	}
 	// To whoever verifies this provider's tokens on their own (ssf.go)
-	// FIRST: a step below failing -- the certificates file, the application
-	// password table -- must not leave them uninformed, again at every retry.
+	// FIRST: a step below failing -- the certificates file -- must not leave
+	// them uninformed, again at every retry.
 	if username != "" && len(subjects) == 0 {
 		subjects = s.subjectsOf(username)
 	}
@@ -136,20 +135,13 @@ func (s *server) revokePerson(username string, subjects ...string) (revoked, err
 	} else {
 		r.certificates = n
 	}
-	if ap := s.cfg.AppPasswords; ap != nil && username != "" {
-		if n, err := ap.removeCount(username); err != nil {
-			errs = append(errs, fmt.Errorf("removing the application password: %w", err))
-		} else {
-			r.appPasswords = n
-		}
-	}
-	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
-		username, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
+	s.logf("revoked %s: %d refresh families, %d access tokens, %d logins, %d certificates",
+		username, r.families, r.tokens, r.logins, r.certificates)
 	return r, errors.Join(errs...)
 }
 
 // revokeIdP ends everything this provider still holds for the people one
-// institution vouched for, application passwords included.
+// institution vouched for.
 func (s *server) revokeIdP(entityID string) (revoked, error) {
 	r := s.revokeMatching(func(_, idp, _ string) bool { return idp == entityID })
 	// Every step is tried, whatever an earlier one did.
@@ -159,21 +151,8 @@ func (s *server) revokeIdP(entityID string) (revoked, error) {
 	} else {
 		r.certificates = n
 	}
-	if ap := s.cfg.AppPasswords; ap != nil {
-		var scopes []string
-		if md := s.fed.Metadata(); md != nil && scopedUsername[s.cfg.Claims.Username] {
-			if i, ok := md.IdPs[entityID]; ok {
-				scopes = i.Scopes
-			}
-		}
-		if n, err := ap.removeIdP(entityID, scopes); err != nil {
-			errs = append(errs, fmt.Errorf("removing application passwords: %w", err))
-		} else {
-			r.appPasswords = n
-		}
-	}
-	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d app passwords, %d certificates",
-		entityID, r.families, r.tokens, r.logins, r.appPasswords, r.certificates)
+	s.logf("revoked IdP %s: %d refresh families, %d access tokens, %d logins, %d certificates",
+		entityID, r.families, r.tokens, r.logins, r.certificates)
 	return r, errors.Join(errs...)
 }
 

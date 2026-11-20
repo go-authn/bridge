@@ -60,7 +60,6 @@ var counterHelp = map[string][2]string{
 	"bridge_tokens_issued_total":       {"Token responses, by grant type.", "grant"},
 	"bridge_ssh_certificates_total":    {"SSH certificates signed.", ""},
 	"bridge_x509_certificates_total":   {"X.509 client certificates issued, for NFS.", ""},
-	"bridge_app_passwords_total":       {"Application passwords set or removed.", "op"},
 	"bridge_state_rows_rejected_total": {"State rows the database refuses for good, given up (not persisted), by kind of operation.", "kind"},
 }
 

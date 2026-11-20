@@ -148,10 +148,6 @@ type config struct {
 	// own. Absent, there are none.
 	Metrics *metricsBlock `hcl:"metrics,block"`
 
-	// AppPasswords gives federated people a password for the protocols that
-	// cannot carry a token: SMB and S3.
-	AppPasswords *appPasswordsBlock `hcl:"app_passwords,block"`
-
 	// Lifetimes. The defaults are short on purpose: a bearer token is
 	// whoever holds it, and the federation says nothing when somebody
 	// leaves.
@@ -399,10 +395,6 @@ type clientBlock struct {
 	// public sub, one of the two formats the CAEP Interoperability Profile
 	// (2.5) has transmitters send.
 	SSFSubjectFormat string `hcl:"ssf_subject_format,optional"`
-
-	// AppPasswords lets tokens of this client, with the "app_password"
-	// scope, set the person's application password.
-	AppPasswords bool `hcl:"app_passwords,optional"`
 
 	// PKCE is "required" (the default): every authorization request carries
 	// an S256 code_challenge. "or_nonce" lets a CONFIDENTIAL client send an
@@ -668,7 +660,7 @@ func (c *config) check() error {
 	// subject-id are, by go-authn/saml): with two IdPs, one names the
 	// other's people -- measured, another university's IdP got a token
 	// for alice@univ-example.example, and with it their SSH certificate and their
-	// application password. So only with exactly one IdP.
+	// Kerberos principal. So only with exactly one IdP.
 	// ⛔ With local accounts there are two kinds of person, and uid and mail
 	// are not scoped: the IdP's uid "alice" and the local login "alice" would
 	// be one name for two people, at every relying party that matches on
@@ -797,11 +789,6 @@ func (c *config) check() error {
 			return fmt.Errorf("ssf: %w", err)
 		}
 	}
-	if c.AppPasswords != nil {
-		if err := c.AppPasswords.check(); err != nil {
-			return fmt.Errorf("app_passwords: %w", err)
-		}
-	}
 
 	if len(c.Clients) == 0 {
 		return errors.New("no client block: nobody could ask this provider for anything")
@@ -854,9 +841,6 @@ func (c *config) check() error {
 			if ru.Scheme == "http" && !loopbackHost(ru.Hostname()) {
 				return fmt.Errorf("client %q: redirect URI %q: a code sent over cleartext http is a code anybody on the path has", cl.ID, r)
 			}
-		}
-		if cl.AppPasswords && c.AppPasswords == nil {
-			return fmt.Errorf("client %q: app_passwords needs an app_passwords block", cl.ID)
 		}
 		if cl.SSHCertificates && c.SSHCA == nil {
 			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)
@@ -986,18 +970,14 @@ func loopbackHost(h string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// close releases what the configuration opened: the application passwords'
-// database. A *sql.DB left open is a file Windows will not delete and a
-// connection pool a server never gives back.
+// close releases what the configuration opened: the state database. A *sql.DB
+// left open is a file Windows will not delete and a connection pool a server
+// never gives back.
 func (c *config) close() error {
-	var err error
-	if c.AppPasswords != nil && c.AppPasswords.db != nil {
-		err = c.AppPasswords.db.Close()
-	}
 	if c.State != nil && c.State.db != nil {
-		err = errors.Join(err, c.State.db.Close())
+		return c.State.db.Close()
 	}
-	return err
+	return nil
 }
 
 // tokenGroups is whether this client's access tokens carry the person's

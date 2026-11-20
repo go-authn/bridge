@@ -207,7 +207,6 @@ func newRootCmd(out io.Writer) *cobra.Command {
 	root.AddCommand(newTokenCmd(out))
 	root.AddCommand(newSSHCertCmd(out))
 	root.AddCommand(newNFSCertCmd(out))
-	root.AddCommand(newAppPasswordCmd(out))
 	root.AddCommand(newLocalAccountCmd(func() []string { return files }))
 	return root
 }

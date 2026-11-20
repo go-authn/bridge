@@ -155,22 +155,24 @@ func TestStateWriteNotTakenIsNotReady(t *testing.T) {
 func TestSSFToldEvenWhenARevocationStepFails(t *testing.T) {
 	f := ssfFixture(t)
 	dir := t.TempDir()
-	dsn := filepath.Join(dir, "dsn")
-	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(dir, "ap.db"))), 0o600)
-	ap := &appPasswordsBlock{Driver: "sqlite", DSNFile: dsn}
-	if err := ap.check(); err != nil {
-		t.Fatal(err)
+	// A certificate recorded for alice, in a store whose file can no longer
+	// be written: revoking it fails.
+	file := filepath.Join(dir, "certs.json")
+	os.WriteFile(file, []byte("x"), 0o600)
+	f.s.certs.path = filepath.Join(file, "under-a-file.json")
+	f.s.certs.Certs = append(f.s.certs.Certs, issuedCert{Kind: "ssh", Serial: "1", Principal: "alice@" + idpScope, IdP: idpEntity, NotAfter: time.Now().Add(time.Hour)})
+	// Control, before any receiver listens: somebody with no certificate
+	// revokes without error, so the failure below is the certificate step.
+	if _, err := f.s.revokePerson("nobody@" + idpScope); err != nil {
+		t.Fatalf("control: %v", err)
 	}
-	defer ap.db.Close()
-	ap.db.Exec(`DROP TABLE app_passwords`)
-	f.s.cfg.AppPasswords = ap
 	c := f.ssfClient(t, "fileshare-ssf")
 	stream, err := c.CreateConfig(t.Context(), &ssfStreamConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.s.revokePerson("alice@" + idpScope); err == nil {
-		t.Fatal("the application password table is gone, and nothing said so")
+		t.Fatal("the certificate store cannot be written, and nothing said so")
 	}
 	if got := pollAll(t, c, f.setVerifier(t), stream.StreamID); len(got) != 1 {
 		t.Errorf("%d events: the receivers were not told", len(got))

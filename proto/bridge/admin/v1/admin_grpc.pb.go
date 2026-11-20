@@ -53,7 +53,7 @@ type AdminServiceClient interface {
 	ListClients(ctx context.Context, in *ListClientsRequest, opts ...grpc.CallOption) (*ListClientsResponse, error)
 	// RevokePerson ends everything this provider still holds for somebody:
 	// their refresh token families, the access tokens those bought, their
-	// logins and device grants in progress, and their application password.
+	// logins and device grants in progress.
 	RevokePerson(ctx context.Context, in *RevokePersonRequest, opts ...grpc.CallOption) (*RevokePersonResponse, error)
 	// DisablePerson stops somebody logging in and getting tokens here, and
 	// revokes what they still hold (as RevokePerson). Their institution still
@@ -195,7 +195,7 @@ type AdminServiceServer interface {
 	ListClients(context.Context, *ListClientsRequest) (*ListClientsResponse, error)
 	// RevokePerson ends everything this provider still holds for somebody:
 	// their refresh token families, the access tokens those bought, their
-	// logins and device grants in progress, and their application password.
+	// logins and device grants in progress.
 	RevokePerson(context.Context, *RevokePersonRequest) (*RevokePersonResponse, error)
 	// DisablePerson stops somebody logging in and getting tokens here, and
 	// revokes what they still hold (as RevokePerson). Their institution still

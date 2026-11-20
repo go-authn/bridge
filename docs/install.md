@@ -152,8 +152,8 @@ chmod 0640 /etc/authn-bridge/*
 ```
 
 Give the secret to the relying party. The README covers the rest of the
-configuration: claims, TLS and ACME, SSH and X.509 certificates, application
-passwords, the admin API and metrics.
+configuration: claims, TLS and ACME, SSH and X.509 certificates, Kerberos
+tickets for SMB, the admin API and metrics.
 
 Check the configuration and the federation's metadata as the service will
 read them. Then print the SP metadata to register with the federation:
