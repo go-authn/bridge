@@ -1,6 +1,6 @@
 module github.com/go-authn/bridge/conformance
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/beevik/etree v1.8.1
