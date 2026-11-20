@@ -5,6 +5,20 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+Removed (breaking, v0.30.0):
+
+- **Application passwords, completely.** This provider issues no password of
+  any kind. Gone: the `app_passwords` block and the client's
+  `app_passwords = true` (a configuration that has either is refused at start),
+  the `app_password` scope (`invalid_scope` at `/authorize` and
+  `/device_authorization`), `/app-password` (404), the `authn-bridge
+  app-password` command, the account page's row and revocation, the
+  `bridge_app_passwords_total` metric, and the `app_passwords` fields of the
+  admin API's `Client` and `Revoked` (field numbers reserved). SMB uses a
+  Kerberos ticket (`kerberos` block), S3 temporary credentials. Passwords
+  already stored are no longer reached by bridge: remove go-fileshare's
+  `users "sql"` block and drop the table. See "No passwords" in the README.
+
 Fixed:
 
 - **An `accounts_file` that `--config` reads as configuration is refused**

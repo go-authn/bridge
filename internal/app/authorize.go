@@ -106,8 +106,10 @@ func (s *server) authorize(w http.ResponseWriter, r *http.Request) {
 		fail("invalid_scope", "the wireguard_peers scope is for a gateway's client credentials, not for a login")
 		return
 	}
-	if slices.Contains(scopes, "app_password") && !client.AppPasswords {
-		fail("invalid_scope", "this client may not set application passwords")
+	// Application passwords are gone (v0.30.0): a client still asking for the
+	// scope learns it here, not by a token that opens nothing.
+	if slices.Contains(scopes, "app_password") {
+		fail("invalid_scope", appPasswordsGone)
 		return
 	}
 	// ⛔ PKCE, S256, for every client. RFC 7636 4.3 makes "plain" the

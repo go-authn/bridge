@@ -142,7 +142,7 @@ func notAddressedHere(w http.ResponseWriter) {
 // no IdP, since the token it read the IdP from was gone, so a later DisableIdP
 // missed it too. The disabling is recorded before anything is revoked, so
 // either its revocation saw this certificate or this sees the disabling, as
-// application passwords already do. Found by a security review.
+// the Kerberos endpoint does. Found by a security review.
 func (s *server) withdrawn(w http.ResponseWriter, jti, user, kind, serial string, now time.Time) bool {
 	it, live := s.issued.get(jti)
 	if live && s.refused(&person{username: user, idp: it.idp}) == "" {

@@ -118,37 +118,21 @@ func TestAdminStatusAndLists(t *testing.T) {
 }
 
 // RevokePerson ends what comes back to this provider: the refresh token no
-// longer refreshes, the access token no longer answers at /userinfo, and
-// the application password is gone.
+// longer refreshes, and the access token no longer answers at /userinfo.
 func TestAdminRevokePerson(t *testing.T) {
-	dir := t.TempDir()
-	dsn := filepath.ToSlash(filepath.Join(dir, "dsn"))
-	db := "file:" + filepath.ToSlash(filepath.Join(dir, "app.db"))
-	os.WriteFile(dsn, []byte(db), 0o600)
 	f, c, _, _ := adminFixture(t, `
-app_passwords {
-  driver   = "sqlite"
-  dsn_file = "`+dsn+`"
-}
 client "files" {
   device           = true
-  app_passwords    = true
   refresh_lifetime = "720h"
 }
 `)
-	tok := f.deviceToken("files", "openid", "app_password")
-	if s, _ := setPassword(t, f, tok.AccessToken, http.MethodPost); s != http.StatusOK {
-		t.Fatalf("setting a password: %d", s)
-	}
-	if _, ok := people(t, db)["alice@"+idpScope]; !ok {
-		t.Fatal("no password was set")
-	}
+	tok := f.deviceToken("files", "openid")
 
 	r, err := c.RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "alice@" + idpScope})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v := r.Revoked; v.RefreshFamilies != 1 || v.AccessTokens < 1 || v.AppPasswords != 1 {
+	if v := r.Revoked; v.RefreshFamilies != 1 || v.AccessTokens < 1 {
 		t.Errorf("revoked %+v", r)
 	}
 	ep, _ := endpoints(t.Context(), f.s.cfg.Issuer)
@@ -160,9 +144,6 @@ client "files" {
 	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 	if res, _ := http.DefaultClient.Do(req); res.StatusCode != http.StatusUnauthorized {
 		t.Error("a revoked person's access token still answers at /userinfo")
-	}
-	if _, ok := people(t, db)["alice@"+idpScope]; ok {
-		t.Error("a revoked person's application password is still there")
 	}
 	// Nobody to revoke is not an error; no name is.
 	if r, err := c.RevokePerson(t.Context(), &adminv1.RevokePersonRequest{Username: "nobody@x"}); err != nil || r.Revoked.RefreshFamilies != 0 {

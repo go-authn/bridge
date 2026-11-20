@@ -166,7 +166,7 @@ func TestLocalGrantsRefusedAfterPasskeyRemoved(t *testing.T) {
 	}
 
 	// Removing the last one ends everything the account bought, including what
-	// the store keeps without a passkey (an application password, a certificate).
+	// the store keeps without a passkey (a certificate).
 	if why := f.s.refused(&person{username: "alice", idp: f.s.cfg.Issuer + "/local"}); why != "" {
 		t.Fatalf("control: with a passkey left alice is refused: %s", why)
 	}

@@ -276,6 +276,7 @@ func TestAuthorizeRefusals(t *testing.T) {
 		"no openid":           {edit(map[string]string{"scope": "profile"}), "invalid_scope"},
 		"ssh, not allowed":    {edit(map[string]string{"scope": "openid ssh"}), "invalid_scope"},
 		"nfs, not allowed":    {edit(map[string]string{"scope": "openid nfs"}), "invalid_scope"},
+		"app_password, gone":  {edit(map[string]string{"scope": "openid app_password"}), "invalid_scope"},
 		"prompt none + login": {edit(map[string]string{"prompt": "none login"}), "invalid_request"},
 		"a request object":    {edit(map[string]string{"request": "eyJ..."}), "request_not_supported"},
 	} {

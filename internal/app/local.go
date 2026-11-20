@@ -348,7 +348,7 @@ func (s *server) localAccountGone(who *person) bool {
 		return true
 	}
 	if who.credential == "" {
-		// An application password or a certificate: what the store keeps of
+		// A certificate or a key: what the store keeps of
 		// them is the login and the IdP, not the passkey. They are held to the
 		// account having a passkey at all -- remove the last and they stop.
 		have, err := s.passkeys.passkeys(who.username)

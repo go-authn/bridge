@@ -30,7 +30,7 @@ import (
 // Disabling is enforced where anything is handed out: at the end of a
 // login (acs), and in issue(), which every grant goes through (code,
 // refresh, device). What was handed out before is revoked at the same time,
-// so the bearer paths (/userinfo, SSH certificates, application passwords),
+// so the bearer paths (/userinfo, SSH certificates, Kerberos tickets),
 // which all ask s.issued, refuse too.
 //
 // ⛔ Kept in a file, and not without one: a person disabled until the
@@ -270,7 +270,7 @@ func (s *server) refused(who *person) string {
 		return "institution disabled"
 	case !configuredIdP(s.cfg, who.idp):
 		// Grants outlive a restart and a configuration change: a refresh
-		// token, an app password or an SSH certificate bought through an IdP
+		// token, a Kerberos ticket or an SSH certificate bought through an IdP
 		// that was since removed from saml { idps } is held to the
 		// configuration now, as a new login is (acs.go).
 		return "institution not configured"

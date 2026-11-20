@@ -24,7 +24,7 @@ service AdminService {
   rpc ListClients(ListClientsRequest) returns (ListClientsResponse);
   // RevokePerson ends everything this provider still holds for somebody:
   // their refresh token families, the access tokens those bought, their
-  // logins and device grants in progress, and their application password.
+  // logins and device grants in progress.
   rpc RevokePerson(RevokePersonRequest) returns (RevokePersonResponse);
   // DisablePerson stops somebody logging in and getting tokens here, and
   // revokes what they still hold (as RevokePerson). Their institution still
@@ -117,7 +117,9 @@ message Client {
   repeated string audience = 5;
   bool device = 6;
   bool ssh_certificates = 7;
-  bool app_passwords = 8;
+  // 8 was app_passwords: application passwords no longer exist (v0.30.0).
+  reserved 8;
+  reserved "app_passwords";
   // refresh_lifetime_seconds is 0 when the client has no refresh tokens.
   int64 refresh_lifetime_seconds = 9;
 }
@@ -138,7 +140,9 @@ message Revoked {
   int32 access_tokens = 2;
   // logins are logins and device grants in progress.
   int32 logins = 3;
-  int32 app_passwords = 4;
+  // 4 was app_passwords: application passwords no longer exist (v0.30.0).
+  reserved 4;
+  reserved "app_passwords";
   // certificates are the SSH and X.509 certificates revoked: listed in
   // /ssh/krl and /x509/crl until they expire.
   int32 certificates = 5;

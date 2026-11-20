@@ -23,7 +23,7 @@ func samplePages() map[string]map[string]any {
 	}
 	access := []accountAccess{
 		{What: "access.kind.ssh", Detail: "SHA256:aBcD…", Expires: "2026-11-19 08:00 UTC", Arg: `{"kind":"ssh"}`},
-		{What: "access.kind.app_password", Detail: "SMB", Expires: "2026-12-01 00:00 UTC", Arg: `{"kind":"app"}`},
+		{What: "access.kind.wireguard", Detail: "laptop", Expires: "2026-12-01 00:00 UTC", Arg: `{"kind":"wireguard"}`},
 	}
 	signed := func(local bool) map[string]any {
 		m := map[string]any{

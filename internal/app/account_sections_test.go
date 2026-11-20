@@ -9,7 +9,6 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -254,10 +253,7 @@ func TestAccountApplicationsAreListedAndRevoked(t *testing.T) {
 
 func TestAccountTechnicalAccess(t *testing.T) {
 	dir := t.TempDir()
-	dsn := filepath.Join(dir, "dsn")
-	os.WriteFile(dsn, []byte("file:"+filepath.ToSlash(filepath.Join(dir, "app.db"))), 0o600)
-	f := localFixture(t, fmt.Sprintf("certificates_file = %q\napp_passwords {\n  driver   = \"sqlite\"\n  dsn_file = %q\n}\n",
-		filepath.ToSlash(filepath.Join(dir, "certs.json")), filepath.ToSlash(dsn)))
+	f := localFixture(t, fmt.Sprintf("certificates_file = %q\n", filepath.ToSlash(filepath.Join(dir, "certs.json"))))
 	idp := f.s.cfg.localEntityID()
 	now := time.Now()
 	for _, c := range []issuedCert{
@@ -270,18 +266,12 @@ func TestAccountTechnicalAccess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := f.s.cfg.AppPasswords.set("alice", idp, "a-password", now.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.s.cfg.AppPasswords.set("bob", idp, "another", now.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
 	alice := f.enrolled("alice", webauthn.AlgES256)
 	s := f.signedIn(alice, "alice")
 
 	_, page := f.accountPage(s.cookie)
 	page = html.UnescapeString(page)
-	for _, want := range []string{"alice-laptop", "alice-wg", "Mot de passe d'application"} {
+	for _, want := range []string{"alice-laptop", "alice-wg"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the technical access lacks %q:\n%s", want, page)
 		}
@@ -329,22 +319,10 @@ func TestAccountTechnicalAccess(t *testing.T) {
 	if st, _ := f.acctPost(s, "/account/access/revoke", map[string]any{"kind": "wireguard", "id": "wgkeyalice"}); st != http.StatusOK || !revoked("wgkeyalice") {
 		t.Errorf("revoking her WireGuard key: %d", st)
 	}
-	// The application password: hers goes, bob's stays.
-	count := func() (n int) {
-		f.s.cfg.AppPasswords.db.QueryRow(`SELECT COUNT(*) FROM ` + f.s.cfg.AppPasswords.Table).Scan(&n)
-		return
-	}
-	if count() != 2 {
-		t.Fatalf("%d application passwords", count())
-	}
-	if st, _ := f.acctPost(s, "/account/access/revoke", map[string]any{"kind": "app_password", "id": "-"}); st != http.StatusOK || count() != 1 {
-		t.Errorf("revoking her application password: %d, %d left", st, count())
-	}
+	// Application passwords no longer exist: the kind is an unknown one.
+	f.resetThrottle()
 	if st, _ := f.acctPost(s, "/account/access/revoke", map[string]any{"kind": "app_password", "id": "-"}); st != http.StatusNotFound {
-		t.Errorf("revoking it twice: %d, want 404", st)
-	}
-	if _, ok := f.s.cfg.AppPasswords.expiry("bob"); !ok {
-		t.Error("alice revoked bob's application password")
+		t.Errorf("revoking an application password: %d, want 404", st)
 	}
 	if _, page := f.accountPage(s.cookie); strings.Contains(page, "alice-laptop") || strings.Contains(page, "alice-wg") {
 		t.Error("what was revoked is still listed")

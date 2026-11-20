@@ -30,7 +30,7 @@ import (
 //	POST /account/removal/cancel         cancel a pending removal (any of the account's keys)
 //	POST /account/profile                the display name (local accounts); mail and groups are refused
 //	POST /account/apps/revoke            end one application session, or all
-//	POST /account/access/revoke          revoke an application password, SSH certificate, WireGuard key
+//	POST /account/access/revoke          revoke an SSH certificate, WireGuard key
 //	POST /account/signout                end the confirmation
 //	GET  /account/passkey.js             the page's one script
 //	GET  /local/account                  redirects to /account
@@ -261,7 +261,7 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 	view["Apps"] = apps
 
 	access := s.accessOf(who)
-	view["Access"], view["AccessOn"] = access, s.cfg.AppPasswords != nil || s.certs.path != ""
+	view["Access"], view["AccessOn"] = access, s.certs.path != ""
 	w.WriteHeader(http.StatusOK)
 	s.show(w, "account", view)
 }
@@ -290,17 +290,11 @@ func (s *server) grantsOf(who *person) []*refreshGrant {
 	return out
 }
 
-// accessOf is what the person holds that is not an OIDC session: an
-// application password, and the certificates and keys this provider issued.
+// accessOf is what the person holds that is not an OIDC session: the
+// certificates and keys this provider issued.
 func (s *server) accessOf(who *person) []accountAccess {
 	var out []accountAccess
 	now := s.now()
-	if ap := s.cfg.AppPasswords; ap != nil && who.username != "" {
-		if exp, ok := ap.expiry(who.username); ok && now.Before(exp) {
-			out = append(out, accountAccess{Kind: "app_password", What: "access.kind.app_password",
-				Expires: exp.UTC().Format(accountTimeLayout), Arg: jsonArg(map[string]string{"kind": "app_password", "id": "-"})})
-		}
-	}
 	for _, c := range s.certs.liveWhere(s.ownedBy(who), now) {
 		what := map[string]string{"ssh": "access.kind.ssh", "x509": "access.kind.x509", "wireguard": "access.kind.wireguard"}[c.Kind]
 		if what == "" {
@@ -847,9 +841,8 @@ func (s *server) accountAppsRevoke(w http.ResponseWriter, r *http.Request) {
 
 // ---- technical access ----
 
-// accountAccessRevoke revokes one of the person's application password, SSH
-// certificate, X.509 certificate or WireGuard key, in the stores they were
-// issued into.
+// accountAccessRevoke revokes one of the person's SSH certificate, X.509
+// certificate or WireGuard key, in the stores they were issued into.
 func (s *server) accountAccessRevoke(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CSRF string `json:"csrf"`
@@ -864,26 +857,6 @@ func (s *server) accountAccessRevoke(w http.ResponseWriter, r *http.Request) {
 	notFound := func() {
 		s.localLimit.failed(s.clientAddr(r), "")
 		http.Error(w, "no such access", http.StatusNotFound)
-	}
-	if req.Kind == "app_password" {
-		ap := s.cfg.AppPasswords
-		if ap == nil || who.username == "" {
-			notFound()
-			return
-		}
-		n, err := ap.removeCount(who.username)
-		if err != nil {
-			s.logf("account: removing the application password of %s: %v", who.username, err)
-			http.Error(w, "the application password could not be removed", http.StatusInternalServerError)
-			return
-		}
-		if n == 0 {
-			notFound()
-			return
-		}
-		s.audit(sess, "revoke-access", "app_password", r)
-		writeJSONNoStore(w, http.StatusOK, map[string]any{"revoked": n})
-		return
 	}
 	mine := s.ownedBy(who)
 	found := false

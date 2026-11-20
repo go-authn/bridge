@@ -213,14 +213,13 @@ var catalogue = map[string][2]string{
 	"apps.confirmall": {"Mettre fin à toutes les sessions ?", "End all sessions?"},
 	"revoke":          {"Révoquer", "Revoke"},
 
-	"access.kind.app_password": {"Mot de passe d'application", "Application password"},
-	"access.kind.ssh":          {"Certificat SSH", "SSH certificate"},
-	"access.kind.x509":         {"Certificat X.509", "X.509 certificate"},
-	"access.kind.wireguard":    {"Clé WireGuard", "WireGuard key"},
-	"access.title":             {"Accès techniques", "Technical access"},
-	"access.expires":           {"expire", "expires"},
-	"access.none":              {"Aucun.", "None."},
-	"access.confirm":           {"Révoquer cet accès ?", "Revoke this access?"},
+	"access.kind.ssh":       {"Certificat SSH", "SSH certificate"},
+	"access.kind.x509":      {"Certificat X.509", "X.509 certificate"},
+	"access.kind.wireguard": {"Clé WireGuard", "WireGuard key"},
+	"access.title":          {"Accès techniques", "Technical access"},
+	"access.expires":        {"expire", "expires"},
+	"access.none":           {"Aucun.", "None."},
+	"access.confirm":        {"Révoquer cet accès ?", "Revoke this access?"},
 
 	"step.done.title": {"Session terminée", "Session ended"},
 	"step.done.p":     {"Votre espace est fermé. Vous pouvez fermer cette page, ou vous reconnecter.", "Your account space is closed. You can close this page, or sign in again."},
@@ -250,7 +249,7 @@ func dynamicKeys() []string {
 	for _, v := range pageTitles {
 		k = append(k, v)
 	}
-	k = append(k, "device.err.rate", "device.err.code", "access.kind.app_password", "access.kind.ssh", "access.kind.x509", "access.kind.wireguard")
+	k = append(k, "device.err.rate", "device.err.code", "access.kind.ssh", "access.kind.x509", "access.kind.wireguard")
 	sort.Strings(k)
 	return k
 }
