@@ -271,10 +271,13 @@ func localSettings(paths []string) (*localBlock, *stateBlock, string, []string, 
 		Remain hcl.Body     `hcl:",remain"`
 	}
 	if diags := gohcl.DecodeBody(hcl.MergeFiles(bodies), nil, &c); diags.HasErrors() {
-		return nil, nil, "", nil, diags
+		return nil, nil, "", nil, explainAccountBlocks(bodies, diags)
 	}
 	if c.Local == nil {
 		return nil, nil, "", nil, errors.New("the configuration has no local block")
+	}
+	if err := accountsPlace(c.Local.AccountsFile, paths); err != nil {
+		return nil, nil, "", nil, err
 	}
 	if c.State == nil {
 		return nil, nil, "", nil, errors.New("the configuration has no state block: the passkeys and invitations are kept there")

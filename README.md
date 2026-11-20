@@ -138,8 +138,8 @@ exists only because an administrator invited it.
 
 ```hcl
 local {
-  accounts_file = "/etc/authn-bridge/accounts.hcl"   # root:authn-bridge 0640
-  scope         = "mesocentre.example"               # the accounts' domain
+  accounts_file = "/etc/authn-bridge-local/accounts.hcl"   # root:authn-bridge 0640
+  scope         = "mesocentre.example"                     # the accounts' domain
 }
 
 state {                                              # required: the passkeys live here
@@ -153,7 +153,10 @@ do not replace it (a provider with no federation at all is not what this is
 for, yet). `state` is required with `local`: the passkeys, their signature
 counters (which change at every login) and the invitations are in the state
 database, never in the accounts file. The accounts file says who exists, and
-holds nothing secret; `authn-bridge local-account` writes it:
+holds nothing secret. It goes in a directory of its own: `--config DIR` reads
+every `*.hcl` file of DIR as configuration, so an accounts file placed there is
+refused by `check`, at startup and by `local-account`. `authn-bridge
+local-account` writes it:
 
 ```hcl
 account "alice" {
