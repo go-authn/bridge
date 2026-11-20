@@ -204,17 +204,22 @@ Each key added, removal requested, cancelled or done is one POST of a JSON event
 
 Create the accounts file empty, owned by root and readable by the service's
 group, name it in the configuration together with the state database, then
-invite the first account:
+invite the first account. The file lives in a directory of its own, NOT in
+`/etc/authn-bridge`: `--config /etc/authn-bridge` reads every `*.hcl` file
+there as configuration, and an `account` block is not configuration. `check`,
+startup and `local-account` refuse an accounts file placed where `--config`
+reads it.
 
 ```sh
-install -m 0640 -o root -g authn-bridge /dev/null /etc/authn-bridge/accounts.hcl
+install -d -m 0750 -o root -g authn-bridge /etc/authn-bridge-local
+install -m 0640 -o root -g authn-bridge /dev/null /etc/authn-bridge-local/accounts.hcl
 install -m 0600 -o authn-bridge -g authn-bridge /dev/null /etc/authn-bridge/state.dsn
 echo 'file:/var/lib/authn-bridge/state.db?_pragma=busy_timeout(5000)' > /etc/authn-bridge/state.dsn
 install -d -m 0750 -o authn-bridge -g authn-bridge /var/lib/authn-bridge
 cat >> /etc/authn-bridge/bridge.hcl <<'HCL'
 
 local {
-  accounts_file = "/etc/authn-bridge/accounts.hcl"
+  accounts_file = "/etc/authn-bridge-local/accounts.hcl"   # outside --config's directory
   scope         = "login.example.org"     # your domain: groups must live under it
 }
 
@@ -230,8 +235,8 @@ authn-bridge local-account invite --config /etc/authn-bridge --name "Alice Marti
     --group urn:geant:example.org:hpc:admins alice
 # https://login.example.org/local/enroll#Qk3f...
 
-chown root:authn-bridge /etc/authn-bridge/accounts.hcl   # if root's group changed it
-chmod 0640 /etc/authn-bridge/accounts.hcl
+chown root:authn-bridge /etc/authn-bridge-local/accounts.hcl   # if root's group changed it
+chmod 0640 /etc/authn-bridge-local/accounts.hcl
 runuser -u authn-bridge -- authn-bridge check --config /etc/authn-bridge   # "local ...: 1 accounts"
 ```
 

@@ -5,6 +5,17 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+Fixed:
+
+- **An `accounts_file` that `--config` reads as configuration is refused**
+  (#99). `docs/install.md` put it in `/etc/authn-bridge`, where `--config DIR`
+  reads every `*.hcl`: `check` passed while it was empty, and the first account
+  written to it stopped the next start with "Unsupported block type". `check`,
+  startup and `local-account` now refuse that place, and `invite` no longer
+  creates the file there. A configuration already in that state says which file
+  holds account blocks and where to move it. The docs use
+  `/etc/authn-bridge-local/accounts.hcl`.
+
 Added:
 
 - **`private_key_jwt` client authentication** (RFC 7523 2.2, OIDC Core 9) for

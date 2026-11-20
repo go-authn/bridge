@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -446,7 +447,12 @@ func loadConfig(paths []string) (*config, error) {
 	var c config
 	body := hcl.MergeFiles(bodies)
 	if diags := gohcl.DecodeBody(body, nil, &c); diags.HasErrors() {
-		return nil, diags
+		return nil, explainAccountBlocks(bodies, diags)
+	}
+	if c.Local != nil {
+		if err := accountsPlace(c.Local.AccountsFile, paths); err != nil {
+			return nil, err
+		}
 	}
 	c.files = files
 	if err := c.check(); err != nil {
@@ -456,6 +462,64 @@ func loadConfig(paths []string) (*config, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// readAsConfiguration says which --config path would read file as
+// configuration: the path itself, or a directory holding it whose *.hcl glob
+// it matches. The file need not exist yet -- `local-account invite` creates
+// it -- so the directory is compared, not the file. go-authn/bridge#99: the
+// accounts file documented under /etc/authn-bridge was read as configuration
+// once it held an account, and the bridge stopped starting.
+func readAsConfiguration(file string, paths []string) (string, bool) {
+	dir, err := os.Stat(filepath.Dir(file))
+	if err != nil {
+		return "", false
+	}
+	fi, ferr := os.Stat(file)
+	for _, p := range paths {
+		st, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if !st.IsDir() {
+			if (ferr == nil && os.SameFile(fi, st)) || filepath.Clean(p) == filepath.Clean(file) {
+				return p, true
+			}
+			continue
+		}
+		if m, _ := filepath.Match("*.hcl", filepath.Base(file)); m && os.SameFile(dir, st) {
+			return p, true
+		}
+	}
+	return "", false
+}
+
+// accountsPlace refuses an accounts_file that --config would read as
+// configuration (see readAsConfiguration).
+func accountsPlace(accounts string, paths []string) error {
+	p, ok := readAsConfiguration(accounts, paths)
+	if !ok {
+		return nil
+	}
+	return fmt.Errorf("accounts_file %q is read as configuration through --config %s (every *.hcl file of a configuration directory is), so the first account written to it would stop the bridge from starting: put it in a directory of its own, such as /etc/authn-bridge-local/accounts.hcl", accounts, p)
+}
+
+// explainAccountBlocks turns the decoding error of a configuration that holds
+// account blocks -- an accounts file already sitting where --config reads --
+// into one that names the file and the remedy. Otherwise it returns diags.
+func explainAccountBlocks(bodies []*hcl.File, diags hcl.Diagnostics) error {
+	for _, f := range bodies {
+		b, ok := f.Body.(*hclsyntax.Body)
+		if !ok {
+			continue
+		}
+		for _, blk := range b.Blocks {
+			if blk.Type == "account" {
+				return fmt.Errorf("%s holds account blocks: it is a local accounts file, read as configuration because --config reads every *.hcl file of its directory; move it to a directory of its own, such as /etc/authn-bridge-local/accounts.hcl, and point accounts_file at it: %w", blk.TypeRange.Filename, diags)
+			}
+		}
+	}
+	return diags
 }
 
 func hclFiles(paths []string) ([]string, error) {
