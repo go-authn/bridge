@@ -288,14 +288,19 @@ jobs:
             echo "::error::no qemu user emulator for $1 (looked for qemu-$1-static and qemu-$1)" >&2
             return 1
           }
+          # Under qemu, internal/app (~300 tests, each with its own provider,
+          # IdP and federation) runs past go test's default ten minutes: s390x
+          # took ~11 and arm more than 10 once the fixture tests stopped
+          # skipping without xmlsec1 (go-authn/bridge#81). The native lanes
+          # keep the default, which would catch a real hang there.
           case "${{ matrix.goarch }}" in
             amd64|arm64) go test -count=1 ./... ;;
-            riscv64) e="$(qemu_for riscv64)" || exit 1; echo "running riscv64 under $e"; GOARCH=riscv64 go test -count=1 -exec="$e" ./... ;;
-            loong64) e="$(qemu_for loongarch64)" || exit 1; echo "running loong64 under $e"; GOARCH=loong64 go test -count=1 -exec="$e" ./... ;;
-            ppc64le) e="$(qemu_for ppc64le)" || exit 1; echo "running ppc64le under $e"; GOARCH=ppc64le go test -count=1 -exec="$e" ./... ;;
-            s390x) e="$(qemu_for s390x)" || exit 1; echo "running s390x under $e"; GOARCH=s390x   go test -count=1 -exec="$e" ./... ;;
+            riscv64) e="$(qemu_for riscv64)" || exit 1; echo "running riscv64 under $e"; GOARCH=riscv64 go test -count=1 -timeout=40m -exec="$e" ./... ;;
+            loong64) e="$(qemu_for loongarch64)" || exit 1; echo "running loong64 under $e"; GOARCH=loong64 go test -count=1 -timeout=40m -exec="$e" ./... ;;
+            ppc64le) e="$(qemu_for ppc64le)" || exit 1; echo "running ppc64le under $e"; GOARCH=ppc64le go test -count=1 -timeout=40m -exec="$e" ./... ;;
+            s390x) e="$(qemu_for s390x)" || exit 1; echo "running s390x under $e"; GOARCH=s390x   go test -count=1 -timeout=40m -exec="$e" ./... ;;
             # 32-bit: 386 runs natively on the amd64 runner (qemu-i386 loses float
             # state across preemption); arm under qemu.
             386)      GOARCH=386     go test -count=1 ./... ;;
-            arm) e="$(qemu_for arm)" || exit 1; echo "running arm under $e"; GOARCH=arm     go test -count=1 -exec="$e" ./... ;;
+            arm) e="$(qemu_for arm)" || exit 1; echo "running arm under $e"; GOARCH=arm     go test -count=1 -timeout=40m -exec="$e" ./... ;;
           esac
