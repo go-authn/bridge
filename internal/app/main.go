@@ -117,6 +117,9 @@ func newRootCmd(out io.Writer) *cobra.Command {
 				fmt.Fprintf(out, "local         %s: %d accounts from %s, scope %s\n", cfg.localEntityID(), l.store.current().len(), l.AccountsFile, l.Scope)
 			}
 			fmt.Fprintf(out, "federation    %d IdPs, %d usable here, valid until %s\n", len(md.IdPs), usable, md.ValidUntil.Format(time.RFC3339))
+			if err := s.localScopeClash(); err != nil {
+				return err
+			}
 			for _, id := range cfg.SAML.IdPs {
 				if _, ok := md.IdPs[id]; !ok {
 					return fmt.Errorf("idps names %q, which the federation does not list", id)

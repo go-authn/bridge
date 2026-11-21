@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
@@ -62,6 +63,37 @@ type person struct {
 // cannot be recognised twice, so there is nothing to call "sub".
 var errNoIdentifier = errors.New("the identity provider released no persistent identifier (subject-id, pairwise-id, eppn, eduPersonTargetedID or a persistent NameID)")
 
+// errLocalScopeName is a federated identity named in the local block's scope.
+var errLocalScopeName = errors.New("a federated identity named in the local scope, which only local accounts may hold")
+
+// inLocalScope says whether the scoped name v (user@domain) is in the local
+// scope; false when there is no local block (scope "") or v is not scoped.
+func inLocalScope(scope, v string) bool {
+	at := strings.LastIndex(v, "@")
+	return scope != "" && at >= 0 && strings.EqualFold(v[at+1:], scope)
+}
+
+// localScopeClash names an IdP, usable here, whose metadata scope is the local
+// block's: its people and the local accounts would share names. It is what
+// `check` reports ahead of time; the login itself refuses the name
+// (newPerson), because the metadata changes at every refresh.
+func (s *server) localScopeClash() error {
+	if s.cfg.Local == nil {
+		return nil
+	}
+	for id, idp := range s.fed.Metadata().IdPs {
+		if !s.allowedIdP(id) {
+			continue
+		}
+		for _, sc := range idp.Scopes {
+			if strings.EqualFold(sc, s.cfg.Local.Scope) {
+				return fmt.Errorf("local scope %q is also a scope of the IdP %s: its people would hold the names of local accounts (Kerberos principal, eduperson_principal_name) -- use another scope for local accounts", s.cfg.Local.Scope, id)
+			}
+		}
+	}
+	return nil
+}
+
 // newPerson maps an assertion to claims, the way the configuration says.
 //
 // Claim names follow OIDC Core 5.1 for the profile and AARC-G056 for the
@@ -87,6 +119,15 @@ func newPerson(a *saml.Assertion, c *claimsBlock) (*person, error) {
 	p.username = a.First(usernameAttributes[c.Username])
 	if c.Username == "subject_id" {
 		p.username = oidc.ASCIILower(p.username)
+	}
+	// ⛔ A federated name in the LOCAL scope is refused: the local account
+	// `alice` is `alice@<local scope>` (Kerberos principal, eduperson_principal_name
+	// and so SSH principals), and an IdP whose metadata scope (which changes at
+	// every refresh) equals it would mint the same name for another person.
+	for _, v := range []string{p.username, a.First(saml.EduPersonPrincipalName)} {
+		if inLocalScope(c.localScope, v) {
+			return nil, fmt.Errorf("%w: %q from %s", errLocalScopeName, v, a.IdP.EntityID)
+		}
 	}
 	for _, g := range c.Groups {
 		for _, v := range a.Attributes[groupAttributes[g]] {

@@ -5,6 +5,19 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+Security (found by the 2026-11-21 audit):
+
+- **MEDIUM: a federated person and a local account could be one principal.**
+  With a `local { scope }` equal to a federated IdP's scope (shibmd:Scope in
+  the metadata), local `alice` and federated `alice@<scope>` were the same
+  Kerberos principal, the same `eduperson_principal_name` and so the same SSH
+  principal. A federated login whose username or eppn is in the local scope is
+  now refused (`access_denied`) when it is minted, because metadata scopes
+  change at every refresh; a federated token that exists anyway gets no
+  Kerberos ticket; and `authn-bridge check` fails when a usable IdP's scope is
+  the local scope. **Upgrade:** if `check` now reports the clash, give the
+  `local` block another scope (local accounts' principals and eppn change
+  with it).
 Tests (no change to the program):
 
 - The SAML side of the test suite is go-authn/saml/samltest by default

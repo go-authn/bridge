@@ -280,6 +280,9 @@ type claimsBlock struct {
 
 	// oneIdP is set at load: saml { idps } lists exactly one IdP.
 	oneIdP bool
+
+	// localScope is the local block's scope, set at load, "" without one.
+	localScope string
 }
 
 // One relying party.
@@ -690,6 +693,9 @@ func (c *config) check() error {
 	// a federated value in the local accounts' namespace would be
 	// indistinguishable from a local group. Its groups are held to its scopes.
 	c.Claims.oneIdP = len(c.SAML.IdPs) == 1 && c.Local == nil
+	if c.Local != nil {
+		c.Claims.localScope = c.Local.Scope
+	}
 	if c.Local != nil && slices.Contains(c.Claims.Groups, "affiliation") {
 		return errors.New("claims: groups = \"affiliation\" carries no institution, so with a local block an IdP could grant any value a local account has: use scoped_affiliation")
 	}
