@@ -5,6 +5,17 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+Dependencies (security fixes the 2026-11-21 audit led to):
+
+- go-authn/directory v0.17.0 to v0.24.0, go-authn/saml v0.7.0 to v0.7.1 and
+  go-authn/webauthn v0.1.0 to v0.1.1: the audit's fixes in those modules.
+  No change to bridge's configuration or behaviour is needed; the full suite
+  passes unchanged.
+- The other modules of the release train (ldap, krb5, cms, rp, totp,
+  secretsource, scim, awscred, authnd) are not required by bridge's go.mod,
+  so none is bumped. Bridge does not read secrets through secretsource, so
+  its v0.6.0 refusal of an empty `file:` secret does not apply here.
+
 Security (found by the 2026-11-21 audit):
 
 - **MEDIUM: a federated person and a local account could be one principal.**
