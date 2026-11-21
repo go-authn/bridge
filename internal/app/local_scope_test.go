@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-authn/webauthn"
@@ -117,5 +118,17 @@ func TestLocalScopeClashNamesTheIdP(t *testing.T) {
 	f.s.cfg.Local.Scope = "another-scope.example"
 	if err := f.s.localScopeClash(); err != nil {
 		t.Errorf("no clash: %v", err)
+	}
+	// Without a local block there is nothing to clash with.
+	if err := newFixture(t, "").s.localScopeClash(); err != nil {
+		t.Errorf("no local block: %v", err)
+	}
+}
+
+// `check` fails on the clash, as it does on an allowlist the federation lacks.
+func TestCheckRefusesALocalScopeEqualToAnIdPScope(t *testing.T) {
+	f, _ := localScopeFixture(t)
+	if _, err := runCmd(t, "check", "--config", f.cfgFile); err == nil || !strings.Contains(err.Error(), "also a scope of the IdP") {
+		t.Errorf("check on a local scope that is an IdP's: %v", err)
 	}
 }
