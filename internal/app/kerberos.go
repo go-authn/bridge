@@ -159,6 +159,10 @@ func (s *server) kerberosPrincipal(claims map[string]any) string {
 			return "" // cannot happen: a local login never holds an "@"
 		}
 		user += "@" + s.cfg.Local.Scope
+	} else if s.cfg.Local != nil && inLocalScope(s.cfg.Local.Scope, user) {
+		// ⛔ A federated token (an old refresh grant, say) in the local scope
+		// would be the local account's principal: no ticket.
+		return ""
 	}
 	if at := strings.LastIndex(user, "@"); at < 1 || at == len(user)-1 {
 		return ""
