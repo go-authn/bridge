@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.33.0
+
+- The `mail` block's SMTP password is now a secretsource reference:
+  `password_from = "systemd-creds:smtp"` (or `file:PATH`, `keychain:...`, any
+  scheme of go-authn/secretsource v0.9.0 (`file:` refuses symlinks and files owned by another uid); at most 4096 bytes). `password_file`
+  stays as a **deprecated** alias of `password_from = "file:PATH"`; setting
+  both is a configuration error. The file rules of `password_file` (owner,
+  `0600`) are now secretsource's `file:` rules. AUTH is still sent only after
+  TLS. Docs show `LoadCredentialEncrypted=` with `--with-key=host+tpm2` and the
+  re-seal recovery path.
+
 ## v0.32.0
 
 - New `mail` block (#122): an out-of-band plain-text e-mail to the account's

@@ -332,7 +332,7 @@ mail {
   host          = "smtp.example.org"
   security      = "tls"                              # "tls" (port 465, the default) or "starttls" (587)
   username      = "authn-bridge"
-  password_file = "/etc/authn-bridge/smtp.password"  # the one source of the SMTP password
+  password_from = "systemd-creds:smtp"               # a secretsource reference to the SMTP password
   from          = "authn-bridge@example.org"
   # window      = "10m"                                # least time between two mails to one account (1m to 24h)
 }
@@ -341,12 +341,16 @@ mail {
 - **Who is told.** The `mail` of the account in the local accounts file, as
   the bridge knows it. Never an address taken from the request. It needs a
   `local` block (the notice is about local accounts' passkeys).
-- **The password** comes from `password_file` and from nowhere else (not the
-  environment, not a command line, not this configuration file). The file must
-  be a regular file, owned by the service's user, with no group or other
-  permission (`0600`), and is read with one open; one non-empty line. Anything
-  else, and a block without `username` and `password_file`, is refused at
-  startup.
+- **The password** comes from `password_from`, a
+  [secretsource](https://github.com/go-authn/secretsource) reference, and from
+  nowhere else (not the environment, not a command line, and never the
+  password itself in this configuration file): `systemd-creds:NAME`,
+  `file:PATH` (a regular file, not a symlink, owned by the user the bridge runs as and readable by that user alone, `0600`),
+  `keychain:SERVICE/ACCOUNT`, and the other schemes of secretsource. A secret is
+  one non-empty line of at most 4096 bytes. `password_file = "PATH"` is the
+  **deprecated** spelling of `password_from = "file:PATH"`; setting both is a
+  configuration error. A bad reference, and a block without `username` and
+  `password_from`, is refused at startup.
 - **TLS, always.** Implicit TLS, or STARTTLS the server offers and completes
   (otherwise the notice is not sent: never a conversation in clear). The server
   certificate is verified against the system roots and the host name. The

@@ -25,6 +25,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/go-authn/secretsource"
 )
 
 // fakeSMTP is an in-process SMTP server. It records every command line, whether
@@ -423,6 +425,9 @@ func TestMailBodyCannotForgeHeadersOrEndTheMessage(t *testing.T) {
 }
 
 func TestMailBlockCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file: secrets need an owner-only access list, which a test's temp dir does not give")
+	}
 	dir := t.TempDir()
 	pw := filepath.Join(dir, "pw")
 	if err := os.WriteFile(pw, []byte("hunter2-hunter2\n"), 0o600); err != nil {
@@ -483,6 +488,47 @@ func TestMailBlockCheck(t *testing.T) {
 	}
 }
 
+func TestMailPasswordFrom(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file: mode rules differ")
+	}
+	dir := t.TempDir()
+	pw := filepath.Join(dir, "pw")
+	os.WriteFile(pw, []byte("hunter2-hunter2\n"), 0o600)
+	// a reference resolves
+	m := &mailBlock{Host: "h", Username: "u", PasswordFrom: "file:" + pw, From: "a@b.org"}
+	if err := m.check(); err != nil || m.password != "hunter2-hunter2" {
+		t.Fatalf("password_from: %v %q", err, m.password)
+	}
+	// the deprecated alias still works
+	m = &mailBlock{Host: "h", Username: "u", PasswordFile: pw, From: "a@b.org"}
+	if err := m.check(); err != nil || m.password != "hunter2-hunter2" {
+		t.Fatalf("password_file: %v %q", err, m.password)
+	}
+	// both set is a configuration error
+	m = &mailBlock{Host: "h", Username: "u", PasswordFrom: "file:" + pw, PasswordFile: pw, From: "a@b.org"}
+	if err := m.check(); err == nil || !strings.Contains(err.Error(), "both set") {
+		t.Fatalf("both set: %v", err)
+	}
+	// neither set
+	m = &mailBlock{Host: "h", Username: "u", From: "a@b.org"}
+	if err := m.check(); err == nil {
+		t.Fatal("no password accepted")
+	}
+	// a bare path is not a reference
+	m = &mailBlock{Host: "h", Username: "u", PasswordFrom: pw, From: "a@b.org"}
+	if err := m.check(); err == nil {
+		t.Fatal("a reference with no scheme was accepted")
+	}
+	// an oversized secret is refused
+	big := filepath.Join(dir, "big")
+	os.WriteFile(big, make([]byte, secretsource.MaxSize+1), 0o600)
+	m = &mailBlock{Host: "h", Username: "u", PasswordFrom: "file:" + big, From: "a@b.org"}
+	if err := m.check(); !errors.Is(err, secretsource.ErrTooLarge) {
+		t.Fatalf("oversized: %v", err)
+	}
+}
+
 func TestMailPasswordFileMustBePrivate(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("no mode bits")
@@ -493,7 +539,7 @@ func TestMailPasswordFileMustBePrivate(t *testing.T) {
 		os.Chmod(pw, mode)
 		m := &mailBlock{Host: "h", Username: "u", PasswordFile: pw, From: "a@b.org"}
 		err := m.check()
-		if err == nil || !strings.Contains(err.Error(), "group or others") {
+		if err == nil {
 			t.Errorf("mode %04o: %v", mode, err)
 		}
 		if err != nil && strings.Contains(err.Error(), "hunter2") {
