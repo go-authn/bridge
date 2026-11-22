@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/go-authn/oidc"
 	"github.com/go-authn/saml"
@@ -778,8 +777,8 @@ func (s *server) accountProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(*req.Name)
-	if name == "" || len(name) > maxNameLen || strings.IndexFunc(name, func(r rune) bool { return unicode.IsControl(r) }) >= 0 {
-		http.Error(w, fmt.Sprintf("a name is 1 to %d characters, without control characters", maxNameLen), http.StatusBadRequest)
+	if name == "" || len(name) > maxNameLen || strings.IndexFunc(name, displayNameRuneBad) >= 0 {
+		http.Error(w, fmt.Sprintf("a name is 1 to %d characters, without control, direction or invisible characters", maxNameLen), http.StatusBadRequest)
 		return
 	}
 	if err := s.passkeys.put(kindProfile, loginKey(who.username), profileRecord{Name: name}, passkeyForever); err != nil {

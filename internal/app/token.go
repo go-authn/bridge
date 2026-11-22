@@ -239,7 +239,7 @@ func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce 
 
 	info := who.claimsFor(scopes)
 	info["sub"] = sub
-	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp, subject: who.subject}, now.Add(s.cfg.tokenTTL))
+	s.issued.put(jti, issuedToken{info: info, username: who.username, idp: who.idp, subject: who.subject, credential: who.credential}, now.Add(s.cfg.tokenTTL))
 	// A disable between the check above and this put would not find the
 	// token it is revoking: the disable is recorded before it revokes, so
 	// looking again after the put closes the window.

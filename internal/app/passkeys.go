@@ -717,12 +717,21 @@ func (s *server) localEnrollFinish(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusForbidden, "this passkey was refused", "the credential ID is not the one signed")
 		return
 	}
+	// ⛔ The cap is rechecked here, under the lock the account page takes: the
+	// count made when the ceremony began is stale by now, and a key added
+	// meanwhile must not make an eleventh.
+	s.accountMu.Lock()
+	defer s.accountMu.Unlock()
 	if _, taken, err := s.passkeys.passkey(passkeyKey(cred.ID)); err != nil || taken {
 		refuse(http.StatusConflict, "this passkey is already registered", fmt.Sprintf("credential exists (%v)", err))
 		return
 	}
 	if _, ok := s.cfg.Local.store.get(cer.login); !ok {
 		refuse(http.StatusForbidden, errNoInvite.Error(), "the account was removed")
+		return
+	}
+	if have, err := s.passkeys.passkeys(cer.login); err != nil || len(have) >= maxPasskeys {
+		refuse(http.StatusConflict, fmt.Sprintf("an account has at most %d passkeys: remove one first", maxPasskeys), fmt.Sprintf("%d keys (%v)", len(have), err))
 		return
 	}
 	// ⛔ The invitation is burnt BEFORE the credential is stored, and only the

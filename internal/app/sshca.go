@@ -145,7 +145,9 @@ func notAddressedHere(w http.ResponseWriter) {
 // the Kerberos endpoint does. Found by a security review.
 func (s *server) withdrawn(w http.ResponseWriter, jti, user, kind, serial string, now time.Time) bool {
 	it, live := s.issued.get(jti)
-	if live && s.refused(&person{username: user, idp: it.idp}) == "" {
+	who := it.who()
+	who.username = user
+	if live && s.refused(who) == "" {
 		return false
 	}
 	if err := s.certs.revokeOne(kind, serial, now); err != nil {
