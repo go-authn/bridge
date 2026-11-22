@@ -117,6 +117,17 @@ func newRootCmd(out io.Writer) *cobra.Command {
 				fmt.Fprintf(out, "local         %s: %d accounts from %s, scope %s\n", cfg.localEntityID(), l.store.current().len(), l.AccountsFile, l.Scope)
 			}
 			fmt.Fprintf(out, "federation    %d IdPs, %d usable here, valid until %s\n", len(md.IdPs), usable, md.ValidUntil.Format(time.RFC3339))
+			if k := cfg.Kerberos; k != nil {
+				// load() already read the CA and the client certificate pair
+				// and parsed validity, so a broken block failed above.
+				asking := 0
+				for _, c := range cfg.Clients {
+					if c.KerberosTickets {
+						asking++
+					}
+				}
+				fmt.Fprintf(out, "kerberos      TGTs from %s, valid %s, kerberos_tickets for %d clients\n", k.KDCURL, k.validity, asking)
+			}
 			if err := s.localScopeClash(); err != nil {
 				return err
 			}

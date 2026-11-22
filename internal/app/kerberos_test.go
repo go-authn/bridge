@@ -294,6 +294,25 @@ func TestKerberosTGTRefusals(t *testing.T) {
 	}
 }
 
+// go-authn/bridge#117: `check` says what the kerberos block would do, like it
+// does for the local and federation blocks, and says nothing without one.
+func TestCheckReportsTheKerberosBlock(t *testing.T) {
+	f, _ := kerberosFixture(t)
+	out, err := runCmd(t, "check", "--config", f.cfgFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "kerberos      TGTs from " + f.s.cfg.Kerberos.KDCURL + ", valid 8h0m0s, kerberos_tickets for 1 clients\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("check does not say %q:\n%s", want, out)
+	}
+	plain := newFixture(t, "")
+	out, err = runCmd(t, "check", "--config", plain.cfgFile)
+	if err != nil || strings.Contains(out, "kerberos") {
+		t.Errorf("without a kerberos block: %v\n%s", err, out)
+	}
+}
+
 func TestNoKerberosBlockNoEndpoint(t *testing.T) {
 	f := newFixture(t, `client "plain" {
   device = true

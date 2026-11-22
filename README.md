@@ -823,6 +823,12 @@ client "kinit" {
 }
 ```
 
+`authn-bridge check` reports the block, like the `local` and federation ones:
+`kerberos      TGTs from https://kdc.internal.example.org:8443/mint, valid 10h0m0s,
+kerberos_tickets for 1 clients` (on one line). It fails, naming the field, when
+the URL is not https, the CA or the client certificate pair cannot be read, or
+`validity` is out of range; a configuration without the block prints nothing.
+
 The principal is the person's scoped name, never a bare one: a federated
 person's `preferred_username` (their eppn, `user@domain`), and for a local
 account, whose login never holds an `@`, the login at the `local` block's scope

@@ -3,6 +3,12 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.33.1
+
+- `authn-bridge check` now reports the `kerberos` block (#117): the KDC URL,
+  the TGT validity and how many clients have `kerberos_tickets`, on a line of
+  its own like the `local` and federation blocks.
+
 ## v0.33.0
 
 - The `mail` block's SMTP password is now a secretsource reference:
