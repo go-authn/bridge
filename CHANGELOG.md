@@ -3,10 +3,16 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
-## Unreleased
+## v0.31.3
 
 Dependencies (security fixes the 2026-11-21 audit led to):
 
+- go-authn/directory v0.25.0, oidc v0.8.0, webauthn v0.2.0, saml v0.7.2,
+  revocation v0.7.1, servercert v0.7.1 and wireguard v0.2.0: the audit's
+  second round. oidc now honours a JWK's `alg` and binds ES256/384/512 to
+  their curves; bridge's own uses (the verifier only) and the full suite are
+  unchanged and pass. ldap, rp, scim, fido, krb5, kdc, cms and awscred are not
+  required by bridge's go.mod, so none is bumped.
 - go-authn/directory v0.17.0 to v0.24.0, go-authn/saml v0.7.0 to v0.7.1 and
   go-authn/webauthn v0.1.0 to v0.1.1: the audit's fixes in those modules.
   No change to bridge's configuration or behaviour is needed; the full suite

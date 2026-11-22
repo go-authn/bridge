@@ -6,15 +6,15 @@ require (
 	github.com/chromedp/cdproto v0.159.0
 	github.com/chromedp/chromedp v0.21.1
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-authn/directory v0.24.0
+	github.com/go-authn/directory v0.25.0
 	github.com/go-authn/krl v0.6.1
-	github.com/go-authn/oidc v0.7.0
-	github.com/go-authn/revocation v0.6.7
-	github.com/go-authn/saml v0.7.1
-	github.com/go-authn/servercert v0.5.3
+	github.com/go-authn/oidc v0.8.0
+	github.com/go-authn/revocation v0.7.1
+	github.com/go-authn/saml v0.7.2
+	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
-	github.com/go-authn/webauthn v0.1.1
-	github.com/go-authn/wireguard v0.1.3
+	github.com/go-authn/webauthn v0.2.0
+	github.com/go-authn/wireguard v0.2.0
 	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/go-net-health/endpoint v0.1.0
 	github.com/go-sql-driver/mysql v1.10.1
