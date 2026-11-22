@@ -824,10 +824,14 @@ client "kinit" {
 ```
 
 `authn-bridge check` reports the block, like the `local` and federation ones:
-`kerberos      TGTs from https://kdc.internal.example.org:8443/mint, valid 10h0m0s,
-kerberos_tickets for 1 clients` (on one line). It fails, naming the field, when
-the URL is not https, the CA or the client certificate pair cannot be read, or
-`validity` is out of range; a configuration without the block prints nothing.
+`kerberos      https://kdc.internal.example.org:8443/mint, client certificate
+https://login.example.org until 2029-02-12, validity 10h` (on one line; the
+date is UTC). Loading the configuration, so `check` and the server, refuses, naming
+the field, what could not work at the first login: a client certificate that
+has expired (as kdcd's `check` does for its mint certificate) or is not valid
+yet, a `key_file` that does not belong to `cert_file`, a `ca_file` that is
+missing or holds no certificate, a `kdc_url` that is not https, a `validity`
+out of range. A configuration without the block prints nothing.
 
 The principal is the person's scoped name, never a bare one: a federated
 person's `preferred_username` (their eppn, `user@domain`), and for a local
