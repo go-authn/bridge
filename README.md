@@ -319,6 +319,61 @@ The tests drive the same HTTP routes the page's script does, with
 `webauthntest`'s software authenticator, whose output is checked against an
 independent verifier in go-authn/webauthn's judge.
 
+## Telling the owner by e-mail: the `mail` block (v0.32.0)
+
+A passkey can always cancel a pending removal, so a thief holding one key can
+cancel the removal the owner asked for with another. Only a notice through a
+channel that holds none of the person's passkeys lets the owner see it. With a
+`mail` block, the bridge sends **a plain-text notice to the account's own
+address** when a removal is requested or cancelled.
+
+```hcl
+mail {
+  host          = "smtp.example.org"
+  security      = "tls"                              # "tls" (port 465, the default) or "starttls" (587)
+  username      = "authn-bridge"
+  password_file = "/etc/authn-bridge/smtp.password"  # the one source of the SMTP password
+  from          = "authn-bridge@example.org"
+  # window      = "10m"                                # least time between two mails to one account (1m to 24h)
+}
+```
+
+- **Who is told.** The `mail` of the account in the local accounts file, as
+  the bridge knows it. Never an address taken from the request. It needs a
+  `local` block (the notice is about local accounts' passkeys).
+- **The password** comes from `password_file` and from nowhere else (not the
+  environment, not a command line, not this configuration file). The file must
+  be a regular file, owned by the service's user, with no group or other
+  permission (`0600`), and is read with one open; one non-empty line. Anything
+  else, and a block without `username` and `password_file`, is refused at
+  startup.
+- **TLS, always.** Implicit TLS, or STARTTLS the server offers and completes
+  (otherwise the notice is not sent: never a conversation in clear). The server
+  certificate is verified against the system roots and the host name. The
+  bridge authenticates (PLAIN, else LOGIN; the strongest the server advertises)
+  only once TLS is up, never over cleartext, not even to 127.0.0.1; a server
+  advertising no usable mechanism after TLS is refused.
+- **No link.** The text carries no URL to follow, says so, and tells the reader
+  to open their account page from their own bookmark. Header values with CR, LF
+  or other line separators are refused (the builder is fuzzed).
+- **Rate limit.** One mail per account per `window`; the events that arrive
+  meanwhile are collapsed into one digest sent when the window ends.
+
+Two rules on failure, both visible to the person and in the log:
+
+1. **A removal request whose notice cannot be sent stays pending.** It is not
+   carried out when its delay ends. The bridge retries (up to 5 tries, with a
+   growing pause), then logs `GAVE UP` loudly; the request resumes with the
+   next event or a restart. The key keeps working meanwhile, as before.
+2. **A cancellation always applies**, even if its mail fails. The failure is
+   logged (`mailing <login> failed`) and the account page says the notice
+   could not be sent.
+
+An account with no usable address is not blocked: its request proceeds as
+without a `mail` block, the log says `<login> has no usable mail address ...
+nobody is told`, and the account page says so. Without a `mail` block nothing
+changes.
+
 ## The pages, and your branding
 
 Every page a person sees (the choice between the federation and a local

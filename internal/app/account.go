@@ -241,6 +241,14 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 		// delayed removal (the confirmation question tells the person so).
 		view["Deferred"], view["Delay"] = s.cfg.Local.removalDelay > 0, delayText(s.cfg.Local.removalDelay)
 		view["Keys"], view["Max"], view["Full"] = keys, maxPasskeys, len(keys) >= maxPasskeys
+		// The e-mail notice (#122): say so when nobody can be told, and when the
+		// last notice could not be mailed.
+		if s.cfg.Mail != nil {
+			if _, err := mailAddr(s.localMail(who.username)); err != nil {
+				view["NoticeNone"] = true
+			}
+			view["NoticeFailed"] = s.noticeFailed(who.username)
+		}
 	}
 
 	var apps []accountApp

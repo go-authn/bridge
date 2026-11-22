@@ -98,6 +98,8 @@ var catES = map[string]string{
 	"rm.banner.title":    "Hay una eliminación de llave de acceso pendiente",
 	"rm.banner.p":        "La llave %s se eliminará el %s. Hasta entonces sigue funcionando. Si usted no lo solicitó, cancélelo: cualquiera de sus llaves puede hacerlo.",
 	"rm.cancel":          "Cancelar la eliminación",
+	"rm.notice.none":     "No hay ninguna dirección de correo registrada para esta cuenta: nadie recibe un aviso por correo cuando se solicita o se cancela la eliminación de una llave.",
+	"rm.notice.failed":   "No se pudo enviar el último aviso por correo. Una eliminación solicitada espera a que se entregue un aviso; una cancelación ya está en vigor.",
 	"rm.pending":         "eliminación programada",
 	"keys.full":          "Una cuenta tiene como máximo %d llaves: elimine una para añadir otra.",
 	"keys.add":           "Añadir una llave de acceso",

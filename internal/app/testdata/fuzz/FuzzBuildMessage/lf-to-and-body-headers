@@ -1,0 +1,5 @@
+go test fuzz v1
+string("a@b.org")
+string("c@d.org\nBcc: z")
+string("s t")
+string("\r\n\r\nBcc: q")

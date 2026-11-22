@@ -11,6 +11,12 @@
 <p class="mt-2 text-sm">{{tf "rm.banner.p" .Prefix .RemoveAt}}</p>
 <button type="button" data-post="account/removal/cancel" data-json="{{.Arg}}" class="btn-primary btn-sm mt-3">{{t "rm.cancel"}}</button>
 </section>{{end}}{{end}}
+{{if .NoticeNone}}<section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100" role="alert" data-notice="none">
+<p class="text-sm">{{t "rm.notice.none"}}</p>
+</section>{{end}}
+{{if .NoticeFailed}}<section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100" role="alert" data-notice="failed">
+<p class="text-sm">{{t "rm.notice.failed"}}</p>
+</section>{{end}}
 
 <section class="surface p-5 sm:p-6" aria-labelledby="h-identity">
 <h2 id="h-identity" class="flex items-center gap-2 text-lg font-semibold">{{icon "user-round" "size-5 text-brand-ink"}}<span>{{t "acct.identity"}}</span></h2>

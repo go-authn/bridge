@@ -296,6 +296,8 @@ func (s *server) accountRemove(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		target.RemoveRequested, target.RemoveAt = s.now(), s.now().Add(delay)
+		// With a mail block the removal waits for a delivered notice (#122).
+		target.NoticePending = s.noticeTo(login) != ""
 		if err := s.passkeys.savePasskey(target); err != nil {
 			s.logf("local: marking a passkey of %s for removal: %v", login, err)
 			http.Error(w, "the removal could not be recorded", http.StatusInternalServerError)
@@ -303,6 +305,7 @@ func (s *server) accountRemove(w http.ResponseWriter, r *http.Request) {
 		}
 		s.audit(sess, "remove-requested", target.key(), r)
 		s.keyEvent("removal.requested", login, target, target.RemoveAt, addr)
+		s.noticeKey("requested", login, target, target.RemoveAt, r)
 		writeJSONNoStore(w, http.StatusOK, map[string]any{"pending": true, "removeAt": target.RemoveAt.UTC().Format(time.RFC3339), "signedOut": false})
 		return
 	}
@@ -342,7 +345,7 @@ func (s *server) accountRemovalCancel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no removal is pending for this passkey", http.StatusNotFound)
 		return
 	}
-	target.RemoveAt, target.RemoveRequested = time.Time{}, time.Time{}
+	target.RemoveAt, target.RemoveRequested, target.NoticePending = time.Time{}, time.Time{}, false
 	if err := s.passkeys.savePasskey(target); err != nil {
 		s.logf("local: cancelling the removal of a passkey of %s: %v", login, err)
 		http.Error(w, "the cancellation could not be recorded", http.StatusInternalServerError)
@@ -350,6 +353,8 @@ func (s *server) accountRemovalCancel(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(sess, "remove-cancelled", target.key(), r)
 	s.keyEvent("removal.cancelled", login, target, time.Time{}, s.clientAddr(r))
+	// The cancellation is done whatever becomes of its mail: it cannot be blocked.
+	s.noticeKey("cancelled", login, target, time.Time{}, r)
 	writeJSONNoStore(w, http.StatusOK, map[string]any{"cancelled": target.key()[:16]})
 }
 
@@ -363,13 +368,33 @@ func (s *server) sweepRemovals() {
 		return
 	}
 	logins := map[string]bool{}
+	var unnoticed []passkeyRecord
 	now := s.now()
 	err := s.passkeys.each(kindPasskey, func(_ string, raw []byte) {
 		var r passkeyRecord
-		if json.Unmarshal(raw, &r) == nil && r.due(now) {
+		if json.Unmarshal(raw, &r) != nil {
+			return
+		}
+		if r.due(now) {
 			logins[r.Login] = true
 		}
+		if r.pending() && r.NoticePending {
+			unnoticed = append(unnoticed, r)
+		}
 	})
+	// A removal still waiting for its notice (a restart forgot the queue, or the
+	// first try failed): queue it again, and try what is waiting.
+	if s.cfg.Mail == nil {
+		s.noticeRelease(unnoticed) // the block was taken out of the configuration
+	}
+	for i := range unnoticed {
+		r := &unnoticed[i]
+		if s.cfg.Mail == nil {
+			break
+		}
+		s.noticeEnqueue(r.Login, mailEvent{Kind: "requested", At: r.RemoveRequested, FullKey: r.key(), Key: r.key()[:16], Created: r.Created, Effective: r.RemoveAt})
+	}
+	s.noticeFlushAll()
 	if err != nil {
 		s.logf("account: sweeping the pending removals: %v", err)
 		return

@@ -88,6 +88,10 @@ type passkeyRecord struct {
 	// any of the account's keys may cancel it (account_removal.go).
 	RemoveAt        time.Time `json:"remove_at,omitzero"`
 	RemoveRequested time.Time `json:"remove_requested,omitzero"`
+	// NoticePending is set when the request was made with a mail block and an
+	// address to tell: the removal waits, however late, until a notice has been
+	// delivered (mailnotice.go).
+	NoticePending bool `json:"notice_pending,omitempty"`
 }
 
 func (r *passkeyRecord) key() string { return passkeyKey(r.ID) }
@@ -96,7 +100,7 @@ func (r *passkeyRecord) key() string { return passkeyKey(r.ID) }
 // has come.
 func (r *passkeyRecord) pending() bool { return !r.RemoveAt.IsZero() }
 func (r *passkeyRecord) due(now time.Time) bool {
-	return !r.RemoveAt.IsZero() && !now.Before(r.RemoveAt)
+	return !r.RemoveAt.IsZero() && !now.Before(r.RemoveAt) && !r.NoticePending
 }
 
 // passkeyKey is the row key of a credential: the SHA-256 of its ID in

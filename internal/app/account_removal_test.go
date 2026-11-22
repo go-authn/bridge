@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -65,9 +66,10 @@ func (h *hook) kinds() []string {
 // the test's hands and a webhook listening.
 type guarded struct {
 	*fixture
-	clock *time.Time
-	hook  *hook
-	logs  *bytes.Buffer
+	clock   *time.Time
+	clockMu sync.Mutex
+	hook    *hook
+	logs    *bytes.Buffer
 }
 
 func newGuarded(t *testing.T, delay time.Duration) *guarded {
@@ -75,8 +77,11 @@ func newGuarded(t *testing.T, delay time.Duration) *guarded {
 	g := &guarded{fixture: f, hook: newHook(t), logs: &bytes.Buffer{}}
 	now := time.Now()
 	g.clock = &now
-	f.s.now = func() time.Time { return *g.clock }
-	t.Cleanup(func() { f.s.now = time.Now })
+	f.s.now = func() time.Time { g.clockMu.Lock(); defer g.clockMu.Unlock(); return *g.clock }
+	t.Cleanup(func() {
+		g.s.notifyWG.Wait() // the mail goroutines read the clock
+		f.s.now = time.Now
+	})
 	f.s.cfg.Local.removalDelay = delay
 	f.s.log = g.logs
 	f.s.cfg.Notify = &notifyBlock{URL: g.hook.srv.URL, secret: []byte(testNotifySecret)}
@@ -84,7 +89,9 @@ func newGuarded(t *testing.T, delay time.Duration) *guarded {
 }
 
 func (g *guarded) advance(d time.Duration) {
+	g.clockMu.Lock()
 	*g.clock = g.clock.Add(d)
+	g.clockMu.Unlock()
 	g.resetThrottle()
 }
 
@@ -162,7 +169,11 @@ func TestDeferredRemovalKeepsTheKeyWorkingUntilTheDelayEnds(t *testing.T) {
 		t.Error("the phone is still stored")
 	}
 	g.settle()
-	if k := g.hook.kinds(); strings.Join(k, ",") != "key.added,removal.requested,removal.done" {
+	// Each delivery is its own goroutine: the order they arrive in is not the
+	// order they were sent in, so the set is what is asserted.
+	k := g.hook.kinds()
+	sort.Strings(k)
+	if strings.Join(k, ",") != "key.added,removal.done,removal.requested" {
 		t.Errorf("the events: %v", k)
 	}
 	out := g.log()
