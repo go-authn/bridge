@@ -6,7 +6,7 @@ require (
 	github.com/chromedp/cdproto v0.159.0
 	github.com/chromedp/chromedp v0.21.1
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-authn/directory v0.25.0
+	github.com/go-authn/directory v0.26.0
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.8.0
 	github.com/go-authn/revocation v0.7.1
@@ -49,6 +49,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/go-authn/ldap v0.15.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

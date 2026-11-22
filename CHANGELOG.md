@@ -7,7 +7,9 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 Dependencies (security fixes the 2026-11-21 audit led to):
 
-- go-authn/directory v0.25.0, oidc v0.8.0, webauthn v0.2.0, saml v0.7.2,
+- go-authn/directory v0.26.0 (Set names now compare by their LDAP equality
+  key, case-insensitively, across sources; ldap v0.15.0 arrives as an indirect
+  requirement), oidc v0.8.0, webauthn v0.2.0, saml v0.7.2,
   revocation v0.7.1, servercert v0.7.1 and wireguard v0.2.0: the audit's
   second round. oidc now honours a JWK's `alg` and binds ES256/384/512 to
   their curves; bridge's own uses (the verifier only) and the full suite are
