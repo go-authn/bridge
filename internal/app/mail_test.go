@@ -38,6 +38,7 @@ type fakeSMTP struct {
 	auth      string // the AUTH line to advertise after TLS ("" none)
 	clearAuth bool   // also advertises AUTH before TLS: a trap for a client that sends credentials anyway
 	user, pw  string
+	reject    string // "MAIL FROM", "RCPT TO", "DATA" or "END": the step that is answered with a refusal
 
 	mu        sync.Mutex
 	cmds      []string
@@ -198,7 +199,13 @@ func (f *fakeSMTP) serve(c net.Conn) {
 				say("535 no")
 			}
 		case strings.HasPrefix(up, "MAIL FROM"), strings.HasPrefix(up, "RCPT TO"):
+			if f.reject != "" && strings.HasPrefix(up, f.reject) {
+				say("550 refused")
+				continue
+			}
 			say("250 ok")
+		case up == "DATA" && f.reject == "DATA":
+			say("554 refused")
 		case up == "DATA":
 			say("354 go")
 			var b strings.Builder
@@ -208,6 +215,10 @@ func (f *fakeSMTP) serve(c net.Conn) {
 					break
 				}
 				b.WriteString(d + "\n")
+			}
+			if f.reject == "END" {
+				say("554 refused after the data")
+				continue
 			}
 			f.mu.Lock()
 			f.mails = append(f.mails, b.String())
@@ -273,8 +284,8 @@ func TestMailRefusesAServerWithoutASupportedMechanism(t *testing.T) {
 		f.auth = auth
 		tc := startSMTP(t, f, "127.0.0.1")
 		err := sendTest(f.block(t, "tls"), tc)
-		if !errors.Is(err, errMailNoAuth) {
-			t.Errorf("%s: %v, want errMailNoAuth", name, err)
+		if err != errMailNoAuth {
+			t.Errorf("%s: %v, want errMailNoAuth itself", name, err)
 		}
 		if f.saw("MAIL") || f.saw("AUTH") {
 			t.Errorf("%s: the client went on after refusing: %q", name, f.cmds)
@@ -318,6 +329,9 @@ func TestMailRefusesAMismatchedCertificate(t *testing.T) {
 		err := sendTest(f.block(t, sec), tc)
 		if err == nil || !strings.Contains(err.Error(), "certificate") {
 			t.Fatalf("%s: %v, want a certificate error", sec, err)
+		}
+		if sec == "tls" && !strings.HasPrefix(err.Error(), "TLS:") {
+			t.Errorf("%s: %v, want it said to be the handshake that failed", sec, err)
 		}
 		if f.authClear || f.saw("AUTH") || f.saw("MAIL") {
 			t.Fatalf("%s: the client went on: %q", sec, f.cmds)

@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"mime/quotedprintable"
 	"net"
@@ -245,15 +244,13 @@ func (m *mailBlock) send(ctx context.Context, tc *tls.Config, to string, msg []b
 		return fmt.Errorf("SMTP: %w", err)
 	}
 	defer c.Close()
-	// ⛔ Whatever the path here, nothing below is said before TLS is up.
-	if _, up := c.TLSConnectionState(); !up {
-		return errMailClear
+	// Both paths above end with TLS up (implicit: the handshake is done;
+	// STARTTLS: c.StartTLS succeeded), and mailAuth.Start refuses to send the
+	// credentials on a connection that is not TLS, whatever got us here.
+	mech := ""
+	if ok, params := c.Extension("AUTH"); ok {
+		mech = pickAuth(params)
 	}
-	ok, params := c.Extension("AUTH")
-	if !ok {
-		return errMailNoAuth
-	}
-	mech := pickAuth(params)
 	if mech == "" {
 		return errMailNoAuth
 	}
@@ -307,9 +304,7 @@ func buildMessage(from, to, subject string, date time.Time, body string) ([]byte
 		return nil, fmt.Errorf("to: %w", err)
 	}
 	var id [12]byte
-	if _, err := io.ReadFull(rand.Reader, id[:]); err != nil {
-		return nil, err
-	}
+	rand.Read(id[:]) // crypto/rand.Read does not fail (it aborts the program if it must)
 	domain := from[strings.LastIndexByte(from, '@')+1:]
 	var b bytes.Buffer
 	h := func(k, v string) { b.WriteString(k + ": " + v + "\r\n") }

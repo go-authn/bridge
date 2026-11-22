@@ -132,9 +132,6 @@ func (s *server) noticeLaunch(login string) {
 
 // noticeFlushAll tries every account that has something waiting.
 func (s *server) noticeFlushAll() {
-	if s.cfg.Mail == nil {
-		return
-	}
 	s.noticeMu.Lock()
 	var logins []string
 	for l, a := range s.notices {
@@ -196,9 +193,6 @@ func (s *server) noticeFlush(login string) {
 func (s *server) noticeSend(login string, batch []mailEvent, dropped int) error {
 	m := s.cfg.Mail
 	to := s.localMail(login)
-	if _, err := mailAddr(to); err != nil {
-		return fmt.Errorf("the account has no usable address")
-	}
 	msg, err := buildMessage(m.From, to, "Passkey removal activity on your account", s.now(), digestBody(s.cfg.Issuer, login, batch, dropped))
 	if err != nil {
 		return err

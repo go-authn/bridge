@@ -372,14 +372,13 @@ func (s *server) sweepRemovals() {
 	now := s.now()
 	err := s.passkeys.each(kindPasskey, func(_ string, raw []byte) {
 		var r passkeyRecord
-		if json.Unmarshal(raw, &r) != nil {
-			return
-		}
-		if r.due(now) {
-			logins[r.Login] = true
-		}
-		if r.pending() && r.NoticePending {
-			unnoticed = append(unnoticed, r)
+		if json.Unmarshal(raw, &r) == nil { // a record that does not parse is not ours to judge
+			if r.due(now) {
+				logins[r.Login] = true
+			}
+			if r.pending() && r.NoticePending {
+				unnoticed = append(unnoticed, r)
+			}
 		}
 	})
 	// A removal still waiting for its notice (a restart forgot the queue, or the
