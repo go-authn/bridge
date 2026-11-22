@@ -267,10 +267,8 @@ func (m *mailBlock) send(ctx context.Context, tc *tls.Config, to string, msg []b
 	if err != nil {
 		return fmt.Errorf("DATA: %w", err)
 	}
-	if _, err := w.Write(msg); err != nil {
-		return fmt.Errorf("DATA: %w", err)
-	}
-	if err := w.Close(); err != nil {
+	_, werr := w.Write(msg)
+	if err := errors.Join(werr, w.Close()); err != nil {
 		return fmt.Errorf("DATA: %w", err)
 	}
 	c.Quit()
