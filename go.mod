@@ -11,7 +11,7 @@ require (
 	github.com/go-authn/oidc v0.8.0
 	github.com/go-authn/revocation v0.7.1
 	github.com/go-authn/saml v0.7.2
-	github.com/go-authn/secretsource v0.8.0
+	github.com/go-authn/secretsource v0.9.0
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
 	github.com/go-authn/webauthn v0.2.0
@@ -51,6 +51,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/ebitengine/purego v0.11.2 // indirect
+	github.com/go-authn/harden v0.2.0 // indirect
 	github.com/go-authn/ldap v0.15.0 // indirect
 	github.com/go-freedesktop/secretservice v0.4.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect

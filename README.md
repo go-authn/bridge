@@ -345,7 +345,7 @@ mail {
   [secretsource](https://github.com/go-authn/secretsource) reference, and from
   nowhere else (not the environment, not a command line, and never the
   password itself in this configuration file): `systemd-creds:NAME`,
-  `file:PATH` (a regular file readable by its owner alone, `0600`),
+  `file:PATH` (a regular file, not a symlink, owned by the user the bridge runs as and readable by that user alone, `0600`),
   `keychain:SERVICE/ACCOUNT`, and the other schemes of secretsource. A secret is
   one non-empty line of at most 4096 bytes. `password_file = "PATH"` is the
   **deprecated** spelling of `password_from = "file:PATH"`; setting both is a
