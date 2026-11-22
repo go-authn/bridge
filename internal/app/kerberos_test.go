@@ -314,6 +314,16 @@ func TestCheckReportsTheKerberosBlock(t *testing.T) {
 	}
 }
 
+func TestCertNameFallsBackToTheSubject(t *testing.T) {
+	u, _ := url.Parse("https://login.test")
+	if got := certName(&x509.Certificate{URIs: []*url.URL{u}, Subject: pkix.Name{CommonName: "x"}}); got != "https://login.test" {
+		t.Errorf("with a URI name: %q", got)
+	}
+	if got := certName(&x509.Certificate{Subject: pkix.Name{CommonName: "x"}}); got != "CN=x" {
+		t.Errorf("without one: %q", got)
+	}
+}
+
 func TestShortDuration(t *testing.T) {
 	for in, want := range map[time.Duration]string{10 * time.Hour: "10h", 8*time.Hour + 30*time.Minute: "8h30m", time.Minute: "1m", 90 * time.Minute: "1h30m", 10*time.Hour + 5*time.Second: "10h0m5s"} {
 		if got := shortDuration(in); got != want {

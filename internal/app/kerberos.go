@@ -110,10 +110,7 @@ func (b *kerberosBlock) load() error {
 	if err != nil {
 		return fmt.Errorf("cert_file and key_file (the key must belong to the certificate): %w", err)
 	}
-	leaf, err := x509.ParseCertificate(cert.Certificate[0])
-	if err != nil {
-		return fmt.Errorf("cert_file: %w", err)
-	}
+	leaf := cert.Leaf // LoadX509KeyPair parses it (Go 1.23+)
 	// Like kdcd's check on its mint certificate: a client certificate that
 	// expired (or is not valid yet) is refused here, not at the first login.
 	if now := time.Now(); now.After(leaf.NotAfter) {
