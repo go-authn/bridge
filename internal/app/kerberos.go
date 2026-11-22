@@ -66,8 +66,31 @@ type kerberosBlock struct {
 	// Validity is the TGT's lifetime: ten hours by default, never more.
 	Validity string `hcl:"validity,optional"`
 
-	validity time.Duration
-	hc       *http.Client
+	validity  time.Duration
+	hc        *http.Client
+	certName  string    // the client certificate's URI name, else its subject
+	certUntil time.Time // its NotAfter
+}
+
+// certName is what the KDC lists in MintCallers: the URI subjectAltName, or
+// the subject when there is none.
+func certName(c *x509.Certificate) string {
+	if len(c.URIs) > 0 {
+		return c.URIs[0].String()
+	}
+	return c.Subject.String()
+}
+
+// shortDuration prints 10h0m0s as 10h and 8h30m0s as 8h30m.
+func shortDuration(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = s[:len(s)-2]
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = s[:len(s)-2]
+	}
+	return s
 }
 
 func (b *kerberosBlock) load() error {
@@ -77,16 +100,25 @@ func (b *kerberosBlock) load() error {
 	}
 	pemCA, err := os.ReadFile(b.CAFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("ca_file: %w", err)
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pemCA) {
-		return fmt.Errorf("%s holds no certificate", b.CAFile)
+		return fmt.Errorf("ca_file: %s holds no certificate", b.CAFile)
 	}
 	cert, err := tls.LoadX509KeyPair(b.CertFile, b.KeyFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("cert_file and key_file (the key must belong to the certificate): %w", err)
 	}
+	leaf := cert.Leaf // LoadX509KeyPair parses it (Go 1.23+)
+	// Like kdcd's check on its mint certificate: a client certificate that
+	// expired (or is not valid yet) is refused here, not at the first login.
+	if now := time.Now(); now.After(leaf.NotAfter) {
+		return fmt.Errorf("cert_file: the client certificate %s expired on %s", certName(leaf), leaf.NotAfter.Format(time.DateOnly))
+	} else if now.Before(leaf.NotBefore) {
+		return fmt.Errorf("cert_file: the client certificate %s is not valid before %s", certName(leaf), leaf.NotBefore.Format(time.DateOnly))
+	}
+	b.certName, b.certUntil = certName(leaf), leaf.NotAfter
 	b.validity = kerberosMaxValidity
 	if b.Validity != "" {
 		d, err := time.ParseDuration(b.Validity)

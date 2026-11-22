@@ -120,13 +120,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			if k := cfg.Kerberos; k != nil {
 				// load() already read the CA and the client certificate pair
 				// and parsed validity, so a broken block failed above.
-				asking := 0
-				for _, c := range cfg.Clients {
-					if c.KerberosTickets {
-						asking++
-					}
-				}
-				fmt.Fprintf(out, "kerberos      TGTs from %s, valid %s, kerberos_tickets for %d clients\n", k.KDCURL, k.validity, asking)
+				fmt.Fprintf(out, "kerberos      %s, client certificate %s until %s, validity %s\n", k.KDCURL, k.certName, k.certUntil.Format(time.DateOnly), shortDuration(k.validity))
 			}
 			if err := s.localScopeClash(); err != nil {
 				return err

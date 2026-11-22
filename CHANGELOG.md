@@ -3,6 +3,18 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.34.0
+
+- `authn-bridge check` prints the kerberos block as the issue (#117) asked:
+  `kerberos      <kdc_url>, client certificate <name> until <date>, validity <d>`
+  (supersedes the v0.33.1 line).
+- The `kerberos` block now refuses at load, naming the field: an expired or
+  not-yet-valid client certificate (the one thing with a lifetime; kdcd's
+  `check` refuses its mint certificate the same way), and errors for a
+  `ca_file` that is missing or not a certificate and for a key that does not
+  belong to the certificate. A deployment whose client certificate already
+  expired no longer starts: renew it.
+
 ## v0.33.1
 
 - `authn-bridge check` now reports the `kerberos` block (#117): the KDC URL,

@@ -302,7 +302,8 @@ func TestCheckReportsTheKerberosBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "kerberos      TGTs from " + f.s.cfg.Kerberos.KDCURL + ", valid 8h0m0s, kerberos_tickets for 1 clients\n"
+	until := time.Now().Add(time.Hour).UTC().Format(time.DateOnly) // certificates carry UTC
+	want := "kerberos      " + f.s.cfg.Kerberos.KDCURL + ", client certificate https://bridge.test until " + until + ", validity 8h\n"
 	if !strings.Contains(out, want) {
 		t.Errorf("check does not say %q:\n%s", want, out)
 	}
@@ -310,6 +311,76 @@ func TestCheckReportsTheKerberosBlock(t *testing.T) {
 	out, err = runCmd(t, "check", "--config", plain.cfgFile)
 	if err != nil || strings.Contains(out, "kerberos") {
 		t.Errorf("without a kerberos block: %v\n%s", err, out)
+	}
+}
+
+func TestCertNameFallsBackToTheSubject(t *testing.T) {
+	u, _ := url.Parse("https://login.test")
+	if got := certName(&x509.Certificate{URIs: []*url.URL{u}, Subject: pkix.Name{CommonName: "x"}}); got != "https://login.test" {
+		t.Errorf("with a URI name: %q", got)
+	}
+	if got := certName(&x509.Certificate{Subject: pkix.Name{CommonName: "x"}}); got != "CN=x" {
+		t.Errorf("without one: %q", got)
+	}
+}
+
+func TestShortDuration(t *testing.T) {
+	for in, want := range map[time.Duration]string{10 * time.Hour: "10h", 8*time.Hour + 30*time.Minute: "8h30m", time.Minute: "1m", 90 * time.Minute: "1h30m", 10*time.Hour + 5*time.Second: "10h0m5s"} {
+		if got := shortDuration(in); got != want {
+			t.Errorf("shortDuration(%v) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// go-authn/bridge#117: a block that cannot work is refused at load (so by
+// `check`), naming the field, as kdcd's check refuses an expired mint
+// certificate: an expired client certificate, a key that is not the
+// certificate's, a ca_file that is not a certificate, a kdc_url that is not
+// https.
+func TestKerberosBlockRefusals(t *testing.T) {
+	c := newConf(t)
+	dir := c.dir
+	_, kdcURL := newStubKDC(t, dir)
+	pair := func(name string, notBefore, notAfter time.Time) {
+		k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		tmpl := &x509.Certificate{SerialNumber: big.NewInt(7), Subject: pkix.Name{CommonName: name},
+			NotBefore: notBefore, NotAfter: notAfter, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &k.PublicKey, k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kd, _ := x509.MarshalPKCS8PrivateKey(k)
+		for suffix, b := range map[string][]byte{
+			".pem": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+			".key": pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: kd}),
+		} {
+			if err := os.WriteFile(filepath.Join(dir, name+suffix), b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	pair("expired", time.Now().Add(-48*time.Hour), time.Now().Add(-time.Hour))
+	pair("future", time.Now().Add(time.Hour), time.Now().Add(48*time.Hour))
+	pair("other", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	p := func(name string) string { return filepath.ToSlash(filepath.Join(dir, name)) }
+	block := func(url, ca, cert, key string) string {
+		return "kerberos {\n  kdc_url   = \"" + url + "\"\n  ca_file   = \"" + p(ca) + "\"\n  cert_file = \"" + p(cert) + "\"\n  key_file  = \"" + p(key) + "\"\n}\n"
+	}
+	for _, tc := range []struct{ name, hcl, says string }{
+		{"expired client certificate", block(kdcURL, "kdc-ca.pem", "expired.pem", "expired.key"), "expired on " + time.Now().Add(-time.Hour).UTC().Format(time.DateOnly)},
+		{"client certificate not valid yet", block(kdcURL, "kdc-ca.pem", "future.pem", "future.key"), "not valid before"},
+		{"key of another certificate", block(kdcURL, "kdc-ca.pem", "bridge.pem", "other.key"), "must belong to the certificate"},
+		{"ca_file that is not a certificate", block(kdcURL, "bridge.key", "bridge.pem", "bridge.key"), "ca_file"},
+		{"ca_file that is missing", block(kdcURL, "nosuch.pem", "bridge.pem", "bridge.key"), "ca_file"},
+		{"kdc_url that is not https", block(strings.Replace(kdcURL, "https://", "http://", 1), "kdc-ca.pem", "bridge.pem", "bridge.key"), "kdc_url"},
+	} {
+		if _, err := c.load(t, c.hcl(nil)+tc.hcl); err == nil || !strings.Contains(err.Error(), tc.says) {
+			t.Errorf("%s: %v, want an error saying %q", tc.name, err, tc.says)
+		}
+	}
+	// The control: the same files, right.
+	if _, err := c.load(t, c.hcl(nil)+block(kdcURL, "kdc-ca.pem", "bridge.pem", "bridge.key")); err != nil {
+		t.Errorf("the control: %v", err)
 	}
 }
 
