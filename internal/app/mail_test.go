@@ -425,6 +425,9 @@ func TestMailBodyCannotForgeHeadersOrEndTheMessage(t *testing.T) {
 }
 
 func TestMailBlockCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file: secrets need an owner-only access list, which a test's temp dir does not give")
+	}
 	dir := t.TempDir()
 	pw := filepath.Join(dir, "pw")
 	if err := os.WriteFile(pw, []byte("hunter2-hunter2\n"), 0o600); err != nil {

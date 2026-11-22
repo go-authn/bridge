@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +78,9 @@ func TestNoticeWithoutAMailBlockOrAnAddressDoesNothing(t *testing.T) {
 }
 
 func TestMailConfiguration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file: secrets need an owner-only access list, which a test's temp dir does not give")
+	}
 	f := newFixture(t, "")
 	good := writeAccountsFile(t, localAccountsText())
 	base, err := os.ReadFile(f.cfgFile)
