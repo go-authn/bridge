@@ -45,6 +45,13 @@ Group=authn-bridge
 ExecStart=/usr/local/bin/authn-bridge --config /etc/authn-bridge
 Restart=on-failure
 RestartSec=5s
+# A secret (the mail block's SMTP password) is a credential, not a file in the
+# configuration: seal it with `systemd-creds encrypt --name=smtp
+# --with-key=host+tpm2 ...` (never a bare --tpm2-pcrs=7), then uncomment the
+# line and write `password_from = "systemd-creds:smtp"`. If a firmware or TPM
+# change makes it unreadable, re-seal it from your offline copy. See
+# docs/install.md.
+#LoadCredentialEncrypted=smtp:/etc/credstore.encrypted/smtp.cred
 # It shuts its listener down within 10 seconds of SIGTERM.
 TimeoutStopSec=20s
 

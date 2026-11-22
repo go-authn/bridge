@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-authn/secretsource"
 )
 
 // The mail block: how the bridge tells a person, through a channel that holds
@@ -30,7 +32,7 @@ import (
 //	  host          = "smtp.example.org"
 //	  security      = "tls"                              # "tls" (465) or "starttls" (587)
 //	  username      = "authn-bridge"
-//	  password_file = "/etc/authn-bridge/smtp.password"  # owned by the service user, 0600
+//	  password_from = "systemd-creds:smtp"               # a secretsource reference; password_file = PATH is the deprecated alias of "file:PATH"
 //	  from          = "authn-bridge@example.org"
 //	}
 //
@@ -44,10 +46,13 @@ type mailBlock struct {
 	Port     int    `hcl:"port,optional"`
 	Security string `hcl:"security,optional"`
 	Username string `hcl:"username"`
-	// PasswordFile holds the SMTP password: a file owned by the service user and
-	// readable by it alone, like the bridge's other secrets (never the
-	// environment, a command line, or this configuration file).
-	PasswordFile string `hcl:"password_file"`
+	// PasswordFrom is a secretsource reference to the SMTP password, such as
+	// "systemd-creds:smtp" or "file:/etc/authn-bridge/smtp.password". The
+	// configuration never holds the secret itself (never the environment or a
+	// command line either).
+	PasswordFrom string `hcl:"password_from,optional"`
+	// PasswordFile is the deprecated spelling of password_from = "file:PATH".
+	PasswordFile string `hcl:"password_file,optional"`
 	From         string `hcl:"from"`
 	// Window is the least time between two mails to one account: notices that
 	// arrive within it are collapsed into one digest. Default 10m, 1m to 24h.
@@ -83,8 +88,15 @@ func (m *mailBlock) check() error {
 	if m.Port < 1 || m.Port > 65535 {
 		return fmt.Errorf("port %d is not a port", m.Port)
 	}
-	if m.Username == "" || m.PasswordFile == "" {
-		return errors.New("username and password_file are required: the bridge sends mail through an authenticated server only")
+	if m.PasswordFrom != "" && m.PasswordFile != "" {
+		return errors.New("password_from and password_file are both set: keep password_from (password_file is its deprecated alias)")
+	}
+	ref := m.PasswordFrom
+	if m.PasswordFile != "" {
+		ref = "file:" + m.PasswordFile
+	}
+	if m.Username == "" || ref == "" {
+		return errors.New("username and password_from are required: the bridge sends mail through an authenticated server only")
 	}
 	if strings.ContainsAny(m.Username, "\x00\r\n") {
 		return errors.New("username: no NUL, CR or LF")
@@ -100,13 +112,18 @@ func (m *mailBlock) check() error {
 		}
 		m.window = d
 	}
-	b, err := readSecretFile(m.PasswordFile, maxMailPassword)
+	ctx, cancel := context.WithTimeout(context.Background(), mailTimeout)
+	defer cancel()
+	sec, err := secretsource.Open(ctx, ref)
 	if err != nil {
-		return fmt.Errorf("password_file: %w", err)
+		return fmt.Errorf("password_from: %w", err)
 	}
-	p := strings.TrimRight(string(b), "\r\n")
-	if p == "" || strings.ContainsAny(p, "\x00\r\n") {
-		return errors.New("password_file: one non-empty line without NUL")
+	defer sec.Close()
+	// systemd-creds: returns the bytes exactly; a lone trailing newline from
+	// `echo` is not part of a password, any other control character is refused.
+	p := strings.TrimRight(string(sec.Bytes()), "\r\n")
+	if p == "" || len(p) > maxMailPassword || strings.ContainsAny(p, "\x00\r\n") {
+		return errors.New("password_from: one non-empty line without NUL")
 	}
 	m.password = p
 	return nil

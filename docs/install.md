@@ -330,6 +330,45 @@ systemctl daemon-reload && systemctl restart authn-bridge
 With this drop-in the exposure is 1.4. Without `PrivateUsers=no`, the bind
 fails with `permission denied` even though the service holds the capability.
 
+### The SMTP password of the `mail` block, sealed with systemd-creds
+
+`password_from` takes a secretsource reference, so the password never sits in
+the configuration. On a systemd host, seal it to the machine and hand it to the
+service as a credential:
+
+```sh
+printf %s 'the-smtp-password' | sudo systemd-creds encrypt --name=smtp \
+  --with-key=host+tpm2 - /etc/credstore.encrypted/smtp.cred
+```
+
+```ini
+# systemctl edit authn-bridge
+[Service]
+LoadCredentialEncrypted=smtp:/etc/credstore.encrypted/smtp.cred
+```
+
+```hcl
+mail {
+  # ...
+  password_from = "systemd-creds:smtp"   # reads $CREDENTIALS_DIRECTORY/smtp
+}
+```
+
+Use `--with-key=host+tpm2` with no `--tpm2-pcrs`: the key derives from the TPM2
+chip and the host key file, and survives firmware and Secure Boot updates. Do
+not use a bare `--tpm2-pcrs=7`: a firmware or shim update would make the
+credential unreadable and the bridge would refuse to start.
+
+**Recovery.** The credential is lost with the TPM2 chip or
+`/var/lib/systemd/credential.secret`, and a decryption failure stops the
+bridge at startup with an error that says the credential may need re-sealing.
+Keep the password in a place that does not depend on this machine (an offline
+copy), and re-seal from that copy with the `systemd-creds encrypt` command
+above, then `systemctl restart authn-bridge`.
+
+`password_file = "PATH"` still works but is deprecated: it is read as
+`password_from = "file:PATH"`. Setting both is refused.
+
 ## 6. Upgrade, and roll back
 
 Back up `/var/lib/authn-bridge` first. It holds the keys and the salt, which
