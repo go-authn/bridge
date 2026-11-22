@@ -199,6 +199,8 @@ var catalogue = map[string][2]string{
 	"rm.banner.title":    {"Suppression d'une clé d'accès en attente", "A passkey removal is pending"},
 	"rm.banner.p":        {"La clé %s sera supprimée le %s. D'ici là elle fonctionne encore. Si ce n'est pas vous qui l'avez demandée, annulez : n'importe laquelle de vos clés peut le faire.", "The passkey %s will be removed on %s. It still works until then. If you did not ask for this, cancel it: any of your keys can."},
 	"rm.cancel":          {"Annuler la suppression", "Cancel the removal"},
+	"rm.notice.none":     {"Aucune adresse e-mail n'est enregistrée pour ce compte : personne n'est prévenu par e-mail des suppressions de clés demandées ou annulées.", "No e-mail address is recorded for this account: nobody is told by e-mail when a passkey removal is requested or cancelled."},
+	"rm.notice.failed":   {"Le dernier avis par e-mail n'a pas pu être envoyé. Une suppression demandée attend qu'un avis soit remis ; une annulation, elle, est déjà effective.", "The last e-mail notice could not be sent. A requested removal waits until a notice is delivered; a cancellation is already in effect."},
 	"rm.pending":         {"suppression prévue", "removal scheduled"},
 	"keys.full":          {"Un compte a au plus %d clés : supprimez-en une pour en ajouter.", "At most %d passkeys: remove one to add another."},
 	"keys.add":           {"Ajouter une clé d'accès", "Add a passkey"},

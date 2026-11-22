@@ -3,6 +3,24 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.32.0
+
+- New `mail` block (#122): an out-of-band plain-text e-mail to the account's
+  own address (from the local accounts file, never from the request) when a
+  passkey removal is requested or cancelled, so a thief holding one key cannot
+  silently cancel the owner's removal with it. TLS only (implicit, or required
+  STARTTLS), certificate verified; username and `password_file` are mandatory
+  (a file owned by the service user, no group/other bits, one open); AUTH
+  (PLAIN, else LOGIN) only after TLS, never in clear, not even to 127.0.0.1.
+  No link in the text; CR/LF in headers refused (fuzzed). One mail per account
+  per `window` (default 10m), events collapsed into a digest.
+- Failure rules: a removal request whose notice cannot be sent **stays
+  pending** (5 tries, then a loud `GAVE UP` log; a restart resumes it); a
+  cancellation **applies even if its mail fails**, and the failure is logged
+  and shown on the account page. An account with no address still gets its
+  removal; the log and the page say nobody was told. Without a `mail` block,
+  nothing changes. New record field `notice_pending`.
+
 ## v0.31.3
 
 Dependencies (security fixes the 2026-11-21 audit led to):

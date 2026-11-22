@@ -115,6 +115,8 @@ type config struct {
 	// sends mail for the deployment turns into the mail (account_removal.go).
 	// Optional, and only with a local block.
 	Notify *notifyBlock `hcl:"notify,block"`
+	// Mail is the e-mail notice of a deferred passkey removal (mail.go).
+	Mail *mailBlock `hcl:"mail,block"`
 
 	// Home is the optional title and list of links on the home page (home.go).
 	Home *homeBlock `hcl:"home,block"`
@@ -714,6 +716,14 @@ func (c *config) check() error {
 		}
 		if err := c.Notify.check(); err != nil {
 			return fmt.Errorf("notify: %w", err)
+		}
+	}
+	if c.Mail != nil {
+		if c.Local == nil {
+			return errors.New("mail: it reports on the passkeys of local accounts, and there is no local block")
+		}
+		if err := c.Mail.check(); err != nil {
+			return fmt.Errorf("mail: %w", err)
 		}
 	}
 	if c.Home != nil {

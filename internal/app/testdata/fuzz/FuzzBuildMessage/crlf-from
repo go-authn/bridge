@@ -1,0 +1,5 @@
+go test fuzz v1
+string("a@b.org\r\nX: y")
+string("c@d.org")
+string("s")
+string(".\r\n")

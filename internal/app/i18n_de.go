@@ -98,6 +98,8 @@ var catDE = map[string]string{
 	"rm.banner.title":    "Das Entfernen eines Passkeys steht aus",
 	"rm.banner.p":        "Der Passkey %s wird am %s entfernt. Bis dahin funktioniert er weiterhin. Wenn nicht Sie das veranlasst haben, brechen Sie es ab: Jeder Ihrer Schlüssel kann das.",
 	"rm.cancel":          "Entfernen abbrechen",
+	"rm.notice.none":     "Für dieses Konto ist keine E-Mail-Adresse hinterlegt: Niemand wird per E-Mail benachrichtigt, wenn das Entfernen eines Passkeys angefordert oder abgebrochen wird.",
+	"rm.notice.failed":   "Die letzte E-Mail-Benachrichtigung konnte nicht gesendet werden. Ein angefordertes Entfernen wartet, bis eine Benachrichtigung zugestellt ist; ein Abbruch gilt bereits.",
 	"rm.pending":         "Entfernen geplant",
 	"keys.full":          "Ein Konto hat höchstens %d Passkeys: Entfernen Sie einen, um einen weiteren hinzuzufügen.",
 	"keys.add":           "Passkey hinzufügen",

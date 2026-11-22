@@ -94,6 +94,11 @@ type server struct {
 	notifySlots  chan struct{}
 	notifyWG     sync.WaitGroup
 	notifyClient *http.Client
+	// noticeMu guards notices, the e-mail digests waiting per account
+	// (mailnotice.go); mailTLS replaces the system roots (tests).
+	noticeMu sync.Mutex
+	notices  map[string]*acctNotices
+	mailTLS  *tls.Config
 
 	logMu sync.Mutex
 
