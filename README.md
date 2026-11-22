@@ -745,6 +745,11 @@ TGT: `POST /kerberos/tgt` with the bearer token asks the realm's KDC
 the answer, a KRB-CRED (RFC 4120 5.8), for the person's machine to load into its
 credential cache (go-authn/kinit does it on Windows).
 
+A token is held to the passkey it was bought with: removing that passkey ends
+what it bought, even if the account keeps other keys. A ticket never outlives
+the login (`session_end`); refresh families are a separate matter, fixed at the
+login and bounded as described under refresh tokens.
+
 ```hcl
 kerberos {
   kdc_url   = "https://kdc.internal.example.org:8443/mint"  # https only

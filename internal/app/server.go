@@ -141,6 +141,15 @@ type issuedToken struct {
 	// subject is the person's stable identity (person.subject), by which
 	// disabling finds them when the username will not do.
 	subject string
+	// credential is the passkey (row key) a local login was made with, "" for a
+	// federated person: a token is held to it as a refresh grant is
+	// (localAccountGone), so removing the key ends what the key bought.
+	credential string
+}
+
+// who is the person as refused() knows them, from what the token recorded.
+func (it issuedToken) who() *person {
+	return &person{username: it.username, idp: it.idp, subject: it.subject, credential: it.credential}
 }
 
 // A grant is what a code stands for.

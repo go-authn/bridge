@@ -450,6 +450,9 @@ type storedIssued struct {
 	Username string         `json:"username,omitempty"`
 	IdP      string         `json:"idp,omitempty"`
 	Subject  string         `json:"subject,omitempty"`
+	// Credential: the passkey the token was bought with. Absent in a state
+	// written before it was kept, which holds the token to the account only.
+	Credential string `json:"credential,omitempty"`
 }
 
 var errUnknownClient = errors.New("a client the configuration no longer has")
@@ -500,12 +503,12 @@ func (s *server) persistStores() error {
 	}
 	return s.issued.persist(s.state, "issued",
 		func(it issuedToken) ([]byte, error) {
-			return json.Marshal(storedIssued{it.info, it.username, it.idp, it.subject})
+			return json.Marshal(storedIssued{it.info, it.username, it.idp, it.subject, it.credential})
 		},
 		func(b []byte) (issuedToken, error) {
 			var st storedIssued
 			err := json.Unmarshal(b, &st)
-			return issuedToken{info: st.Info, username: st.Username, idp: st.IdP, subject: st.Subject}, err
+			return issuedToken{info: st.Info, username: st.Username, idp: st.IdP, subject: st.Subject, credential: st.Credential}, err
 		})
 }
 

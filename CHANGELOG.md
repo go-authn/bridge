@@ -16,6 +16,29 @@ Dependencies (security fixes the 2026-11-21 audit led to):
   so none is bumped. Bridge does not read secrets through secretsource, so
   its v0.6.0 refusal of an empty `file:` secret does not apply here.
 
+Security (audit follow-up, [#125](https://github.com/go-authn/bridge/issues/125)):
+
+- **MEDIUM: a token of a removed passkey still bought a Kerberos ticket (and
+  kept an SSH certificate's person live).** The recheck built the person
+  without the credential, so it only asked that the account kept some
+  passkey. An access token now records the passkey it was bought with (state
+  field `credential`, optional: a token stored before holds to the account
+  only) and is held to it, before the KDC is asked, after it, and when an SSH
+  certificate is withdrawn, as a refresh grant already was.
+- **LOW: the Kerberos ticket lifetime used the host clock** instead of the
+  provider's (`s.now`); a provider clock behind refused a valid login.
+- **LOW: a display name could hold direction controls and invisible
+  characters** (U+202E, U+2066, U+200E, U+200B, U+FEFF, U+2028, U+00AD...).
+  They are refused; ZWJ and ZWNJ stay.
+- **LOW: finishing an enrolment could exceed ten passkeys** when a key was
+  added between its begin and its finish. The finish takes the account lock
+  and rechecks the cap (409) before the invitation is burnt.
+- Documentation: the Kerberos comment no longer reads as if the endpoint
+  bounded refresh families.
+- Examined and not defects: refresh lifetime (#2), certificate rows without
+  an IdP (#5), the anonymous step-up begin (#7), HTML escaping of the
+  authorize page (#8).
+
 Security (found by the 2026-11-21 audit):
 
 - **MEDIUM: a federated person and a local account could be one principal.**

@@ -38,7 +38,9 @@ import (
 //     and finds it, or not, in its directory;
 //   - the lifetime never outlives the IdP's session (session_end) nor the
 //     block's validity, at most ten hours: nothing renews a TGT here, a
-//     longer-lived credential needs a new login;
+//     longer-lived credential needs a new login. (The bound is on this
+//     endpoint, per ticket: a refresh family is a separate matter, fixed at
+//     the login and bounded by session_end for a SAML login, see refresh.go;)
 //   - a person disabled, or a token revoked, while the KDC was being asked,
 //     gets nothing: the ticket is dropped, as for an SSH or X.509 certificate.
 //
@@ -235,10 +237,21 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ⛔ The token is held to the passkey it was bought with, as a refresh
+	// grant is: the account having some other key left is not enough.
+	jti, _ := claims["jti"].(string)
+	_, machine := s.machineName(claims)
+	if it, live := s.issued.get(jti); live && !machine && s.refused(it.who()) != "" {
+		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+		http.Error(w, "the token is not valid", http.StatusUnauthorized)
+		return
+	}
+
 	now := s.now()
 	life := kb.validity
 	if end, ok := claims["session_end"].(float64); ok && end > 0 {
-		if d := time.Until(time.Unix(int64(end), 0)); d < life {
+		// The provider's clock, as everywhere else (s.now), never the host's.
+		if d := time.Unix(int64(end), 0).Sub(now); d < life {
 			life = d
 		}
 	}
@@ -261,9 +274,7 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 	// time: a person disabled or a token revoked since gets nothing. (A TGT
 	// cannot be taken back once out; it is the same window every
 	// certificate here closes with withdrawn.)
-	jti, _ := claims["jti"].(string)
-	_, machine := s.machineName(claims)
-	if it, live := s.issued.get(jti); !live || (!machine && s.refused(&person{username: it.username, idp: it.idp, subject: it.subject}) != "") {
+	if it, live := s.issued.get(jti); !live || (!machine && s.refused(it.who()) != "") {
 		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 		http.Error(w, "the token is not valid", http.StatusUnauthorized)
 		return
