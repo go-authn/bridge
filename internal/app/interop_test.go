@@ -528,7 +528,9 @@ func TestInteropSSFOpkssh(t *testing.T) {
 		// Token in the openpubkey-pkt extension.
 		cert := &ssh.Certificate{
 			Key: signer.PublicKey(), CertType: ssh.UserCert, KeyId: user,
-			ValidAfter: uint64(now.Add(-5 * time.Minute).Unix()), ValidBefore: uint64(now.Add(time.Hour).Unix()),
+			// golang.org/x/crypto v0.59.0 refuses to sign a certificate with no principal.
+			ValidPrincipals: []string{user},
+			ValidAfter:      uint64(now.Add(-5 * time.Minute).Unix()), ValidBefore: uint64(now.Add(time.Hour).Unix()),
 			Permissions: ssh.Permissions{Extensions: map[string]string{"openpubkey-pkt": string(compact)}},
 		}
 		if err := cert.SignCert(rand.Reader, signer); err != nil {
