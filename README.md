@@ -93,9 +93,10 @@ saml {
     email      = "help@example.org"
   }
   contact {
-    type     = "other"
-    security = true                            # the REFEDS security contact; type "other" only
-    email    = "security@example.org"
+    type       = "other"
+    security   = true                          # the REFEDS security contact; type "other" only
+    given_name = "Example CSIRT"               # required for a security contact (REFEDS)
+    email      = "security@example.org"
   }
 
   ui {
