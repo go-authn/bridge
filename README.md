@@ -255,6 +255,24 @@ with `Sec-Fetch-Site: same-origin`, a `fetch()` the real origin), room in the
 host's failure budget, and leaves one audit line:
 `account: audit: <login> <action> <what> from <address>`.
 
+**What the journal says about a success.** One line per successful sign-in,
+and nothing secret in it (no code, token, assertion, mail, name or group):
+
+```text
+login: <username> via <idp entityID> for <client_id> from <address>
+login: <login> via <issuer>/local with passkey <8 hex> for <client_id> from <address>
+account: <username> confirmed through <idp entityID> from <address>
+account: audit: <login> stepup <16 hex> from <address>
+token: authorization_code issued to <client_id> for <username>
+token: refresh_token issued to <client_id> for <username>
+```
+
+The first two are a login at the authorization endpoint, federated and local
+(`<8 hex>` is the passkey's ID as `local: <login> enrolled a passkey (<8 hex>)`
+prints it); the next two are the account page's sign-in through an institution
+and with a passkey (the page then opens with `account: audit: <login> confirm
+federation …`); the last two are the tokens handed to the client.
+
 The pages and the script are exercised in a real Chrome by
 `TestRealBrowserPasskeyLifecycle` (`BRIDGE_REQUIRE_BROWSER=1` turns "no Chrome"
 into a failure, as `BRIDGE_REQUIRE_JUDGE` does for the judges): enrolment from
@@ -278,6 +296,15 @@ authn-bridge local-account passkeys      --config /etc/authn-bridge alice   # ID
 authn-bridge local-account remove-passkey --config /etc/authn-bridge alice <id>   # 8+ hex characters of the ID
 authn-bridge local-account remove        --config /etc/authn-bridge alice
 ```
+
+Run `local-account` as **root** when the accounts directory is `root:authn-bridge`
+0750 and the file 0640 (the layout of `docs/install.md`): the command replaces
+the file through a temporary one next to it (`.accounts-NNN`), and as
+`authn-bridge` it fails with `open /etc/authn-bridge-local/.accounts-NNN:
+permission denied`. It keeps the file's owner and mode. Over SSH,
+`ssh host sudo authn-bridge local-account … --name "Two words"` needs an inner
+quote layer (`--name '"Two words"'`): ssh joins its arguments into one string
+and the remote shell splits it again.
 
 A passkey's ID, as `passkeys` lists it and `remove-passkey` takes it, is the
 SHA-256 of the credential ID in lowercase hex: 64 characters, of which any

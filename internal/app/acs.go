@@ -109,7 +109,14 @@ func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, l *login, w
 		s.finishError(w, r, l, "access_denied", "your access to this service has been disabled")
 		return
 	}
-	s.logf("login: %s via %s for %s", orUnnamed(who.username), who.idp, l.client.ID)
+	// A local account's line names the passkey that signed in, the first eight
+	// characters of its row key, as the enrolment line does. Nothing else of
+	// the person is printed: no mail, no name, no group.
+	by := ""
+	if who.credential != "" {
+		by = " with passkey " + who.credential[:min(8, len(who.credential))]
+	}
+	s.logf("login: %s via %s%s for %s from %s", orUnnamed(who.username), who.idp, by, l.client.ID, s.clientAddr(r))
 	s.counters.inc("bridge_logins_total", "ok")
 	if l.kind == "device" {
 		s.deviceDone(w, l, who, "")

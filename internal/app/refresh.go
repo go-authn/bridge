@@ -128,6 +128,7 @@ func (s *server) rotate(w http.ResponseWriter, r *http.Request, client *clientBl
 	s.families.update(g.family, func(j *[]string) { *j = append(*j, jti) })
 	resp["refresh_token"] = next
 	s.counters.inc("bridge_tokens_issued_total", "refresh_token")
+	s.logf("token: refresh_token issued to %s for %s", client.ID, orUnnamed(g.who.username))
 	writeJSON(w, http.StatusOK, resp)
 }
 
