@@ -10,7 +10,7 @@ require (
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.8.0
 	github.com/go-authn/revocation v0.7.1
-	github.com/go-authn/saml v0.7.2
+	github.com/go-authn/saml v0.8.0
 	github.com/go-authn/secretsource v0.9.0
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-authn/saml"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -211,6 +212,74 @@ type samlBlock struct {
 	InformationURL   string            `hcl:"information_url,optional"`
 	PrivacyStatement string            `hcl:"privacy_statement_url,optional"`
 	Technical        string            `hcl:"technical_contact,optional"`
+
+	// Organization, Contacts and UI are optional: left out, the metadata is
+	// what it was before they existed. Each is checked at start
+	// (saml.Description.Validate), so an invalid value refuses to start rather
+	// than being published to a federation.
+	Organization *organizationBlock `hcl:"organization,block"`
+	Contacts     []contactBlock     `hcl:"contact,block"`
+	UI           *uiBlock           `hcl:"ui,block"`
+}
+
+// organizationBlock is md:Organization (saml-metadata-2.0-os 2.3.2.1): all
+// three maps are by language, and each needs at least one entry.
+type organizationBlock struct {
+	Names        map[string]string `hcl:"names"`
+	DisplayNames map[string]string `hcl:"display_names"`
+	URLs         map[string]string `hcl:"urls"`
+}
+
+// contactBlock is one md:ContactPerson, written after technical_contact's.
+// type is technical, support, administrative, billing or other; security
+// marks the REFEDS security contact and needs type "other".
+type contactBlock struct {
+	Type      string `hcl:"type"`
+	Security  bool   `hcl:"security,optional"`
+	GivenName string `hcl:"given_name,optional"`
+	Email     string `hcl:"email"`
+}
+
+// uiBlock is what mdui:UIInfo holds beyond names and descriptions: logos (an
+// https URL, and the width and height in pixels), and the information and
+// privacy statement pages by language.
+type uiBlock struct {
+	Logos                []logoBlock       `hcl:"logo,block"`
+	InformationURLs      map[string]string `hcl:"information_urls,optional"`
+	PrivacyStatementURLs map[string]string `hcl:"privacy_statement_urls,optional"`
+}
+
+type logoBlock struct {
+	URL    string `hcl:"url"`
+	Width  int    `hcl:"width"`
+	Height int    `hcl:"height"`
+	Lang   string `hcl:"lang,optional"`
+}
+
+// description is the saml.Description this block stands for, with the
+// Attributes left to the caller.
+func (s *samlBlock) description() saml.Description {
+	d := saml.Description{
+		Names:            s.Names,
+		Descriptions:     s.Descriptions,
+		InformationURL:   s.InformationURL,
+		PrivacyStatement: s.PrivacyStatement,
+		Technical:        s.Technical,
+	}
+	if o := s.Organization; o != nil {
+		d.Organization = &saml.Organization{Names: o.Names, DisplayNames: o.DisplayNames, URLs: o.URLs}
+	}
+	for _, c := range s.Contacts {
+		d.Contacts = append(d.Contacts, saml.Contact{Type: c.Type, Security: c.Security, GivenName: c.GivenName, Email: c.Email})
+	}
+	if u := s.UI; u != nil {
+		for _, l := range u.Logos {
+			d.Logos = append(d.Logos, saml.Logo{URL: l.URL, Width: l.Width, Height: l.Height, Lang: l.Lang})
+		}
+		d.InformationURLs = u.InformationURLs
+		d.PrivacyStatementURLs = u.PrivacyStatementURLs
+	}
+	return d
 }
 
 // The administration API's listener.
@@ -650,6 +719,9 @@ func (c *config) check() error {
 	}
 	if len(s.Names) == 0 {
 		s.Names = map[string]string{"en": u.Host}
+	}
+	if err := s.description().Validate(); err != nil {
+		return fmt.Errorf("saml: %w", err)
 	}
 
 	if c.Claims == nil {

@@ -1,0 +1,4 @@
+# The golden metadata is compared byte for byte: no line-ending conversion on
+# any platform.
+internal/app/testdata/sp-metadata-empty.golden.xml -text
+internal/app/testdata/sp-golden-cert.pem -text

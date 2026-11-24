@@ -75,15 +75,9 @@ func (s *server) samlMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) spMetadata() ([]byte, error) {
 	c := s.cfg.SAML
-	d := saml.Description{
-		Names:            c.Names,
-		Descriptions:     c.Descriptions,
-		InformationURL:   c.InformationURL,
-		PrivacyStatement: c.PrivacyStatement,
-		Technical:        c.Technical,
-		Attributes: []string{saml.SubjectID, saml.EduPersonPrincipalName, saml.Mail,
-			saml.DisplayName, saml.GivenName, saml.Surname},
-	}
+	d := c.description()
+	d.Attributes = []string{saml.SubjectID, saml.EduPersonPrincipalName, saml.Mail,
+		saml.DisplayName, saml.GivenName, saml.Surname}
 	if c.Discovery != "" {
 		d.Discovery = s.cfg.Issuer + "/saml/disco"
 	}

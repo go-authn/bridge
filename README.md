@@ -65,6 +65,55 @@ checked at every start: a key that arrives over the same channel as the
 document it vouches for vouches for nothing. RENATER publishes the fingerprint
 on its metadata page; the one above is the 2026 certificate's.
 
+### Describing this provider to the federation
+
+A registry (RENATER, eduGAIN) asks more of an SP's metadata
+(`/saml/metadata`) than names and a technical contact. Three blocks inside
+`saml { }` are optional; configured, they add `md:Organization`, more
+`md:ContactPerson`s and `mdui:Logo`s. Left out, the metadata is byte-for-byte
+what it was. Every value is checked at start, and a bad one refuses to start
+(the provider never publishes it to a federation): URLs are `https`, a logo has
+a positive `width` and `height`, a contact `type` is one of `technical`,
+`support`, `administrative`, `billing`, `other`, an e-mail is a bare address.
+
+```hcl
+saml {
+  # ... as above ...
+  technical_contact = "admin@example.org"      # written first, as before
+
+  organization {
+    names         = { en = "Example Org" }     # each map: by language, at least one entry
+    display_names = { en = "Example Organisation", fr = "Organisation Exemple" }
+    urls          = { en = "https://www.example.org/" }
+  }
+
+  contact {
+    type       = "support"                     # technical, support, administrative, billing, other
+    given_name = "Help desk"
+    email      = "help@example.org"
+  }
+  contact {
+    type     = "other"
+    security = true                            # the REFEDS security contact; type "other" only
+    email    = "security@example.org"
+  }
+
+  ui {
+    logo {
+      url    = "https://login.example.org/logo.png"   # no lang: the default logo
+      width  = 200
+      height = 80
+    }
+    information_urls       = { en = "https://login.example.org/info/en", fr = "https://login.example.org/info/fr" }
+    privacy_statement_urls = { en = "https://login.example.org/privacy/en", fr = "https://login.example.org/privacy/fr" }
+  }
+}
+```
+
+`information_url` and `privacy_statement_url` stay, and stand for the `en`
+entry: giving one and an `en` entry of its map is refused. A data URI is not
+accepted for a logo (saml2int SDP-MD10 allows one; here only `https`).
+
 ## What an application gets
 
 | | |
