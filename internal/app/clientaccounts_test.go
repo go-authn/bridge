@@ -84,6 +84,21 @@ func TestClientAccountsConfig(t *testing.T) {
 	}
 }
 
+// The rule is part of loading a configuration, not only of the method: a
+// restriction nobody checks at load is one that fails at the first login.
+func TestClientAccountsRefusedAtLoad(t *testing.T) {
+	c := newConf(t)
+	client := func(body string) string {
+		return c.hcl(nil) + "client \"p\" {\ndevice = true\n" + body + "\n}\n"
+	}
+	if _, err := c.load(t, client(`accounts = ["ldap"]`)); err == nil || !strings.Contains(err.Error(), `client "p"`) || !strings.Contains(err.Error(), `"ldap" is not`) {
+		t.Errorf("an unknown kind: %v", err)
+	}
+	if _, err := c.load(t, client(`accounts = ["federated"]`)); err != nil {
+		t.Errorf("accounts = [federated] refused: %v", err)
+	}
+}
+
 func TestClientAccountsRoutesTheLoginToTheKindItTakes(t *testing.T) {
 	f := localFixture(t, "")
 	web := func() string {
