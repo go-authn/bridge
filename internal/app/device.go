@@ -361,6 +361,10 @@ func (s *server) pollDevice(w http.ResponseWriter, r *http.Request, client *clie
 				tokenError(w, http.StatusBadRequest, "invalid_grant", "access has been disabled")
 				return
 			}
+			if errors.Is(err, errKindRefused) {
+				tokenError(w, http.StatusBadRequest, "access_denied", "this client does not take this kind of account")
+				return
+			}
 			tokenError(w, http.StatusInternalServerError, "server_error", "")
 			return
 		}

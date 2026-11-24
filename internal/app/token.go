@@ -178,6 +178,10 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 			tokenError(w, http.StatusBadRequest, "invalid_grant", "access has been disabled")
 			return
 		}
+		if errors.Is(err, errKindRefused) {
+			tokenError(w, http.StatusBadRequest, "access_denied", "this client does not take this kind of account")
+			return
+		}
 		tokenError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}
@@ -196,6 +200,12 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 func (s *server) issue(client *clientBlock, who *person, scopes []string, nonce string, aud any) (map[string]any, string, error) {
 	if why := s.refused(who); why != "" {
 		return nil, "", fmt.Errorf("%w: %s (%s via %s)", errDisabled, why, orUnnamed(who.username), who.idp)
+	}
+	// ⛔ Every token passes here -- code, refresh, device -- so the kind of
+	// account is held at each, and a grant bought before the restriction was
+	// written dies with it.
+	if why := s.accountsRefused(client, who); why != "" {
+		return nil, "", fmt.Errorf("%w: %s (%s via %s for %s)", errKindRefused, why, orUnnamed(who.username), who.idp, client.ID)
 	}
 	now := s.now()
 	sub := who.sub(s.cfg.salt, client)

@@ -225,6 +225,41 @@ lists and removes their own passkeys at `<issuer>/account` ("My account",
 below); the login page links to it. `authn-bridge local-account invite` stays
 the way to create an account and to recover one that lost every key.
 
+**Which kind of account a client takes: `accounts` (v0.38.0).** A `client` block
+may say that only one kind of person signs in to it:
+
+```hcl
+client "forgejo" {
+  secret_file   = "/etc/authn-bridge/forgejo.secret"
+  redirect_uris = ["https://git.example.org/user/oauth2/bridge/callback"]
+  accounts      = ["local"]       # "local", "federated", or both (the default)
+}
+```
+
+`accounts = ["local"]` is for a service that wants a hardware key: a person of
+a SAML institution is refused, whatever their institution says. The rule is not
+a menu entry. It is asked **everywhere a grant is made or used**: the
+authorization endpoint sends the person to the one path the client takes (the
+passkey page, or the federation; `prompt=none` for a local-only client answers
+`login_required`); the federation step, the passkey step and the end of a login
+each refuse a login of the other kind; and every token -- the code exchange, a
+refresh, a device poll -- is refused for a person of the other kind, so a grant
+bought before the restriction was written stops with it. The answer is
+`access_denied`, at the client's redirect URI during a login and at the token
+endpoint afterwards. `check` prints it on the client's line (`..., local
+accounts only)`), and `accounts = ["local"]` without a `local` block is a
+configuration error. The journal says why, without anything of the person but
+the name the login line already carries:
+
+```text
+login: alice@univ-ex.example via https://idp.univ-ex.example/idp/shibboleth refused for forgejo: this client takes local accounts only
+token: account kind not accepted by this client: this client takes local accounts only (alice@univ-ex.example via https://idp.univ-ex.example/idp/shibboleth for forgejo)
+```
+
+**Known limit.** The certificate endpoints (SSH, X.509, Kerberos, WireGuard) are
+not tied to a client, so `accounts` does not apply to them: the restriction
+covers OAuth/OIDC clients only.
+
 ## My account (`/account`)
 
 Every signed-in person, federated or local, has a profile space at

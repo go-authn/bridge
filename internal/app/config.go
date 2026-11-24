@@ -370,6 +370,13 @@ type clientBlock struct {
 	// command-line tool listens.
 	RedirectURIs []string `hcl:"redirect_uris,optional"`
 
+	// Accounts says which kind of account may sign in to this client: "local"
+	// (a local account, with a passkey), "federated" (a person of a SAML
+	// IdP), or both. Absent, both. Held at the authorization endpoint, where
+	// a login is offered, when a login ends, and at every token issued (code,
+	// refresh, device) -- see accountsRefused.
+	Accounts []string `hcl:"accounts,optional"`
+
 	// Audience is what the access token is addressed to, e.g. "fileshare".
 	// The client ID when empty.
 	Audience []string `hcl:"audience,optional"`
@@ -929,6 +936,9 @@ func (c *config) check() error {
 			if ru.Scheme == "http" && !loopbackHost(ru.Hostname()) {
 				return fmt.Errorf("client %q: redirect URI %q: a code sent over cleartext http is a code anybody on the path has", cl.ID, r)
 			}
+		}
+		if err := cl.checkAccounts(c.Local != nil); err != nil {
+			return fmt.Errorf("client %q: %w", cl.ID, err)
 		}
 		if cl.SSHCertificates && c.SSHCA == nil {
 			return fmt.Errorf("client %q: ssh_certificates needs an ssh_ca block", cl.ID)

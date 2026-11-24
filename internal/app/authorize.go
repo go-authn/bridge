@@ -243,11 +243,25 @@ func (s *server) startLogin(w http.ResponseWriter, r *http.Request, l *login) {
 	// With local accounts, people choose between them and the federation. Not
 	// for prompt=none: there is no session of a local account to find, and the
 	// federation path is the one that can answer it.
-	if s.cfg.Local != nil && !l.options.IsPassive {
+	//
+	// A client that takes one kind of account is offered that path only: the
+	// local page straight away, or the federation as if there were no local
+	// accounts. prompt=none for a local-only client has nothing to ask.
+	local := l.client == nil || l.client.allowsLocal()
+	federated := l.client == nil || l.client.allowsFederated()
+	if s.cfg.Local != nil && !federated && l.options.IsPassive {
+		s.finishError(w, r, l, "login_required", "no session: a local account needs a passkey")
+		return
+	}
+	if s.cfg.Local != nil && local && !l.options.IsPassive {
 		if !s.setLoginCookie(w, id, l) {
 			return
 		}
-		http.Redirect(w, r, s.cfg.Issuer+"/login", http.StatusFound)
+		to := s.cfg.Issuer + "/login"
+		if !federated {
+			to = s.cfg.Issuer + "/local/login"
+		}
+		http.Redirect(w, r, to, http.StatusFound)
 		return
 	}
 	if len(s.cfg.SAML.IdPs) == 1 {
@@ -347,6 +361,14 @@ func configuredIdP(cfg *config, entityID string) bool {
 
 // toIdP sends the person to their IdP with an AuthnRequest.
 func (s *server) toIdP(w http.ResponseWriter, r *http.Request, id string, l *login, entityID string) {
+	// ⛔ Also here, not only where startLogin chose the path: /saml/disco is a
+	// URL anybody can type, with the cookie of a login for any client.
+	if l.client != nil && !l.client.allowsFederated() {
+		s.logf("login: a federated sign-in was started for %s, which takes %s", l.client.ID, l.client.accountsLine())
+		s.counters.inc("bridge_logins_total", "wrong_account_kind")
+		s.finishError(w, r, l, "access_denied", "this application does not take institutional accounts")
+		return
+	}
 	idp, ok := s.fed.IdP(entityID)
 	if !ok || !s.allowedIdP(entityID) {
 		s.page(w, http.StatusBadRequest, "That institution cannot be used to log in here.")
