@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.36.0
+
+- A `contact` block with `security = true` now requires `given_name`: the
+  REFEDS Security Contact Metadata Extension makes GivenName and EmailAddress
+  mandatory, and go-authn/saml v0.9.0 refuses the metadata without it. A
+  configuration written from the v0.35.0 README example (no `given_name`)
+  refuses to start until one is added.
+
 ## v0.35.0
 
 - The SP metadata (`/saml/metadata`) takes three optional blocks inside

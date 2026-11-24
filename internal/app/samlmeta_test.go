@@ -130,9 +130,10 @@ const metaBlocks = `saml {
     email      = "help@example.org"
   }
   contact {
-    type     = "other"
-    security = true
-    email    = "security@example.org"
+    type       = "other"
+    security   = true
+    given_name = "Example CSIRT"
+    email      = "security@example.org"
   }
   ui {
     logo {
@@ -215,18 +216,19 @@ func TestConfigMetadataRefusals(t *testing.T) {
 	}
 	const logo = `ui {|logo {|url = "https://login.example.org/l.png"|width = 1|height = 1|`
 	for name, tc := range map[string]struct{ block, want string }{
-		"http logo":                     {`ui {|logo {|url = "http://login.example.org/l.png"|width = 1|height = 1|}|}`, "not an https URL"},
-		"logo without size":             {`ui {|logo {|url = "https://login.example.org/l.png"|width = 0|height = 0|}|}`, "positive"},
-		"logo language":                 {logo + `lang = "fr_FR"|}|}`, "language tag"},
-		"http information URL":          {`ui {|information_urls = { fr = "http://login.example.org/" }|}`, "not an https URL"},
-		"http privacy URL":              {`ui {|privacy_statement_urls = { fr = "http://login.example.org/" }|}`, "not an https URL"},
-		"information URL twice":         {`information_url = "https://login.example.org/a"|ui {|information_urls = { en = "https://login.example.org/b" }|}`, "both give"},
-		"organization without display":  {`organization {|names = { en = "x" }|display_names = {}|urls = { en = "https://www.example.org/" }|}`, "display name"},
-		"organization with http URL":    {`organization {|names = { en = "x" }|display_names = { en = "x" }|urls = { en = "http://www.example.org/" }|}`, "not an https URL"},
-		"unknown contact type":          {`contact {|type = "security"|email = "a@example.org"|}`, "unknown contact type"},
-		"security contact not other":    {`contact {|type = "support"|security = true|email = "a@example.org"|}`, `of type "other"`},
-		"contact e-mail with a name":    {`contact {|type = "support"|email = "Help <a@example.org>"|}`, "bare address"},
-		"contact e-mail not an address": {`contact {|type = "support"|email = "help"|}`, "bare address"},
+		"http logo":                      {`ui {|logo {|url = "http://login.example.org/l.png"|width = 1|height = 1|}|}`, "not an https URL"},
+		"logo without size":              {`ui {|logo {|url = "https://login.example.org/l.png"|width = 0|height = 0|}|}`, "positive"},
+		"logo language":                  {logo + `lang = "fr_FR"|}|}`, "language tag"},
+		"http information URL":           {`ui {|information_urls = { fr = "http://login.example.org/" }|}`, "not an https URL"},
+		"http privacy URL":               {`ui {|privacy_statement_urls = { fr = "http://login.example.org/" }|}`, "not an https URL"},
+		"information URL twice":          {`information_url = "https://login.example.org/a"|ui {|information_urls = { en = "https://login.example.org/b" }|}`, "both give"},
+		"organization without display":   {`organization {|names = { en = "x" }|display_names = {}|urls = { en = "https://www.example.org/" }|}`, "display name"},
+		"organization with http URL":     {`organization {|names = { en = "x" }|display_names = { en = "x" }|urls = { en = "http://www.example.org/" }|}`, "not an https URL"},
+		"unknown contact type":           {`contact {|type = "security"|email = "a@example.org"|}`, "unknown contact type"},
+		"security contact not other":     {`contact {|type = "support"|security = true|email = "a@example.org"|}`, `of type "other"`},
+		"security contact no given name": {`contact {|type = "other"|security = true|email = "a@example.org"|}`, "REFEDS"},
+		"contact e-mail with a name":     {`contact {|type = "support"|email = "Help <a@example.org>"|}`, "bare address"},
+		"contact e-mail not an address":  {`contact {|type = "support"|email = "help"|}`, "bare address"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := c.load(t, c.hcl(in(tc.block)))
