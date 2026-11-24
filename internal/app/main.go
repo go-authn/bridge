@@ -135,7 +135,11 @@ func newRootCmd(out io.Writer) *cobra.Command {
 				if c.public() {
 					kind = "public"
 				}
-				fmt.Fprintf(out, "client        %s (%s, %s subject, audience %v)\n", c.ID, kind, c.Subject, c.Audience)
+				restriction := ""
+				if c.Accounts != nil {
+					restriction = ", " + c.accountsLine()
+				}
+				fmt.Fprintf(out, "client        %s (%s, %s subject, audience %v%s)\n", c.ID, kind, c.Subject, c.Audience, restriction)
 			}
 			return nil
 		},

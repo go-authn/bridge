@@ -109,6 +109,13 @@ func (s *server) finishLogin(w http.ResponseWriter, r *http.Request, l *login, w
 		s.finishError(w, r, l, "access_denied", "your access to this service has been disabled")
 		return
 	}
+	// ⛔ Whatever source vouched, the client's own rule is asked here too.
+	if why := s.accountsRefused(l.client, who); why != "" {
+		s.logKindRefused("login", l.client, who, why)
+		s.counters.inc("bridge_logins_total", "wrong_account_kind")
+		s.finishError(w, r, l, "access_denied", why)
+		return
+	}
 	// A local account's line names the passkey that signed in, the first eight
 	// characters of its row key, as the enrolment line does. Nothing else of
 	// the person is printed: no mail, no name, no group.

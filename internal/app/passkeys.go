@@ -827,6 +827,12 @@ func (s *server) localLoginState(w http.ResponseWriter, r *http.Request) (string
 		s.page(w, http.StatusBadRequest, "This login has already gone to an institution; start again from the application.")
 		return "", nil, false
 	}
+	if l.client != nil && !l.client.allowsLocal() {
+		s.logf("login: a local sign-in was started for %s, which takes %s", l.client.ID, l.client.accountsLine())
+		s.counters.inc("bridge_logins_total", "wrong_account_kind")
+		s.finishError(w, r, l, "access_denied", "this application does not take local accounts")
+		return "", nil, false
+	}
 	if l.options.IsPassive {
 		// prompt=none: there is no session here to find.
 		s.finishError(w, r, l, "login_required", "no session: a local account needs a passkey")
