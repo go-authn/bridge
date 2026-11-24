@@ -3,6 +3,18 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## v0.35.0
+
+- The SP metadata (`/saml/metadata`) takes three optional blocks inside
+  `saml { }`: `organization` (md:Organization), repeated `contact` blocks
+  (md:ContactPerson, `security = true` for the REFEDS security contact) and
+  `ui` (mdui:Logo, and `information_urls` / `privacy_statement_urls` by
+  language). They are validated at start; an invalid value (a non-https URL, a
+  logo without a size, an unknown contact type, an e-mail that is not a bare
+  address, a language given twice) refuses to start. With none configured the
+  metadata is byte-identical to v0.34.0 (tested against the v0.34.0 mapping and
+  a golden file). Needs go-authn/saml v0.8.0.
+
 ## v0.34.0
 
 - `authn-bridge check` prints the kerberos block as the issue (#117) asked:
