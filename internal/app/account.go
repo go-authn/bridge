@@ -432,6 +432,7 @@ func (s *server) accountFromACS(w http.ResponseWriter, r *http.Request, a *saml.
 		s.page(w, http.StatusForbidden, "Your access to this service has been disabled.")
 		return
 	}
+	s.logf("account: %s confirmed through %s from %s", orUnnamed(who.username), who.idp, s.clientAddr(r))
 	h := token()
 	if err := s.accountOpens.put(hashToken(h), &accountSession{who: who}, s.now().Add(accountOpenTTL)); err != nil {
 		s.page(w, http.StatusServiceUnavailable, "Too many in progress; try again in a minute.")

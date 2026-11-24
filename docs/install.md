@@ -251,9 +251,14 @@ removes one -- and with it the tokens and codes that key bought.
 
 `--group` takes a value under `scope` (`urn:geant:<scope>:...`,
 `urn:mace:<scope>:...` or `https://<host under scope>/...`); another is
-refused. Run `local-account` as root (or as the service's user, for the
-passkey commands): it replaces the accounts file next to itself and keeps its
-owner and group. The running provider reads the file within a second, and the
+refused. Run `local-account` as **root** when the directory is `root:authn-bridge`
+0750 and the file 0640, as above: it replaces the accounts file by writing a
+temporary file next to it (`.accounts-NNN`), and as `authn-bridge` that fails
+with `open /etc/authn-bridge-local/.accounts-NNN: permission denied`. The
+command keeps the file's owner and mode. Over SSH, `ssh host sudo authn-bridge
+local-account … --name "Two words"` needs one more layer of quotes
+(`--name '"Two words"'`), because ssh joins its arguments into one string that
+the remote shell splits again. The running provider reads the file within a second, and the
 invitations and passkeys from the database at every use, so inviting, removing
 a passkey and removing an account need no restart (the `local` block itself
 does). A `password_hash` in an accounts file is refused: delete the line.

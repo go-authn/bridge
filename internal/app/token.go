@@ -182,6 +182,7 @@ func (s *server) exchangeCode(w http.ResponseWriter, r *http.Request, client *cl
 		return
 	}
 	s.counters.inc("bridge_tokens_issued_total", "authorization_code")
+	s.logf("token: authorization_code issued to %s for %s", client.ID, orUnnamed(g.who.username))
 	spent := []string{jti}
 	if rt, family := s.newRefresh(client, g.who, g.scopes, g.resources, jti); rt != "" {
 		resp["refresh_token"] = rt
