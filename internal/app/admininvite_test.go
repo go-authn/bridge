@@ -641,6 +641,10 @@ func TestASystemdCredentialIsReadFromTheCredentialsDirectory(t *testing.T) {
 		t.Skip("systemd credentials are Linux's")
 	}
 	dir := t.TempDir()
+	// secretsource refuses a credentials directory others can reach.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "smtp-password"), []byte("s3cret-pw\n"), 0o400); err != nil {
 		t.Fatal(err)
 	}
