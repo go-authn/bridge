@@ -3,6 +3,21 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## Unreleased
+
+- `local { admins = [...], admin_aaguids = [...] }`: an administrator invites a
+  local account at `/account/invite` (login, e-mail, optional name). Same
+  invitation as the CLI; the link goes only by e-mail; one notice per
+  administrator with an address, without the link. Needs a `mail` block, a
+  user-verifying assertion at most 3 minutes old, CSRF, and 10 invitations an
+  hour per administrator. The authenticator-model allowlist reads only an
+  AAGUID proved by verified attestation, which nothing records yet, so the
+  page refuses everyone until that exists (fail closed). Not released for
+  that reason.
+- `authn-bridge check` reports a `systemd-creds:` password it cannot read
+  outside the unit as `resolved only inside the service`; the service refuses
+  to start without it.
+
 ## v0.36.0
 
 - A `contact` block with `security = true` now requires `given_name`: the

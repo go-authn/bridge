@@ -77,7 +77,7 @@ func newRootCmd(out io.Writer) *cobra.Command {
 		Use:   "check",
 		Short: "read the configuration and the federation's metadata, and say what would be served",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig(files)
+			cfg, err := loadConfigIn(files, true)
 			if err != nil {
 				return err
 			}
@@ -115,6 +115,16 @@ func newRootCmd(out io.Writer) *cobra.Command {
 			fmt.Fprintf(out, "tls           %s\n", tlsLine)
 			if l := cfg.Local; l != nil {
 				fmt.Fprintf(out, "local         %s: %d accounts from %s, scope %s\n", cfg.localEntityID(), l.store.current().len(), l.AccountsFile, l.Scope)
+			}
+			if l := cfg.Local; l != nil && len(l.adminSet) > 0 {
+				fmt.Fprintf(out, "admins        %d (invite from the web), %d allowed authenticator model(s)\n", len(l.adminSet), len(l.aaguidSet))
+			}
+			if m := cfg.Mail; m != nil {
+				if m.unresolved != "" {
+					fmt.Fprintf(out, "mail          %s:%d as %s, credential %s: resolved only inside the service\n", m.Host, m.Port, m.Username, m.unresolved)
+				} else {
+					fmt.Fprintf(out, "mail          %s:%d as %s, password read\n", m.Host, m.Port, m.Username)
+				}
 			}
 			fmt.Fprintf(out, "federation    %d IdPs, %d usable here, valid until %s\n", len(md.IdPs), usable, md.ValidUntil.Format(time.RFC3339))
 			if k := cfg.Kerberos; k != nil {

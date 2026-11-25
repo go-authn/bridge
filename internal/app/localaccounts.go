@@ -68,8 +68,24 @@ type localBlock struct {
 	// account page says so (account_removal.go).
 	PasskeyRemovalDelay string `hcl:"passkey_removal_delay,optional"`
 
+	// Admins are the local accounts that may invite another local account from
+	// the web (admininvite.go). Only a LOCAL account is ever one: a federated
+	// session of the same name is not. Each must be in accounts_file; the one
+	// that gets notified of every invitation has a mail address there.
+	Admins []string `hcl:"admins,optional"`
+
+	// AdminAAGUIDs are the authenticator models an administrator's passkey must
+	// be, as UUIDs ("9dd8d593-2213-438a-97f8-d6b813d51c27" is a YubiKey Bio).
+	// It counts only for a passkey whose AAGUID came from a VERIFIED
+	// attestation (passkeyRecord.AttestedAAGUID): the AAGUID a passkey reports
+	// about itself under attestation "none" is a claim, not evidence, and is
+	// never compared with this list. Required with admins.
+	AdminAAGUIDs []string `hcl:"admin_aaguids,optional"`
+
 	store        *localStore
 	removalDelay time.Duration
+	adminSet     map[string]bool
+	aaguidSet    map[string]bool
 }
 
 // localEntityID is the identity source local accounts log in under. It is

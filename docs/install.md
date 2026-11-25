@@ -341,28 +341,45 @@ fails with `permission denied` even though the service holds the capability.
 the configuration. On a systemd host, seal it to the machine and hand it to the
 service as a credential:
 
+The secret goes in on standard input, typed without echo, so it is in no
+command line, no shell history and no file in clear:
+
 ```sh
-printf %s 'the-smtp-password' | sudo systemd-creds encrypt --name=smtp \
-  --with-key=host+tpm2 - /etc/credstore.encrypted/smtp.cred
+# on a host WITHOUT a TPM (systemd 257): the key is the host key file
+sudo systemd-creds encrypt --with-key=host --name=smtp-password \
+  - /etc/credstore.encrypted/smtp-password
+# type the password, then Ctrl-D twice; nothing is echoed
 ```
 
 ```ini
 # systemctl edit authn-bridge
 [Service]
-LoadCredentialEncrypted=smtp:/etc/credstore.encrypted/smtp.cred
+LoadCredentialEncrypted=smtp-password:/etc/credstore.encrypted/smtp-password
 ```
 
 ```hcl
 mail {
   # ...
-  password_from = "systemd-creds:smtp"   # reads $CREDENTIALS_DIRECTORY/smtp
+  password_from = "systemd-creds:smtp-password"   # reads $CREDENTIALS_DIRECTORY/smtp-password
 }
 ```
 
-Use `--with-key=host+tpm2` with no `--tpm2-pcrs`: the key derives from the TPM2
-chip and the host key file, and survives firmware and Secure Boot updates. Do
-not use a bare `--tpm2-pcrs=7`: a firmware or shim update would make the
-credential unreadable and the bridge would refuse to start.
+The service refuses to start if the credential is missing, and the error names
+the `LoadCredentialEncrypted=` line to check. `authn-bridge check`, run from a
+shell and not inside the unit, cannot read a credential, so it reports
+`credential smtp-password: resolved only inside the service` and does not fail.
+
+On a host with a TPM2, use `--with-key=host+tpm2` with no `--tpm2-pcrs`: the key
+derives from the TPM2 chip and the host key file, and survives firmware and
+Secure Boot updates. Do not use a bare `--tpm2-pcrs=7`: a firmware or shim
+update would make the credential unreadable and the bridge would refuse to
+start.
+
+On OpenBSD there is no systemd-creds. The source of the SMTP password there is
+not decided here: it is a new secretsource scheme, which `password_from` would
+take like any other (`mail.go` passes the reference to `secretsource.Open`
+and knows no scheme by name, except to explain a missing `systemd-creds:`
+credential).
 
 **Recovery.** The credential is lost with the TPM2 chip or
 `/var/lib/systemd/credential.secret`, and a decryption failure stops the

@@ -1,0 +1,2 @@
+go test fuzz v1
+string("login=erin&mail=%22a%0d%0ab%22%40example.org")

@@ -444,7 +444,7 @@ mail {
   host          = "smtp.example.org"
   security      = "tls"                              # "tls" (port 465, the default) or "starttls" (587)
   username      = "authn-bridge"
-  password_from = "systemd-creds:smtp"               # a secretsource reference to the SMTP password
+  password_from = "systemd-creds:smtp-password"      # a secretsource reference to the SMTP password
   from          = "authn-bridge@example.org"
   # window      = "10m"                                # least time between two mails to one account (1m to 24h)
 }
@@ -489,6 +489,61 @@ An account with no usable address is not blocked: its request proceeds as
 without a `mail` block, the log says `<login> has no usable mail address ...
 nobody is told`, and the account page says so. Without a `mail` block nothing
 changes.
+
+## Inviting a local account from the web: `admins`
+
+An administrator can invite a new LOCAL account at `/account/invite`, without a
+shell on the host. The invitation is the CLI's: 24 hours, one-time token. The
+link goes **only by e-mail, to the invitee**; the administrator's page does not
+show it.
+
+```hcl
+local {
+  accounts_file = "/etc/authn-bridge-local/accounts.hcl"
+  admins        = ["alice", "bob"]                     # logins in the accounts file
+  admin_aaguids = ["9dd8d593-2213-438a-97f8-d6b813d51c27"]   # allowed authenticator models
+}
+```
+
+The page exists only when ALL of this holds, and each condition is checked on
+every request:
+
+1. The session is a **local** account named in `admins`. A federated session
+   with the same name is never an administrator.
+2. The administrator's key was used **at most 3 minutes ago** (a fresh
+   user-verifying assertion); older, the page says to confirm again with the key.
+3. That key's authenticator model is in `admin_aaguids` **and was proved by
+   verified attestation**. The check reads only an `attested_aaguid` the bridge
+   itself wrote after verifying an attestation statement; a model the
+   authenticator merely *reports* is never trusted. Nothing writes that field
+   yet (see below), so today **no one passes this check: the page refuses, by
+   design**.
+4. A `mail` block exists (otherwise the page is a 404) and the account is not
+   already there.
+
+The form takes a login, an e-mail address and an optional display name. The
+address is parsed with `net/mail` as a bare address (no display name, no list)
+and anything with CR, LF or another control character is refused; the form
+parser is fuzzed with its corpus committed. Requests are same-origin and carry a
+CSRF token; each administrator may invite 10 accounts an hour.
+
+Every invitation logs `who invited whom, from which address`, and sends **one
+message per administrator that has an address** (never a recipient list): who,
+whom, the invited address, when, from which IP, and never the link or the
+token. An administrator without an address is logged as unreachable; one
+administrator's failed notice is logged and does not undo the invitation.
+If the invitee's mail cannot be sent the account is not created.
+
+The process must be able to rewrite the accounts file: it must own it (0640 or
+tighter) and write its directory (the file is replaced by a rename). Under
+`ProtectSystem=`, add `ReadWritePaths=` for that directory.
+
+**What the AAGUID allowlist still needs.** Registration must request
+`attestation: direct`; the bridge must verify the attestation statement
+(`packed` x5c, `fido-u2f`, `apple`, `tpm`), which go-authn/webauthn does not do
+yet; validate its chain against roots from the FIDO Metadata Service blob
+(go-authn/fido/mds); and store the AAGUID only then. Existing keys have no
+verified attestation and would be registered again.
 
 ## The pages, and your branding
 

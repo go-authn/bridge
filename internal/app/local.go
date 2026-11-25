@@ -390,5 +390,66 @@ func (l *localBlock) check(c *config) error {
 		return fmt.Errorf("accounts_file: %w", err)
 	}
 	l.store = store
+	return l.checkAdmins(c)
+}
+
+// checkAdmins validates admins and admin_aaguids, and builds their sets.
+func (l *localBlock) checkAdmins(c *config) error {
+	l.adminSet, l.aaguidSet = nil, nil
+	if len(l.Admins) == 0 {
+		if len(l.AdminAAGUIDs) > 0 {
+			return errors.New("admin_aaguids without admins")
+		}
+		return nil
+	}
+	if c.Mail == nil {
+		return errors.New("admins needs a mail { } block: the invitation goes only by e-mail")
+	}
+	if len(l.AdminAAGUIDs) == 0 {
+		return errors.New("admins needs admin_aaguids: the models of authenticator an administrator's passkey may be")
+	}
+	l.adminSet, l.aaguidSet = map[string]bool{}, map[string]bool{}
+	for _, a := range l.Admins {
+		if !loginSyntax.MatchString(a) {
+			return fmt.Errorf("admins: %w", badLogin(a))
+		}
+		if _, ok := l.store.get(a); !ok {
+			return fmt.Errorf("admins: %q is not an account of accounts_file", a)
+		}
+		if l.adminSet[a] {
+			return fmt.Errorf("admins: %q twice", a)
+		}
+		l.adminSet[a] = true
+	}
+	for _, g := range l.AdminAAGUIDs {
+		n, err := normAAGUID(g)
+		if err != nil {
+			return fmt.Errorf("admin_aaguids: %w", err)
+		}
+		l.aaguidSet[n] = true
+	}
 	return nil
+}
+
+// normAAGUID is an AAGUID in its canonical form, lowercase 8-4-4-4-12; the
+// all-zero one (what an authenticator that does not say reports) is refused.
+func normAAGUID(s string) (string, error) {
+	n := strings.ToLower(s)
+	if len(n) != 36 {
+		return "", fmt.Errorf("%q: a UUID such as 9dd8d593-2213-438a-97f8-d6b813d51c27", s)
+	}
+	for i := 0; i < len(n); i++ {
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if n[i] != '-' {
+				return "", fmt.Errorf("%q: a UUID such as 9dd8d593-2213-438a-97f8-d6b813d51c27", s)
+			}
+		case !(n[i] >= '0' && n[i] <= '9' || n[i] >= 'a' && n[i] <= 'f'):
+			return "", fmt.Errorf("%q: a UUID such as 9dd8d593-2213-438a-97f8-d6b813d51c27", s)
+		}
+	}
+	if n == "00000000-0000-0000-0000-000000000000" {
+		return "", fmt.Errorf("%q: the zero AAGUID names no model", s)
+	}
+	return n, nil
 }

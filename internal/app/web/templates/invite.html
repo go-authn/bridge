@@ -1,0 +1,22 @@
+{{define "invite"}}{{template "head" .}}
+<section class="surface p-6 sm:p-8" aria-labelledby="t">
+<h1 id="t" class="text-2xl font-semibold tracking-tight">{{t "inv.title"}}</h1>
+{{if .Sent}}<p id="invite-sent" class="mt-4" role="status">{{t "inv.sent"}}</p>{{else}}<p class="mt-4">{{t "inv.p"}}</p>{{end}}
+<form method="post" action="invite" class="mt-6 space-y-6" autocomplete="off">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div>
+<label for="login" class="label">{{t "inv.login"}}</label>
+<input id="login" name="login" required maxlength="64" pattern="[a-z0-9][a-z0-9._\-]*" autocomplete="off" class="field">
+</div>
+<div>
+<label for="mail" class="label">{{t "inv.mail"}}</label>
+<input id="mail" name="mail" type="email" required maxlength="254" autocomplete="off" class="field">
+</div>
+<div>
+<label for="name" class="label">{{t "inv.name"}}</label>
+<input id="name" name="name" maxlength="200" autocomplete="off" class="field">
+</div>
+<button type="submit" class="btn-primary w-full">{{t "inv.send"}}</button>
+</form>
+</section>
+{{template "foot" .}}{{end}}

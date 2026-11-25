@@ -42,6 +42,8 @@ type fakeSMTP struct {
 	user, pw  string
 	reject    string // "MAIL FROM", "RCPT TO", "DATA" or "END": the step that is answered with a refusal
 
+	rejectRcpt string // a recipient (substring) whose RCPT TO is refused
+
 	mu        sync.Mutex
 	cmds      []string
 	authClear bool
@@ -203,6 +205,10 @@ func (f *fakeSMTP) serve(c net.Conn) {
 		case strings.HasPrefix(up, "MAIL FROM"), strings.HasPrefix(up, "RCPT TO"):
 			if f.reject != "" && strings.HasPrefix(up, f.reject) {
 				say("550 refused")
+				continue
+			}
+			if f.rejectRcpt != "" && strings.HasPrefix(up, "RCPT TO") && strings.Contains(up, strings.ToUpper(f.rejectRcpt)) {
+				say("550 no such mailbox")
 				continue
 			}
 			say("250 ok")

@@ -73,14 +73,22 @@ var (
 
 // passkeyRecord is what is stored per credential.
 type passkeyRecord struct {
-	Login          string    `json:"login"`
-	ID             []byte    `json:"id"`
-	PublicKey      []byte    `json:"key"`
-	SignCount      uint32    `json:"count"`
-	BackupEligible bool      `json:"be"`
-	BackupState    bool      `json:"bs"`
-	Transports     []string  `json:"transports,omitempty"`
-	AAGUID         []byte    `json:"aaguid,omitempty"`
+	Login          string   `json:"login"`
+	ID             []byte   `json:"id"`
+	PublicKey      []byte   `json:"key"`
+	SignCount      uint32   `json:"count"`
+	BackupEligible bool     `json:"be"`
+	BackupState    bool     `json:"bs"`
+	Transports     []string `json:"transports,omitempty"`
+	AAGUID         []byte   `json:"aaguid,omitempty"`
+	// AttestedAAGUID is the model of the authenticator, in canonical UUID form,
+	// ONLY when it was proved at registration by an attestation statement whose
+	// certificate chain leads to a root the FIDO Metadata Service lists for that
+	// AAGUID. Nothing sets it today: every registration here asks for attestation
+	// "none" and go-authn/webauthn does not verify chains, so AAGUID above is the
+	// authenticator's own word. The administrator gate (admininvite.go) reads
+	// this field and never AAGUID, so until a verifier fills it no passkey passes.
+	AttestedAAGUID string    `json:"attested_aaguid,omitempty"`
 	Created        time.Time `json:"created"`
 	LastUsed       time.Time `json:"last_used,omitzero"`
 	// RemoveAt is when a removal the person asked for from /account takes

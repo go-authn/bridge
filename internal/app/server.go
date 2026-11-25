@@ -99,6 +99,10 @@ type server struct {
 	noticeMu sync.Mutex
 	notices  map[string]*acctNotices
 	mailTLS  *tls.Config
+	// adminMu serialises the web invitations (they edit accounts_file) and
+	// guards adminInvites, the instants of each administrator's recent ones.
+	adminMu      sync.Mutex
+	adminInvites map[string][]time.Time
 
 	logMu sync.Mutex
 
