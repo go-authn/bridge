@@ -140,6 +140,18 @@ func (e *adminEnv) invitePost(s *accountSess, login, mail, name string) (int, st
 	return e.do("POST", s.cookie, url.Values{"csrf": {s.csrf}, "login": {login}, "mail": {mail}, "name": {name}})
 }
 
+// forge opens a session of the LOCAL account login on credential, as the
+// step-up would, at the test's now.
+func (e *adminEnv) forge(login, credential string) *accountSess {
+	e.t.Helper()
+	who := &person{idp: e.s.cfg.localEntityID(), subject: login, username: login}
+	tok := token()
+	if err := e.s.accountSessions.put(hashToken(tok), &accountSession{who: who, credential: credential, at: e.s.now()}, e.s.now().Add(accountTTL)); err != nil {
+		e.t.Fatal(err)
+	}
+	return &accountSess{cookie: accountCookieName + "=" + tok, csrf: e.s.accountCSRF(hashToken(tok))}
+}
+
 func (e *adminEnv) exists(login string) bool {
 	e.t.Helper()
 	ok, err := accountExists(e.s.cfg.Local, login)
@@ -314,6 +326,13 @@ func TestTheInvitationIsRefusedUnlessEveryConditionHolds(t *testing.T) {
 			s.csrf = e.s.accountCSRF(hashToken(tok))
 			return s
 		}},
+		{"an administrator's session on another account's key", 403, func(e *adminEnv) *accountSess {
+			dave := e.keyOf("dave", yubikeyBio)
+			rec, _, _ := e.s.passkeys.passkey(passkeyKey(dave.ID))
+			return e.forge("alice", rec.key())
+		}},
+		{"a session on a key that is not stored", 403, func(e *adminEnv) *accountSess { return e.forge("alice", "no-such-key") }},
+		{"a session with no key", 403, func(e *adminEnv) *accountSess { return e.forge("alice", "") }},
 		{"an assertion older than the step-up allows", 403, func(e *adminEnv) *accountSess {
 			e.advance(adminStepUpMax + time.Minute)
 			return e.sess
@@ -399,6 +418,123 @@ func TestTheFormCannotInjectAHeader(t *testing.T) {
 	}
 	if len(e.sent()) != 0 || e.exists("erin") {
 		t.Errorf("a refused form created something (%d mails):\n%s", len(e.sent()), e.log())
+	}
+}
+
+// A POST must come from this provider's page, be small and parse; a host that
+// failed too often is refused before anything is looked at.
+func TestThePostIsHeldToTheProvidersOwnPageAndToTheThrottle(t *testing.T) {
+	e := newAdminEnv(t)
+	form := url.Values{"csrf": {e.sess.csrf}, "login": {"erin"}, "mail": {"erin@elsewhere.example"}}
+	post := func(body string, hdr ...string) int {
+		req, err := http.NewRequest("POST", e.s.cfg.Issuer+"/account/invite", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Cookie", e.sess.cookie)
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		res, err := newBrowser(t).c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		readBody(res)
+		return res.StatusCode
+	}
+	if st := post(form.Encode(), "Origin", "https://evil.example"); st != http.StatusForbidden {
+		t.Errorf("another origin: %d", st)
+	}
+	if st := post(form.Encode(), "Sec-Fetch-Site", "cross-site", "Origin", "null"); st != http.StatusForbidden {
+		t.Errorf("a cross-site post: %d", st)
+	}
+	if st := post("login=erin&name=" + strings.Repeat("x", inviteFormMax+1)); st != http.StatusForbidden {
+		t.Errorf("an oversized body: %d", st)
+	}
+	if e.exists("erin") {
+		t.Error("a refused post created the account")
+	}
+	for i := 0; i < 1000 && !e.s.localLimit.blocked("127.0.0.1", ""); i++ {
+		e.s.localLimit.failed("127.0.0.1", "")
+	}
+	if st := post(form.Encode()); st != http.StatusTooManyRequests {
+		t.Errorf("a throttled host: POST %d", st)
+	}
+	if st, _ := e.do("GET", e.sess.cookie, nil); st != http.StatusTooManyRequests {
+		t.Errorf("a throttled host: GET %d", st)
+	}
+	if e.exists("erin") {
+		t.Error("a throttled post created the account")
+	}
+}
+
+func TestWithoutASessionAGetGoesToTheAccountPageAndAPostIsRefused(t *testing.T) {
+	e := newAdminEnv(t)
+	if st, _ := e.do("GET", "", nil); st != http.StatusFound {
+		t.Errorf("GET: %d", st)
+	}
+	if st, _ := e.do("POST", "", url.Values{"login": {"erin"}}); st != http.StatusUnauthorized {
+		t.Errorf("POST: %d", st)
+	}
+}
+
+// What the invitation does when the host cannot do its part: the answer is an
+// error and nothing is left behind.
+func TestAnInvitationFailsCleanlyWhenTheHostCannotKeepItsPart(t *testing.T) {
+	t.Run("the accounts file cannot be read", func(t *testing.T) {
+		e := newAdminEnv(t)
+		if err := os.Remove(e.s.cfg.Local.AccountsFile); err != nil {
+			t.Fatal(err)
+		}
+		if st, body := e.invitePost(e.sess, "erin", "erin@elsewhere.example", ""); st != http.StatusInternalServerError {
+			t.Errorf("%d %s", st, body)
+		}
+		if len(e.sent()) != 0 {
+			t.Error("mail was sent")
+		}
+	})
+	t.Run("the accounts file cannot be replaced", func(t *testing.T) {
+		if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+			t.Skip("a read-only directory stops neither Windows' owner nor root")
+		}
+		e := newAdminEnv(t)
+		dir := filepath.Dir(e.s.cfg.Local.AccountsFile)
+		if err := os.Chmod(dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(dir, 0o700) })
+		if st, body := e.invitePost(e.sess, "erin", "erin@elsewhere.example", ""); st != http.StatusInternalServerError {
+			t.Errorf("%d %s", st, body)
+		}
+		if len(e.sent()) != 0 {
+			t.Error("mail was sent")
+		}
+	})
+	t.Run("the invitation cannot be stored", func(t *testing.T) {
+		e := newAdminEnv(t)
+		e.s.passkeys.b.db.Close()
+		st, body := e.s.inviteLocal(inviteRequest{Login: "erin", Mail: "erin@elsewhere.example", Name: "erin"}, "alice", "127.0.0.1")
+		if st != http.StatusInternalServerError {
+			t.Errorf("%d %s", st, body)
+		}
+		if e.exists("erin") {
+			t.Error("the account stayed without an invitation")
+		}
+		if len(e.sent()) != 0 {
+			t.Error("mail was sent")
+		}
+	})
+}
+
+func TestAnAAGUIDIsAUUIDInCanonicalForm(t *testing.T) {
+	for _, s := range []string{"", "yubikey", yubikeyBio + "0", yubikeyBio[:35], "9dd8d593_2213-438a-97f8-d6b813d51c27", "9dd8d593-2213-438a-97f8-d6b813d51c2g", "9dd8d5932213438a97f8d6b813d51c27", "9dd8d593-2213-438a-97f8d6b813d51c27-"} {
+		if n, err := normAAGUID(s); err == nil {
+			t.Errorf("%q accepted as %q", s, n)
+		}
+	}
+	if n, err := normAAGUID(strings.ToUpper(yubikeyBio)); err != nil || n != yubikeyBio {
+		t.Errorf("%q %v", n, err)
 	}
 }
 

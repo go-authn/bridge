@@ -83,9 +83,6 @@ func (s *server) adminRefusal(sess *accountSession) string {
 	if !s.isAdmin(sess.who) {
 		return "not an administrator of local accounts"
 	}
-	if sess.credential == "" {
-		return "no passkey was asserted in this session"
-	}
 	if age := s.now().Sub(sess.at); sess.at.IsZero() || age < 0 || age > adminStepUpMax {
 		return "the passkey assertion is older than " + adminStepUpMax.String()
 	}
@@ -207,9 +204,8 @@ func (s *server) inviteLocal(req inviteRequest, admin, addr string) (int, string
 	cmd := &cobra.Command{Use: "web-invite"}
 	cmd.SetErr(io.Discard)
 	if err := editAccounts(cmd, lb, trusted, false, req.Login, func(b *hclwrite.Body, find func() *hclwrite.Block) error {
-		if find() != nil {
-			return fmt.Errorf("account %q exists", req.Login)
-		}
+		// accountExists, above and under the same lock, answered no; editAccounts
+		// parses what it wrote and refuses a duplicate block.
 		if len(b.Blocks()) > 0 {
 			b.AppendNewline()
 		}
