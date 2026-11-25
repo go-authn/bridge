@@ -73,14 +73,23 @@ var (
 
 // passkeyRecord is what is stored per credential.
 type passkeyRecord struct {
-	Login          string    `json:"login"`
-	ID             []byte    `json:"id"`
-	PublicKey      []byte    `json:"key"`
-	SignCount      uint32    `json:"count"`
-	BackupEligible bool      `json:"be"`
-	BackupState    bool      `json:"bs"`
-	Transports     []string  `json:"transports,omitempty"`
-	AAGUID         []byte    `json:"aaguid,omitempty"`
+	Login          string   `json:"login"`
+	ID             []byte   `json:"id"`
+	PublicKey      []byte   `json:"key"`
+	SignCount      uint32   `json:"count"`
+	BackupEligible bool     `json:"be"`
+	BackupState    bool     `json:"bs"`
+	Transports     []string `json:"transports,omitempty"`
+	AAGUID         []byte   `json:"aaguid,omitempty"`
+	// AttestedAAGUID is the model of the authenticator, in canonical UUID form,
+	// ONLY when it was proved at registration by an attestation statement whose
+	// certificate chain leads to a root the FIDO Metadata Service lists for that
+	// AAGUID. attest.go sets it, for an administrator's registration only, and
+	// only when the statement verified AND its chain led to such a root; AAGUID
+	// above is the authenticator's own word, and a passkey that registered
+	// before this, or under attestation "none", has it empty. The administrator
+	// gate (admininvite.go) reads this field and never AAGUID.
+	AttestedAAGUID string    `json:"attested_aaguid,omitempty"`
 	Created        time.Time `json:"created"`
 	LastUsed       time.Time `json:"last_used,omitzero"`
 	// RemoveAt is when a removal the person asked for from /account takes
@@ -664,7 +673,7 @@ func (s *server) localEnrollBegin(w http.ResponseWriter, r *http.Request) {
 				"requireResidentKey": true,
 				"userVerification":   "required",
 			},
-			"attestation":        "none",
+			"attestation":        s.attestationFor(inv.Login),
 			"excludeCredentials": exclude,
 			"timeout":            int(ceremonyTTL / time.Millisecond),
 		},
@@ -712,7 +721,7 @@ func (s *server) localEnrollFinish(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "the registration could not be read", "bad encoding")
 		return
 	}
-	cred, err := s.relyingParty().VerifyRegistration(cer.challenge, cd, ao, webauthn.Policy{RequireUV: true})
+	cred, attested, err := s.verifyEnrolment(cer.login, cer.challenge, cd, ao)
 	if err != nil {
 		refuse(http.StatusForbidden, "this passkey was refused", err)
 		return
@@ -748,7 +757,7 @@ func (s *server) localEnrollFinish(w http.ResponseWriter, r *http.Request) {
 	rec := &passkeyRecord{
 		Login: cer.login, ID: cred.ID, PublicKey: cred.PublicKeyCOSE, SignCount: cred.SignCount,
 		BackupEligible: cred.BackupEligible, Transports: cleanTransports(req.Transports),
-		AAGUID: cred.AAGUID[:], Created: s.now(),
+		AAGUID: cred.AAGUID[:], AttestedAAGUID: attested, Created: s.now(),
 	}
 	if err := s.passkeys.savePasskey(rec); err != nil {
 		s.logf("local: storing a passkey for %s: %v", cer.login, err)
@@ -757,7 +766,7 @@ func (s *server) localEnrollFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logf("local: %s enrolled a passkey (%s)", cer.login, rec.key()[:8])
 	s.counters.inc("bridge_logins_total", "local_enrolled")
-	writeJSONNoStore(w, http.StatusOK, map[string]any{"enrolled": true})
+	writeJSONNoStore(w, http.StatusOK, map[string]any{"enrolled": true, "attested": attested != ""})
 }
 
 // ---- login ----

@@ -74,6 +74,9 @@ const (
 type accountSession struct {
 	who        *person
 	credential string
+	// at is when the passkey was asserted: what an action that wants a FRESH
+	// assertion (admininvite.go) measures.
+	at time.Time
 }
 
 func (s *server) isLocal(p *person) bool {
@@ -96,6 +99,7 @@ func (s *server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/account/apps/revoke", s.limited(s.accountAppsRevoke))
 	mux.HandleFunc("/account/access/revoke", s.limited(s.accountAccessRevoke))
 	mux.HandleFunc("/account/signout", s.limited(s.accountSignOut))
+	mux.HandleFunc("/account/invite", s.limited(s.accountInvite))
 }
 
 func (s *server) accountMoved(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +243,7 @@ func (s *server) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 		// Deferred says the page's remove buttons for another key ask for a
 		// delayed removal (the confirmation question tells the person so).
+		view["CanInvite"] = s.isAdmin(who)
 		view["Deferred"], view["Delay"] = s.cfg.Local.removalDelay > 0, delayText(s.cfg.Local.removalDelay)
 		view["Keys"], view["Max"], view["Full"] = keys, maxPasskeys, len(keys) >= maxPasskeys
 		// The e-mail notice (#122): say so when nobody can be told, and when the
@@ -586,7 +591,7 @@ func (s *server) accountStepUpFinish(w http.ResponseWriter, r *http.Request) {
 		refuse("refused: " + why)
 		return
 	}
-	sess := &accountSession{who: who, credential: rec.key()}
+	sess := &accountSession{who: who, credential: rec.key(), at: s.now()}
 	if !s.startSession(w, r, sess) {
 		return
 	}
@@ -673,7 +678,7 @@ func (s *server) accountAddBegin(w http.ResponseWriter, r *http.Request) {
 				"requireResidentKey": true,
 				"userVerification":   "required",
 			},
-			"attestation":        "none",
+			"attestation":        s.attestationFor(login),
 			"excludeCredentials": exclude,
 			"timeout":            int(ceremonyTTL / time.Millisecond),
 		},
@@ -713,7 +718,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "the registration could not be read", "bad encoding")
 		return
 	}
-	cred, err := s.relyingParty().VerifyRegistration(cer.challenge, cd, ao, webauthn.Policy{RequireUV: true})
+	cred, attested, err := s.verifyEnrolment(login, cer.challenge, cd, ao)
 	if err != nil {
 		refuse(http.StatusForbidden, "this passkey was refused", err)
 		return
@@ -736,7 +741,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 	rec := &passkeyRecord{
 		Login: login, ID: cred.ID, PublicKey: cred.PublicKeyCOSE, SignCount: cred.SignCount,
 		BackupEligible: cred.BackupEligible, Transports: cleanTransports(req.Transports),
-		AAGUID: cred.AAGUID[:], Created: s.now(),
+		AAGUID: cred.AAGUID[:], AttestedAAGUID: attested, Created: s.now(),
 	}
 	if err := s.passkeys.savePasskey(rec); err != nil {
 		s.logf("local: storing a passkey for %s: %v", login, err)
@@ -745,7 +750,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(sess, "add", rec.key(), r)
 	s.keyEvent("key.added", login, rec, time.Time{}, addr)
-	writeJSONNoStore(w, http.StatusOK, map[string]any{"added": rec.key()[:16]})
+	writeJSONNoStore(w, http.StatusOK, map[string]any{"added": rec.key()[:16], "attested": attested != ""})
 }
 
 // ---- profile ----

@@ -3,6 +3,30 @@
 Versions follow [semantic versioning](https://semver.org). Releases before
 v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bridge/releases).
 
+## Unreleased
+
+- `local { admins = [...], admin_aaguids = [...] }`: an administrator invites a
+  local account at `/account/invite` (login, e-mail, optional name). Same
+  invitation as the CLI; the link goes only by e-mail; one notice per
+  administrator with an address, without the link. Needs a `mail` block, a
+  user-verifying assertion at most 3 minutes old, CSRF, and 10 invitations an
+  hour per administrator. The authenticator-model allowlist reads only an
+  AAGUID proved by verified attestation (below), and fails closed.
+- An administrator's passkey model is now PROVED: registration asks for
+  `attestation: "direct"` (everybody else still `"none"`); go-authn/webauthn
+  v0.3.0 verifies the `packed` x5c statement; the model must be in the FIDO
+  MDS3 metadata (go-authn/fido v0.16.0 `mds`, no compromise status), and the
+  chain must lead to a root the metadata lists for it. Only then is
+  `attested_aaguid` written. The metadata is kept in `local { mds_dir }`
+  (default `/var/lib/authn-bridge/mds`, absolute, refused without `admins`) by
+  a background goroutine, never on a request; the host needs outbound HTTPS to
+  `mds3.fidoalliance.org` and HTTP to the CRL distribution points. A model
+  reported revoked or compromised later stops opening the page. Existing
+  administrators' keys are not attested: add a key again (see the README).
+- `authn-bridge check` reports a `systemd-creds:` password it cannot read
+  outside the unit as `resolved only inside the service`; the service refuses
+  to start without it.
+
 ## v0.36.0
 
 - A `contact` block with `security = true` now requires `given_name`: the

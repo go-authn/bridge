@@ -15,6 +15,7 @@ import (
 	"net"
 	netmail "net/mail"
 	"net/smtp"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +33,7 @@ import (
 //	  host          = "smtp.example.org"
 //	  security      = "tls"                              # "tls" (465) or "starttls" (587)
 //	  username      = "authn-bridge"
-//	  password_from = "systemd-creds:smtp"               # a secretsource reference; password_file = PATH is the deprecated alias of "file:PATH"
+//	  password_from = "systemd-creds:smtp-password"      # a secretsource reference; password_file = PATH is the deprecated alias of "file:PATH"
 //	  from          = "authn-bridge@example.org"
 //	}
 //
@@ -60,6 +61,10 @@ type mailBlock struct {
 
 	password string
 	window   time.Duration
+	// outside is set for `authn-bridge check`, which runs outside the unit;
+	// unresolved is then the name of the systemd credential it could not read.
+	outside    bool
+	unresolved string
 }
 
 const (
@@ -116,6 +121,17 @@ func (m *mailBlock) check() error {
 	defer cancel()
 	sec, err := secretsource.Open(ctx, ref)
 	if err != nil {
+		// A systemd credential exists only inside the unit that loads it
+		// (LoadCredentialEncrypted= puts it in $CREDENTIALS_DIRECTORY): `check`,
+		// run from a shell, cannot see it, and says so instead of failing. The
+		// service itself (outside false) refuses to start without it.
+		if name, ok := strings.CutPrefix(ref, "systemd-creds:"); ok && m.outside && os.Getenv("CREDENTIALS_DIRECTORY") == "" {
+			m.unresolved = name
+			return nil
+		}
+		if strings.HasPrefix(ref, "systemd-creds:") {
+			return fmt.Errorf("password_from: the credential %q is not available (is LoadCredentialEncrypted=%s:... in the unit, and the file encrypted for this host?): %w", strings.TrimPrefix(ref, "systemd-creds:"), strings.TrimPrefix(ref, "systemd-creds:"), err)
+		}
 		return fmt.Errorf("password_from: %w", err)
 	}
 	defer sec.Close()

@@ -61,6 +61,11 @@
 </div>
 </section>{{end}}
 
+{{if .CanInvite}}<section class="surface p-5 sm:p-6" aria-labelledby="h-invite">
+<h2 id="h-invite" class="flex items-center gap-2 text-lg font-semibold">{{icon "user-round" "size-5 text-brand-ink"}}<span>{{t "inv.title"}}</span></h2>
+<p class="mt-3"><a id="invite-link" href="account/invite" class="btn-outline">{{t "inv.title"}}</a></p>
+</section>{{end}}
+
 <section class="surface" aria-labelledby="h-apps">
 <div class="p-5 pb-3 sm:p-6 sm:pb-3">
 <h2 id="h-apps" class="flex items-center gap-2 text-lg font-semibold">{{icon "laptop" "size-5 text-brand-ink"}}<span>{{t "apps.title"}}</span></h2>

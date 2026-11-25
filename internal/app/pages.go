@@ -162,6 +162,7 @@ var pageTitles = map[string]string{
 	"account":     "acct.title",
 	"accountopen": "acct.title",
 	"localenroll": "enroll.title",
+	"invite":      "inv.title",
 	"device":      "device.title",
 	"confirm":     "confirm.ttl",
 }

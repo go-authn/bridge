@@ -159,7 +159,10 @@ type config struct {
 	IDTokenLifetime string `hcl:"id_token_lifetime,optional"` // 5m
 
 	files []string
-	brand *brand
+	// outsideService is set by `check`: the command runs outside the service's
+	// unit, where a systemd credential cannot be resolved (mail.go).
+	outsideService bool
+	brand          *brand
 
 	trustedProxies []netip.Prefix
 
@@ -500,7 +503,12 @@ type clientBlock struct {
 
 func (c *clientBlock) public() bool { return c.secret == "" && c.keys == nil }
 
-func loadConfig(paths []string) (*config, error) {
+func loadConfig(paths []string) (*config, error) { return loadConfigIn(paths, false) }
+
+// loadConfigIn is loadConfig; outside says the command is not the service (the
+// `check` subcommand), so a systemd credential that only the unit can resolve is
+// reported, not failed (mailBlock.check).
+func loadConfigIn(paths []string, outside bool) (*config, error) {
 	files, err := hclFiles(paths)
 	if err != nil {
 		return nil, err
@@ -528,6 +536,7 @@ func loadConfig(paths []string) (*config, error) {
 		}
 	}
 	c.files = files
+	c.outsideService = outside
 	if err := c.check(); err != nil {
 		// check may have opened the database before something after it was
 		// refused.
@@ -801,6 +810,7 @@ func (c *config) check() error {
 		if c.Local == nil {
 			return errors.New("mail: it reports on the passkeys of local accounts, and there is no local block")
 		}
+		c.Mail.outside = c.outsideService
 		if err := c.Mail.check(); err != nil {
 			return fmt.Errorf("mail: %w", err)
 		}
