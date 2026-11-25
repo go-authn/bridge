@@ -484,11 +484,14 @@ func TestWithoutASessionAGetGoesToTheAccountPageAndAPostIsRefused(t *testing.T) 
 func TestAnInvitationFailsCleanlyWhenTheHostCannotKeepItsPart(t *testing.T) {
 	t.Run("the accounts file cannot be read", func(t *testing.T) {
 		e := newAdminEnv(t)
-		if err := os.Remove(e.s.cfg.Local.AccountsFile); err != nil {
+		if err := os.WriteFile(e.s.cfg.Local.AccountsFile, []byte("account {\n"), 0o640); err != nil {
 			t.Fatal(err)
 		}
 		if st, body := e.invitePost(e.sess, "erin", "erin@elsewhere.example", ""); st != http.StatusInternalServerError {
 			t.Errorf("%d %s", st, body)
+		}
+		if !strings.Contains(e.log(), "reading accounts_file") {
+			t.Errorf("the read failure is not what stopped it:\n%s", e.log())
 		}
 		if len(e.sent()) != 0 {
 			t.Error("mail was sent")
