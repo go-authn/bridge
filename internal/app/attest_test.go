@@ -457,6 +457,18 @@ func TestAnAdministratorsBrokenRegistrationIsRefusedNotStored(t *testing.T) {
 	}
 }
 
+// verifyEnrolment itself answers a registration that does not verify with the
+// error, for an administrator and for everybody else, and proves nothing.
+func TestVerifyEnrolmentReturnsTheVerificationError(t *testing.T) {
+	e := newAdminEnv(t)
+	for _, login := range []string{"carol", "dave"} {
+		cred, id, err := e.s.verifyEnrolment(login, []byte("challenge"), []byte("{}"), []byte("not cbor"))
+		if err == nil || id != "" || len(cred.ID) != 0 {
+			t.Errorf("%s: cred %v, proven %q, error %v", login, cred, id, err)
+		}
+	}
+}
+
 // A key that proved no model is refused by the administrator page with the
 // reason for that, not the one for a model since revoked.
 func TestAnUnprovedKeyIsRefusedForItsMissingProof(t *testing.T) {
