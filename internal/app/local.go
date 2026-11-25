@@ -409,7 +409,9 @@ func (l *localBlock) checkAdmins(c *config) error {
 	if l.MDSDir == "" {
 		l.MDSDir = defaultMDSDir
 	}
-	if !filepath.IsAbs(l.MDSDir) {
+	// A slash-rooted path is absolute where the service runs; filepath.IsAbs
+	// alone would refuse the default on Windows, which only builds the tests.
+	if !strings.HasPrefix(l.MDSDir, "/") && !filepath.IsAbs(l.MDSDir) {
 		return fmt.Errorf("mds_dir %q: an absolute path", l.MDSDir)
 	}
 	if c.Mail == nil {
