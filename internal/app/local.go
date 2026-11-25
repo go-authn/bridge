@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -400,7 +401,16 @@ func (l *localBlock) checkAdmins(c *config) error {
 		if len(l.AdminAAGUIDs) > 0 {
 			return errors.New("admin_aaguids without admins")
 		}
+		if l.MDSDir != "" {
+			return errors.New("mds_dir without admins")
+		}
 		return nil
+	}
+	if l.MDSDir == "" {
+		l.MDSDir = defaultMDSDir
+	}
+	if !filepath.IsAbs(l.MDSDir) {
+		return fmt.Errorf("mds_dir %q: an absolute path", l.MDSDir)
 	}
 	if c.Mail == nil {
 		return errors.New("admins needs a mail { } block: the invitation goes only by e-mail")

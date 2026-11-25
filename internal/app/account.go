@@ -678,7 +678,7 @@ func (s *server) accountAddBegin(w http.ResponseWriter, r *http.Request) {
 				"requireResidentKey": true,
 				"userVerification":   "required",
 			},
-			"attestation":        "none",
+			"attestation":        s.attestationFor(login),
 			"excludeCredentials": exclude,
 			"timeout":            int(ceremonyTTL / time.Millisecond),
 		},
@@ -718,7 +718,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 		refuse(http.StatusBadRequest, "the registration could not be read", "bad encoding")
 		return
 	}
-	cred, err := s.relyingParty().VerifyRegistration(cer.challenge, cd, ao, webauthn.Policy{RequireUV: true})
+	cred, attested, err := s.verifyEnrolment(login, cer.challenge, cd, ao)
 	if err != nil {
 		refuse(http.StatusForbidden, "this passkey was refused", err)
 		return
@@ -741,7 +741,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 	rec := &passkeyRecord{
 		Login: login, ID: cred.ID, PublicKey: cred.PublicKeyCOSE, SignCount: cred.SignCount,
 		BackupEligible: cred.BackupEligible, Transports: cleanTransports(req.Transports),
-		AAGUID: cred.AAGUID[:], Created: s.now(),
+		AAGUID: cred.AAGUID[:], AttestedAAGUID: attested, Created: s.now(),
 	}
 	if err := s.passkeys.savePasskey(rec); err != nil {
 		s.logf("local: storing a passkey for %s: %v", login, err)
@@ -750,7 +750,7 @@ func (s *server) accountAddFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(sess, "add", rec.key(), r)
 	s.keyEvent("key.added", login, rec, time.Time{}, addr)
-	writeJSONNoStore(w, http.StatusOK, map[string]any{"added": rec.key()[:16]})
+	writeJSONNoStore(w, http.StatusOK, map[string]any{"added": rec.key()[:16], "attested": attested != ""})
 }
 
 // ---- profile ----

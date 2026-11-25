@@ -513,11 +513,12 @@ every request:
 2. The administrator's key was used **at most 3 minutes ago** (a fresh
    user-verifying assertion); older, the page says to confirm again with the key.
 3. That key's authenticator model is in `admin_aaguids` **and was proved by
-   verified attestation**. The check reads only an `attested_aaguid` the bridge
-   itself wrote after verifying an attestation statement; a model the
-   authenticator merely *reports* is never trusted. Nothing writes that field
-   yet (see below), so today **no one passes this check: the page refuses, by
-   design**.
+   verified attestation** (see "How a model is proved", below). The check reads
+   only an `attested_aaguid` the bridge itself wrote after verifying an
+   attestation statement; a model the authenticator merely *reports* is never
+   trusted. A key enrolled before this existed, or with attestation `none`, has
+   none: it still signs in, it does not open the page. The model must also still
+   be one the FIDO metadata trusts when the key is used.
 4. A `mail` block exists (otherwise the page is a 404) and the account is not
    already there.
 
@@ -538,12 +539,58 @@ The process must be able to rewrite the accounts file: it must own it (0640 or
 tighter) and write its directory (the file is replaced by a rename). Under
 `ProtectSystem=`, add `ReadWritePaths=` for that directory.
 
-**What the AAGUID allowlist still needs.** Registration must request
-`attestation: direct`; the bridge must verify the attestation statement
-(`packed` x5c, `fido-u2f`, `apple`, `tpm`), which go-authn/webauthn does not do
-yet; validate its chain against roots from the FIDO Metadata Service blob
-(go-authn/fido/mds); and store the AAGUID only then. Existing keys have no
-verified attestation and would be registered again.
+### How a model is proved
+
+For an administrator (and only for one) the registration asks the browser for
+`attestation: "direct"`; everybody else is still asked for `"none"`. The bridge
+then proves the model in three steps, and records the AAGUID in
+`attested_aaguid` only if all three pass:
+
+1. go-authn/webauthn verifies the attestation statement: a `packed` statement
+   with an `x5c` chain, signed by an attestation certificate that carries the
+   same AAGUID as the authenticator data (WebAuthn §8.2). Self attestation and
+   `none` verify but prove no model, and give no AAGUID. Formats other than
+   `packed` and `none` are refused.
+2. The FIDO Metadata Service (MDS3) knows that AAGUID and reports none of
+   `REVOKED`, `ATTESTATION_KEY_COMPROMISE`, `USER_VERIFICATION_BYPASS`,
+   `USER_KEY_REMOTE_COMPROMISE`, `USER_KEY_PHYSICAL_COMPROMISE`.
+3. The certificate chain leads to one of the `attestationRootCertificates` the
+   metadata lists for that model.
+
+A registration that does not prove its model is **still stored** (the person can
+sign in with it) and is not marked; the reason goes to the log
+(`the new passkey is stored WITHOUT a proven model: ...`) and the JSON answer says
+`"attested": false`. The metadata is never fetched while a request waits: one
+goroutine downloads the blob (signature chain pinned to the GlobalSign root, CRLs
+checked), keeps it in `mds_dir`, and refreshes it at half of what its
+`nextUpdate` leaves, between an hour and a day (after a failure: 15 minutes,
+doubling to an hour, keeping the blob already held). With no blob, or one past
+its `nextUpdate`, nothing is proved and the administrator page refuses.
+
+```hcl
+local {
+  admins        = ["alice"]
+  admin_aaguids = ["9dd8d593-2213-438a-97f8-d6b813d51c27"]   # YubiKey Bio
+  mds_dir       = "/var/lib/authn-bridge/mds"                 # the default; absolute
+}
+```
+
+`mds_dir` is optional, defaults to the unit's `StateDirectory`, and is refused
+without `admins`. The host must let the service write that directory, reach
+`https://mds3.fidoalliance.org/` and the CRL distribution points of the
+metadata's certificates (plain `http`), over IPv4 or IPv6.
+
+**Registering an administrator's key again.** Existing keys have no verified
+attestation. For each administrator: sign in with the existing key, open
+`/account`, confirm with the key, and **add a passkey** with the allowed
+authenticator, accepting the browser's prompt to share the key's make and model
+(the prompt is the "direct" attestation; refusing it stores a key that opens
+nothing). The answer says `attested: true`; `/account/invite` then works with
+the new key. Remove the old key afterwards from `/account`.
+
+Unverified against hardware: the checks of §8.2.1 (subject, basic constraints)
+and the chain shape were exercised with test certificates; the first real YubiKey
+Bio registration is the proof.
 
 ## The pages, and your branding
 

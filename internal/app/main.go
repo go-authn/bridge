@@ -251,6 +251,11 @@ func serve(ctx context.Context, cfg *config, out io.Writer) error {
 	if s.passkeys != nil {
 		go s.sweepLoop(ctx)
 	}
+	if s.attest != nil {
+		// Off the request path, and not waited for: the service starts without
+		// the FIDO metadata, and administrators' keys are attested once it is in.
+		go s.attest.run(ctx)
+	}
 	admin, err := s.openAdmin()
 	if err != nil {
 		return err

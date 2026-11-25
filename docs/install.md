@@ -265,6 +265,26 @@ does). A `password_hash` in an accounts file is refused: delete the line.
 The RP ID is the issuer's host, so the issuer URL must be the one people use in
 their browser, over HTTPS.
 
+### Administrators who invite from the web (optional): the FIDO metadata
+
+With `admins` and `admin_aaguids` in the `local` block, an administrator's
+passkey must be PROVED to be of an allowed model through its attestation, which
+the bridge checks against the FIDO Metadata Service. The host needs:
+
+- a directory the service may write: `mds_dir`, default
+  `/var/lib/authn-bridge/mds`, which the unit's `StateDirectory=authn-bridge`
+  already creates (0700, files 0600). If you set another path it must be in the
+  unit's `ReadWritePaths=`;
+- outbound HTTPS to `mds3.fidoalliance.org`, and outbound plain HTTP to the CRL
+  distribution points of its certificates (they change; allow the service's
+  outbound web access, not a single address);
+- the clock right: the metadata and its certificates are checked against it.
+
+The service starts without the metadata (the log says `mds: ... could not be
+loaded` and retries); until it is in, no administrator key is proved and the
+invitation page refuses. Existing administrators add their key again, as the
+README describes ("Registering an administrator's key again").
+
 ### Branding (optional)
 
 The pages are neutral go-authn pages until a `branding` block gives them your

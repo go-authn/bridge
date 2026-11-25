@@ -6,7 +6,9 @@ require (
 	github.com/chromedp/cdproto v0.159.0
 	github.com/chromedp/chromedp v0.21.1
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-authn/directory v0.26.0
+	github.com/go-authn/fido v0.16.0
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.8.0
 	github.com/go-authn/revocation v0.7.1
@@ -14,7 +16,7 @@ require (
 	github.com/go-authn/secretsource v0.9.0
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
-	github.com/go-authn/webauthn v0.2.0
+	github.com/go-authn/webauthn v0.3.0
 	github.com/go-authn/wireguard v0.2.0
 	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/go-net-health/endpoint v0.1.0
@@ -92,6 +94,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yeqown/go-qrcode/v2 v2.2.5 // indirect
 	github.com/yeqown/reedsolomon v1.0.0 // indirect
 	github.com/zitadel/oidc/v3 v3.51.8 // indirect

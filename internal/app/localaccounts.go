@@ -82,6 +82,14 @@ type localBlock struct {
 	// never compared with this list. Required with admins.
 	AdminAAGUIDs []string `hcl:"admin_aaguids,optional"`
 
+	// MDSDir is where the FIDO Metadata Service blob is cached (an absolute
+	// path; created 0700, files 0600), used only with admins: the model of an
+	// administrator's passkey is proved from it (attest.go). The default is
+	// /var/lib/authn-bridge/mds, inside the systemd unit's StateDirectory. The
+	// host needs outbound HTTPS to mds3.fidoalliance.org and outbound HTTP to
+	// the CRL distribution points of its certificate chain.
+	MDSDir string `hcl:"mds_dir,optional"`
+
 	store        *localStore
 	removalDelay time.Duration
 	adminSet     map[string]bool

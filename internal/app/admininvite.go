@@ -94,6 +94,11 @@ func (s *server) adminRefusal(sess *accountSession) string {
 	if rec.AttestedAAGUID == "" || !s.cfg.Local.aaguidSet[rec.AttestedAAGUID] {
 		return "the passkey is not of an allowed model by a verified attestation"
 	}
+	// A key attested before its model was revoked must not go on opening this.
+	if err := s.attest.stillTrusted(rec.AttestedAAGUID); err != nil {
+		s.logf("local: admin %s refused: %v", sess.who.username, err)
+		return "the model of the passkey is no longer trusted by the FIDO metadata"
+	}
 	return ""
 }
 

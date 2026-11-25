@@ -66,6 +66,8 @@ type adminEnv struct {
 	smtp    *fakeSMTP
 	alice   *webauthntest.Authenticator
 	sess    *accountSess
+	mds     *testMDS
+	attCA   pkiCA
 }
 
 func (e *adminEnv) advance(d time.Duration) {
@@ -93,6 +95,12 @@ func newAdminEnv(t *testing.T) *adminEnv {
 	l := e.s.cfg.Local
 	l.adminSet = map[string]bool{"alice": true, "bob": true, "carol": true}
 	l.aaguidSet = map[string]bool{yubikeyBio: true}
+	// The FIDO metadata the service would have loaded: it lists the Bio model.
+	e.mds = newTestMDS(t, func() time.Time { return e.s.now() })
+	e.attCA = newAttCA(t, e.s.now())
+	e.mds.set(e.mds.entry(yubikeyBio, "FIDO_CERTIFIED_L1", e.attCA.cert))
+	e.s.attest = e.mds.verifier(t, t.TempDir(), e.s.logf)
+	e.mds.load(e.s.attest)
 	e.alice = e.keyOf("alice", yubikeyBio)
 	e.sess = e.signedIn(e.alice, "alice")
 	return e
@@ -597,6 +605,8 @@ func TestTheAdminSettingsAreChecked(t *testing.T) {
 		{"bad login", localBlock{Admins: []string{"Alice"}, AdminAAGUIDs: []string{yubikeyBio}}, withMail, "login"},
 		{"bad model", localBlock{Admins: []string{"alice"}, AdminAAGUIDs: []string{"yubikey"}}, withMail, "UUID"},
 		{"zero model", localBlock{Admins: []string{"alice"}, AdminAAGUIDs: []string{"00000000-0000-0000-0000-000000000000"}}, withMail, "zero"},
+		{"a relative mds_dir", localBlock{Admins: []string{"alice"}, AdminAAGUIDs: []string{yubikeyBio}, MDSDir: "mds"}, withMail, "absolute"},
+		{"mds_dir without admins", localBlock{MDSDir: "/var/lib/authn-bridge/mds"}, withMail, "mds_dir without admins"},
 	} {
 		l := c.l
 		l.store = st
@@ -609,6 +619,9 @@ func TestTheAdminSettingsAreChecked(t *testing.T) {
 		}
 		if c.name == "ok" && !l.aaguidSet[yubikeyBio] {
 			t.Errorf("the model was not normalised to lower case: %v", l.aaguidSet)
+		}
+		if c.name == "ok" && l.MDSDir != defaultMDSDir {
+			t.Errorf("mds_dir defaults to %q, want %q", l.MDSDir, defaultMDSDir)
 		}
 	}
 }

@@ -84,6 +84,9 @@ type server struct {
 	localLimit *localThrottle
 	passkeys   *passkeyStore
 	ceremonies *ttl[*ceremony]
+	// attest proves the model of an administrator's passkey (attest.go). Nil
+	// unless the local block has admins.
+	attest *attestVerifier
 	// accountSessions are the step-ups the account page (account.go) holds,
 	// and accountMu serialises the changes it makes to an account's keys.
 	accountSessions *ttl[*accountSession]
@@ -215,6 +218,9 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 		s.notifySlots = make(chan struct{}, 8)
 		s.ceremonies = newTTL[*ceremony](now).capped(maxPending).evicting()
 		cfg.Local.store.logf = s.logf
+		if len(cfg.Local.adminSet) > 0 {
+			s.attest = newAttestVerifier(cfg.Local.MDSDir, now, s.logf)
+		}
 	}
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
 		return nil, fmt.Errorf("disabled_file: %w", err)

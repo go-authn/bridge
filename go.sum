@@ -36,8 +36,12 @@ github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2
 github.com/dustin/go-humanize v1.1.0/go.mod h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI=
 github.com/ebitengine/purego v0.11.2 h1:WWiTx8rD8zYdOwSj8O/NiNbsOvSAgJMTlyV1XlbUSeU=
 github.com/ebitengine/purego v0.11.2/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
+github.com/fxamacker/cbor/v2 v2.10.0 h1:HVF3T5vYwLqO81ebPirWEPNv2SMrUMD3HLnKgEr6uWE=
+github.com/fxamacker/cbor/v2 v2.10.0/go.mod h1:uSwlToFuT9BZAKRxxVm3qQC8DR4tlWl7D6pf20iRYH4=
 github.com/go-authn/directory v0.26.0 h1:NIJTYTOzh24gRvQNr5+gs0KjFxcEUxsXtuix++QdsDQ=
 github.com/go-authn/directory v0.26.0/go.mod h1:TJWv+q9cs93vJgkjCQrcyRGAtBkPCScfCKmpf65HcDI=
+github.com/go-authn/fido v0.16.0 h1:bKaB9LreytdJhnuSqYyNaGHqBywAd8kdA/MLqSsLzs8=
+github.com/go-authn/fido v0.16.0/go.mod h1:HCJih3OxqpYgf/rPOJKEpQE9q+WcIx2QMUWMDLh2wao=
 github.com/go-authn/harden v0.2.0 h1:xPWLSeelcFEo4gJU5aTNWngZn6R/VQ9bTGDx3BRrUb0=
 github.com/go-authn/harden v0.2.0/go.mod h1:sceLxhnMHtExHEp9bU8XHKCw2fp+WFjh6Ri6Yxu2aVA=
 github.com/go-authn/krl v0.6.1 h1:m3DrENpuM3F8IjTFGxeVy0H6O0/wz3F45kCzIVI6PVA=
@@ -56,8 +60,8 @@ github.com/go-authn/servercert v0.7.1 h1:s1s1Jc20bzqwSHJ1YglNWjATPs2sr4EdHrE2Uxl
 github.com/go-authn/servercert v0.7.1/go.mod h1:lv46o9W84qj9CrvYiQuk0mgpXgykWtaeS8KC80nobJs=
 github.com/go-authn/sshcert v0.1.10 h1:LA8QUAFams5dbOXGis78Lkih327p2wSKIbrbBjK9xh0=
 github.com/go-authn/sshcert v0.1.10/go.mod h1:H9wE3JJNCWB3yXjGOHK0bLLYWS9juyoibPdGDaJ9k7U=
-github.com/go-authn/webauthn v0.2.0 h1:3zTN6WFk77eETUhQE8RZEtejcwbXRPjztLa2RvnkEFw=
-github.com/go-authn/webauthn v0.2.0/go.mod h1:DSsIO6/tiWkRSA7qM38HR8r9jg/SumxBtSUvprZ7OAI=
+github.com/go-authn/webauthn v0.3.0 h1:4HjfU1v2LkgCbO7ewL2q7xIUNVpXIeRb/pS5IuOqCj8=
+github.com/go-authn/webauthn v0.3.0/go.mod h1:DSsIO6/tiWkRSA7qM38HR8r9jg/SumxBtSUvprZ7OAI=
 github.com/go-authn/wireguard v0.2.0 h1:A2yZxbZnfTLI/ps0V9goix5bcpOTzuRkA1OFVzCgiqA=
 github.com/go-authn/wireguard v0.2.0/go.mod h1:O+eBhoeqo0Cg4na/30Xhrf74kaD9SJNNbHzuXu1HCsA=
 github.com/go-chi/chi/v5 v5.3.2 h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=
@@ -194,6 +198,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/valyala/fastjson v1.6.10 h1:/yjJg8jaVQdYR3arGxPE2X5z89xrlhS0eGXdv+ADTh4=
 github.com/valyala/fastjson v1.6.10/go.mod h1:e6FubmQouUNP73jtMLmcbxS6ydWIpOfhz34TSfO3JaE=
+github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
+github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/yeqown/go-qrcode/v2 v2.2.5 h1:HCOe2bSjkhZyYoyyNaXNzh4DJZll6inVJQQw+8228Zk=
 github.com/yeqown/go-qrcode/v2 v2.2.5/go.mod h1:uHpt9CM0V1HeXLz+Wg5MN50/sI/fQhfkZlOM+cOTHxw=
 github.com/yeqown/reedsolomon v1.0.0 h1:x1h/Ej/uJnNu8jaX7GLHBWmZKCAWjEJTetkqaabr4B0=
