@@ -414,6 +414,19 @@ func TestAKeyThatDoesNotProveItsModelIsStoredUnproved(t *testing.T) {
 			e.advance(40 * 24 * time.Hour)
 			return e.attestedBy(e.attCA, yubikeyBio)
 		}, "expired"},
+		{"a root the metadata lists that is not a certificate", func(e *adminEnv) makeAO {
+			bad, err := json.Marshal(map[string]any{
+				"aaguid":            yubikeyBio,
+				"metadataStatement": map[string]any{"description": "Test model", "attestationRootCertificates": []string{"AAAA"}},
+				"statusReports":     []map[string]string{{"status": "FIDO_CERTIFIED", "effectiveDate": "2024-06-06"}},
+			})
+			if err != nil {
+				e.t.Fatal(err)
+			}
+			e.mds.set(string(bad))
+			e.mds.load(e.s.attest)
+			return e.attestedBy(e.attCA, yubikeyBio)
+		}, "the roots the FIDO metadata lists"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := newAdminEnv(t)
@@ -428,6 +441,38 @@ func TestAKeyThatDoesNotProveItsModelIsStoredUnproved(t *testing.T) {
 				t.Errorf("the log does not say why (%q):\n%s", c.why, e.log())
 			}
 		})
+	}
+}
+
+// A registration that does not verify is refused for an administrator too: the
+// failure is not swallowed into "stored without a proven model".
+func TestAnAdministratorsBrokenRegistrationIsRefusedNotStored(t *testing.T) {
+	e := newAdminEnv(t)
+	st, attested, _, a := e.enrolAs("carol", func(*webauthntest.Authenticator, []byte) []byte { return []byte("not cbor") })
+	if st == http.StatusOK || attested {
+		t.Fatalf("a broken registration was accepted: %d %v", st, attested)
+	}
+	if _, ok, _ := e.s.passkeys.passkey(passkeyKey(a.ID)); ok {
+		t.Fatal("a broken registration was stored")
+	}
+}
+
+// A key that proved no model is refused by the administrator page with the
+// reason for that, not the one for a model since revoked.
+func TestAnUnprovedKeyIsRefusedForItsMissingProof(t *testing.T) {
+	e := newAdminEnv(t)
+	st, _, _, a := e.enrolAs("carol", noAttestation(e))
+	if st != http.StatusOK {
+		t.Fatalf("enrol: %d", st)
+	}
+	rec, _, _ := e.s.passkeys.passkey(passkeyKey(a.ID))
+	sess := e.forge("carol", rec.key())
+	st, body := e.invitePost(sess, "erin", "erin@elsewhere.example", "Erin")
+	if st == http.StatusOK {
+		t.Fatal("an unproved key opened the page")
+	}
+	if !strings.Contains(body+e.log(), "verified attestation") {
+		t.Fatalf("the refusal does not name the missing proof: %d %s\n%s", st, body, e.log())
 	}
 }
 
