@@ -5,6 +5,13 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+- go-authn/webauthn v0.3.0 to v0.5.0. To PROVE an administrator's model, the
+  attestation certificate must now carry the `id-fido-gen-ce-aaguid` extension
+  (`Policy.RequireAAGUIDExtension`), equal to the authenticator data's AAGUID.
+  A key without it is stored and signs in, but is not proved (`"attested":
+  false`, the log names the extension), like any other unproved key. Other
+  registrations are unchanged.
+
 - `local { admins = [...], admin_aaguids = [...] }`: an administrator invites a
   local account at `/account/invite` (login, e-mail, optional name). Same
   invitation as the CLI; the link goes only by e-mail; one notice per
