@@ -21,7 +21,8 @@ import (
 //
 //  1. go-authn/webauthn verified the attestation statement: a packed statement
 //     whose signature is made by the key of an attestation certificate that
-//     carries the same AAGUID (WebAuthn L3 8.2). Self attestation and "none"
+//     carries the same AAGUID (WebAuthn L3 8.2), in its id-fido-gen-ce-aaguid
+//     extension, which must be present (Policy.RequireAAGUIDExtension; 8.2.1). Self attestation and "none"
 //     verify, but prove nothing and yield no AAGUID.
 //  2. the FIDO Metadata Service (MDS3) knows that AAGUID, and reports nothing
 //     that says the model is compromised or revoked (MDS3 3.1.3).
@@ -194,6 +195,16 @@ func (s *server) verifyEnrolment(login string, challenge, clientData, attestatio
 	cred, att, err := s.relyingParty().VerifyRegistrationAttested(challenge, clientData, attestationObject, webauthn.Policy{RequireUV: true})
 	if err != nil || s.attestationFor(login) != "direct" {
 		return cred, "", err
+	}
+	// The registration is valid and will be stored. Proving the model asks for
+	// more (the leaf's id-fido-gen-ce-aaguid extension, §8.2.1), and a key that
+	// fails that is stored unproved like any other, never refused: so the
+	// stricter policy is a second verification of the same registration.
+	strict := webauthn.Policy{RequireUV: true, RequireAAGUIDExtension: true}
+	_, att, err = s.relyingParty().VerifyRegistrationAttested(challenge, clientData, attestationObject, strict)
+	if err != nil {
+		s.logf("local: %s: the new passkey is stored WITHOUT a proven model: %v", login, err)
+		return cred, "", nil
 	}
 	id, err := s.attest.prove(att)
 	if err != nil {

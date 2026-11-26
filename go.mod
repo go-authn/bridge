@@ -16,7 +16,7 @@ require (
 	github.com/go-authn/secretsource v0.9.0
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
-	github.com/go-authn/webauthn v0.3.0
+	github.com/go-authn/webauthn v0.5.0
 	github.com/go-authn/wireguard v0.2.0
 	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/go-net-health/endpoint v0.1.0

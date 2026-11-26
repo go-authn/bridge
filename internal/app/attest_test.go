@@ -88,15 +88,26 @@ func newAttCA(t testing.TB, base time.Time) pkiCA {
 // leaf is an attestation certificate for model aaguid, as §8.2.1 asks.
 func (ca pkiCA) leaf(t testing.TB, base time.Time, aaguid [16]byte) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
+	return ca.leafExt(t, base, &aaguid)
+}
+
+// leafExt is leaf with the id-fido-gen-ce-aaguid extension carrying ext, or
+// without the extension when ext is nil.
+func (ca pkiCA) leafExt(t testing.TB, base time.Time, ext *[16]byte) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
 	k := tKey(t)
-	v, _ := asn1.Marshal(aaguid[:])
+	var extra []pkix.Extension
+	if ext != nil {
+		v, _ := asn1.Marshal(ext[:])
+		extra = []pkix.Extension{{Id: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}, Value: v}}
+	}
 	tpl := &x509.Certificate{
 		SerialNumber: big.NewInt(77),
 		Subject: pkix.Name{Country: []string{"SE"}, Organization: []string{"Yubico AB"},
 			OrganizationalUnit: []string{"Authenticator Attestation"}, CommonName: "Test Attestation"},
 		NotBefore: base.AddDate(-1, 0, 0), NotAfter: base.AddDate(5, 0, 0),
 		BasicConstraintsValid: true,
-		ExtraExtensions:       []pkix.Extension{{Id: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}, Value: v}},
+		ExtraExtensions:       extra,
 	}
 	return tCert(t, tpl, ca.cert, &k.PublicKey, ca.key), k
 }
@@ -299,6 +310,16 @@ func (e *adminEnv) attestedBy(ca pkiCA, aaguid string) makeAO {
 	}
 }
 
+// attestedByExt is attestedBy with a leaf whose id-fido-gen-ce-aaguid carries
+// ext (nil: the leaf has no such extension).
+func (e *adminEnv) attestedByExt(ca pkiCA, aaguid string, ext *[16]byte) makeAO {
+	return func(a *webauthntest.Authenticator, cd []byte) []byte {
+		id := aaguidBytes(e.t, aaguid)
+		leaf, key := ca.leafExt(e.t, e.s.now(), ext)
+		return packedAO(e.t, a, e.s.cfg.rpID(), cd, id, key, leaf.Raw)
+	}
+}
+
 // noAttestation is what a browser asked for "none" sends.
 func noAttestation(e *adminEnv) makeAO {
 	return func(a *webauthntest.Authenticator, cd []byte) []byte {
@@ -393,6 +414,9 @@ func TestAKeyThatDoesNotProveItsModelIsStoredUnproved(t *testing.T) {
 		{"a chain to a root the metadata does not list", func(e *adminEnv) makeAO {
 			return e.attestedBy(other(e), yubikeyBio)
 		}, "does not lead to a root"},
+		{"a leaf without the id-fido-gen-ce-aaguid extension", func(e *adminEnv) makeAO {
+			return e.attestedByExt(e.attCA, yubikeyBio, nil)
+		}, "id-fido-gen-ce-aaguid"},
 		{"a model the metadata does not know", func(e *adminEnv) makeAO {
 			return e.attestedBy(e.attCA, someOtherAA)
 		}, "is not in the FIDO metadata"},

@@ -280,6 +280,11 @@ the bridge checks against the FIDO Metadata Service. The host needs:
   outbound web access, not a single address);
 - the clock right: the metadata and its certificates are checked against it.
 
+The attestation certificate must also carry the `id-fido-gen-ce-aaguid`
+extension (WebAuthn §8.2.1), equal to the authenticator's AAGUID. A key whose
+certificate lacks it is still stored and signs in, but is not proved; the log
+names the missing extension. Current YubiKeys carry it.
+
 The service starts without the metadata (the log says `mds: ... could not be
 loaded` and retries); until it is in, no administrator key is proved and the
 invitation page refuses. Existing administrators add their key again, as the

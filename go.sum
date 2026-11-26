@@ -60,8 +60,8 @@ github.com/go-authn/servercert v0.7.1 h1:s1s1Jc20bzqwSHJ1YglNWjATPs2sr4EdHrE2Uxl
 github.com/go-authn/servercert v0.7.1/go.mod h1:lv46o9W84qj9CrvYiQuk0mgpXgykWtaeS8KC80nobJs=
 github.com/go-authn/sshcert v0.1.10 h1:LA8QUAFams5dbOXGis78Lkih327p2wSKIbrbBjK9xh0=
 github.com/go-authn/sshcert v0.1.10/go.mod h1:H9wE3JJNCWB3yXjGOHK0bLLYWS9juyoibPdGDaJ9k7U=
-github.com/go-authn/webauthn v0.3.0 h1:4HjfU1v2LkgCbO7ewL2q7xIUNVpXIeRb/pS5IuOqCj8=
-github.com/go-authn/webauthn v0.3.0/go.mod h1:DSsIO6/tiWkRSA7qM38HR8r9jg/SumxBtSUvprZ7OAI=
+github.com/go-authn/webauthn v0.5.0 h1:idGQ1do8Mb2fOqNWzLCzl1xvXh8KmvzOlJ3pnEhuDSE=
+github.com/go-authn/webauthn v0.5.0/go.mod h1:DSsIO6/tiWkRSA7qM38HR8r9jg/SumxBtSUvprZ7OAI=
 github.com/go-authn/wireguard v0.2.0 h1:A2yZxbZnfTLI/ps0V9goix5bcpOTzuRkA1OFVzCgiqA=
 github.com/go-authn/wireguard v0.2.0/go.mod h1:O+eBhoeqo0Cg4na/30Xhrf74kaD9SJNNbHzuXu1HCsA=
 github.com/go-chi/chi/v5 v5.3.2 h1:5YQkICvTCSZ25hoRsyJazN0scjzKGiu4VAUc7H1o1nY=

@@ -548,7 +548,11 @@ then proves the model in three steps, and records the AAGUID in
 
 1. go-authn/webauthn verifies the attestation statement: a `packed` statement
    with an `x5c` chain, signed by an attestation certificate that carries the
-   same AAGUID as the authenticator data (WebAuthn §8.2). Self attestation and
+   same AAGUID as the authenticator data (WebAuthn §8.2). For this proof the
+   certificate must carry the `id-fido-gen-ce-aaguid` extension (§8.2.1: not
+   critical, a 16-byte OCTET STRING equal to the authenticator data's AAGUID);
+   a certificate without it, or with a different value, proves nothing. The
+   key is still stored, as below. Self attestation and
    `none` verify but prove no model, and give no AAGUID. Formats other than
    `packed` and `none` are refused.
 2. The FIDO Metadata Service (MDS3) knows that AAGUID and reports none of
