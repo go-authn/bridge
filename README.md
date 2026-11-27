@@ -576,8 +576,22 @@ local {
   admins        = ["alice"]
   admin_aaguids = ["9dd8d593-2213-438a-97f8-d6b813d51c27"]   # YubiKey Bio
   mds_dir       = "/var/lib/authn-bridge/mds"                 # the default; absolute
+  admin_min_certification = "L2"                              # optional: least FIDO level
 }
 ```
+
+`admin_min_certification` (optional; `"L1"`, `"L1plus"`, `"L2"`, `"L2plus"`,
+`"L3"` or `"L3plus"`; refused without `admins`; any other value is a
+configuration error) is the least FIDO certification level the model of an
+administrator's passkey may have, from the MDS3 blob. The order is the
+specification's (MDS 3.1 §3.1.4.1): L1 < L1plus < L2 < L2plus < L3 < L3plus. The
+level is the model's *current* one: the latest effective `FIDO_CERTIFIED_Lx`
+status report (§3.1.3, "the latest StatusReport entry MUST reflect the current
+status"). A model with no such report (the legacy `FIDO_CERTIFIED` counts for
+none) fails any minimum. Unset, no level is required. Like the compromise
+statuses it is checked at registration **and at each use of the administrator
+page**: a model later downgraded below the minimum, or revoked, keeps signing in
+but no longer opens the page.
 
 `mds_dir` is optional, defaults to the unit's `StateDirectory`, and is refused
 without `admins`. The host must let the service write that directory, reach

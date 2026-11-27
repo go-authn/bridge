@@ -66,6 +66,10 @@ type attestVerifier struct {
 	client *mds.Client
 	now    func() time.Time
 	logf   func(string, ...any)
+	// minCert is local { admin_min_certification }: the least FIDO certification
+	// level a model may have, LevelNone for no minimum. Checked in entry, so at
+	// registration and again each time a key opens the administrator page.
+	minCert mds.Level
 
 	mu   sync.RWMutex
 	blob *mds.Blob
@@ -148,6 +152,14 @@ func (v *attestVerifier) entry(aaguid string) (*mds.Entry, error) {
 	for _, r := range e.StatusReports {
 		if mdsCompromised[r.Status] {
 			return nil, fmt.Errorf("the FIDO metadata reports %s for model %s", r.Status, aaguid)
+		}
+	}
+	// admin_min_certification: the CURRENT level (MDS 3.1 3.1.3/3.1.4.1, see
+	// mds.Entry.CertificationLevel), so a model certified L2 and later
+	// re-certified lower no longer passes an L2 minimum.
+	if v.minCert > mds.LevelNone {
+		if got := e.CertificationLevel(v.now()); got < v.minCert {
+			return nil, fmt.Errorf("the FIDO metadata gives model %s a certification level of %s, below admin_min_certification %s", aaguid, got, v.minCert)
 		}
 	}
 	return e, nil

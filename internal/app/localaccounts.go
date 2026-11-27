@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-authn/directory"
+	"github.com/go-authn/fido/mds"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -90,10 +91,20 @@ type localBlock struct {
 	// the CRL distribution points of its certificate chain.
 	MDSDir string `hcl:"mds_dir,optional"`
 
+	// AdminMinCertification is the least FIDO certification level the model of
+	// an administrator's passkey may have, from the FIDO Metadata Service: "L1",
+	// "L1plus", "L2", "L2plus", "L3" or "L3plus" (MDS 3.1, 3.1.4.1; the legacy
+	// FIDO_CERTIFIED counts for none). Unset: no minimum. The level is the model's
+	// CURRENT one and is checked on every use, like the compromise statuses: a key
+	// whose model is later downgraded below it, or loses its certification, keeps
+	// signing in but no longer opens the administrator page. Needs admins.
+	AdminMinCertification string `hcl:"admin_min_certification,optional"`
+
 	store        *localStore
 	removalDelay time.Duration
 	adminSet     map[string]bool
 	aaguidSet    map[string]bool
+	minCert      mds.Level
 }
 
 // localEntityID is the identity source local accounts log in under. It is

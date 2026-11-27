@@ -220,6 +220,7 @@ func newServer(cfg *config, log io.Writer) (*server, error) {
 		cfg.Local.store.logf = s.logf
 		if len(cfg.Local.adminSet) > 0 {
 			s.attest = newAttestVerifier(cfg.Local.MDSDir, now, s.logf)
+			s.attest.minCert = cfg.Local.minCert
 		}
 	}
 	if s.disabled, err = loadDisabled(cfg.DisabledFile); err != nil {
