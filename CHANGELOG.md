@@ -5,6 +5,12 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+- `POST /kerberos/tgt` now sends `method` to the KDC (`passkey` for a local
+  account, `federated` for a person through their institution, `machine` for
+  a machine identity). go-authn/kdc v0.13.0 refuses a mint request without it
+  when its `PAC` is on, and records it in the ticket's PAC (S-1-18-1, a CAMMAC
+  with the authentication indicator). **Needed before upgrading the KDC to
+  v0.13.0 with a PAC configured**; an older KDC ignores the field.
 - `local { admin_min_certification = "L2" }` (optional; L1, L1plus, L2,
   L2plus, L3, L3plus): an administrator's passkey must be of a model whose
   CURRENT FIDO certification level in the MDS3 blob is at least that

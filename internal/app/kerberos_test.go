@@ -173,6 +173,9 @@ func TestKerberosTGT(t *testing.T) {
 	if p := k.asked[0]["principal"]; p != "alice@"+idpScope {
 		t.Errorf("principal %v, want the token's scoped name", p)
 	}
+	if m := k.asked[0]["method"]; m != "federated" {
+		t.Errorf("method %v, want federated (an institution's person)", m)
+	}
 	if secs, _ := k.asked[0]["lifetime_seconds"].(float64); secs <= 0 || secs > 8*3600 {
 		t.Errorf("lifetime %v s, want at most the configured 8h", secs)
 	}
@@ -217,6 +220,8 @@ client "kinit" {
 	}
 	if len(k.asked) != 1 || k.asked[0]["principal"] != "alice@"+localScope {
 		t.Errorf("the KDC was asked %v, want alice@%s", k.asked, localScope)
+	} else if k.asked[0]["method"] != "passkey" {
+		t.Errorf("method %v, want passkey (a local account)", k.asked[0]["method"])
 	}
 }
 
@@ -238,6 +243,27 @@ func TestKerberosPrincipal(t *testing.T) {
 		"a local login that has an @": {map[string]any{"preferred_username": "alice@evil.example", "idp": local}, ""},
 	} {
 		if got := s.kerberosPrincipal(c.claims); got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+// The KDC (go-authn/kdc v0.13.0) cannot know how a person logged in, so every
+// request names it, from its closed list.
+func TestKerberosMethod(t *testing.T) {
+	f := localFixture(t, "")
+	s := f.s
+	for name, c := range map[string]struct {
+		claims map[string]any
+		want   string
+	}{
+		"a local account":     {map[string]any{"preferred_username": "alice", "idp": s.cfg.localEntityID()}, "passkey"},
+		"an institution":      {map[string]any{"preferred_username": "alice@univ.example", "idp": "https://idp.univ.example"}, "federated"},
+		"no idp, a person":    {map[string]any{"preferred_username": "alice@univ.example"}, "federated"},
+		"a machine":           {map[string]any{"client_id": "winpc-17", "sub": "winpc-17"}, "machine"},
+		"a machine, bad name": {map[string]any{"client_id": "a@b", "sub": "a@b"}, "machine"},
+	} {
+		if got := s.kerberosMethod(c.claims); got != c.want {
 			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
 	}

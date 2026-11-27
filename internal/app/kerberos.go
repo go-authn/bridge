@@ -144,11 +144,16 @@ func (b *kerberosBlock) load() error {
 var errKDCRefused = errors.New("the realm refused")
 
 // mint asks the KDC for a TGT for principal, lasting seconds.
-func (b *kerberosBlock) mint(ctx context.Context, principal string, seconds int64) ([]byte, error) {
+//
+// method is how the person logged in, one of the KDC's closed list (passkey,
+// federated, machine): the KDC cannot know it, and since go-authn/kdc v0.13.0
+// a KDC with a PAC refuses a request without it.
+func (b *kerberosBlock) mint(ctx context.Context, principal, method string, seconds int64) ([]byte, error) {
 	body, _ := json.Marshal(struct {
 		Principal       string `json:"principal"`
 		LifetimeSeconds int64  `json:"lifetime_seconds"`
-	}{principal, seconds})
+		Method          string `json:"method"`
+	}{principal, seconds, method})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.KDCURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -202,6 +207,20 @@ func (s *server) kerberosPrincipal(claims map[string]any) string {
 		return ""
 	}
 	return user
+}
+
+// kerberosMethod is the login method the KDC records in the ticket's PAC: a
+// machine identity's token is "machine", a local account's person logged in
+// with a passkey ("passkey"), and anybody else came through their institution
+// ("federated").
+func (s *server) kerberosMethod(claims map[string]any) string {
+	if _, machine := s.machineName(claims); machine {
+		return "machine"
+	}
+	if idp, _ := claims["idp"].(string); s.cfg.Local != nil && idp == s.cfg.localEntityID() {
+		return "passkey"
+	}
+	return "federated"
 }
 
 // machineName is the principal of a machine identity's token: the client ID at
@@ -291,7 +310,7 @@ func (s *server) kerberosTGT(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the login ends too soon for a ticket: log in again", http.StatusForbidden)
 		return
 	}
-	cred, err := kb.mint(r.Context(), user, int64(life/time.Second))
+	cred, err := kb.mint(r.Context(), user, s.kerberosMethod(claims), int64(life/time.Second))
 	switch {
 	case errors.Is(err, errKDCRefused):
 		s.logf("kerberos: the realm refused a TGT for %s", user)
