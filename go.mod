@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-authn/directory v0.26.0
-	github.com/go-authn/fido v0.16.0
+	github.com/go-authn/fido v0.17.0
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.8.0
 	github.com/go-authn/revocation v0.7.1

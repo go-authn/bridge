@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-authn/directory"
+	"github.com/go-authn/fido/mds"
 	"github.com/go-authn/oidc"
 	"github.com/go-authn/saml"
 )
@@ -396,7 +397,17 @@ func (l *localBlock) check(c *config) error {
 
 // checkAdmins validates admins and admin_aaguids, and builds their sets.
 func (l *localBlock) checkAdmins(c *config) error {
-	l.adminSet, l.aaguidSet = nil, nil
+	l.adminSet, l.aaguidSet, l.minCert = nil, nil, mds.LevelNone
+	if l.AdminMinCertification != "" {
+		lv, err := mds.ParseLevel(l.AdminMinCertification)
+		if err != nil {
+			return fmt.Errorf("admin_min_certification: %q is not one of L1, L1plus, L2, L2plus, L3, L3plus", l.AdminMinCertification)
+		}
+		if len(l.Admins) == 0 {
+			return errors.New("admin_min_certification without admins")
+		}
+		l.minCert = lv
+	}
 	if len(l.Admins) == 0 {
 		if len(l.AdminAAGUIDs) > 0 {
 			return errors.New("admin_aaguids without admins")

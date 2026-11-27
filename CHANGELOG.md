@@ -5,6 +5,13 @@ v0.23.6 are described in their [GitHub releases](https://github.com/go-authn/bri
 
 ## Unreleased
 
+- `local { admin_min_certification = "L2" }` (optional; L1, L1plus, L2,
+  L2plus, L3, L3plus): an administrator's passkey must be of a model whose
+  CURRENT FIDO certification level in the MDS3 blob is at least that
+  (go-authn/fido `mds.Entry.CertificationLevel`, MDS 3.1 §3.1.3 and §3.1.4.1).
+  Checked at registration and at each use, like the compromise statuses: a
+  model downgraded or revoked later keeps sign-in but loses the administrator
+  page. Unset: unchanged. An unknown value is a configuration error.
 - go-authn/webauthn v0.3.0 to v0.5.0. To PROVE an administrator's model, the
   attestation certificate must now carry the `id-fido-gen-ce-aaguid` extension
   (`Policy.RequireAAGUIDExtension`), equal to the authenticator data's AAGUID.
