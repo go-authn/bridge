@@ -10,33 +10,33 @@ require (
 	github.com/go-authn/directory v0.26.0
 	github.com/go-authn/fido v0.17.0
 	github.com/go-authn/krl v0.6.1
-	github.com/go-authn/oidc v0.8.0
+	github.com/go-authn/oidc v0.8.1
 	github.com/go-authn/revocation v0.7.1
 	github.com/go-authn/saml v0.9.0
 	github.com/go-authn/secretsource v0.9.0
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
 	github.com/go-authn/webauthn v0.5.0
-	github.com/go-authn/wireguard v0.2.0
-	github.com/go-jose/go-jose/v4 v4.1.8
+	github.com/go-authn/wireguard v0.2.1
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/go-net-health/endpoint v0.1.0
-	github.com/go-sql-driver/mysql v1.10.1
+	github.com/go-sql-driver/mysql v1.11.0
 	github.com/grpc-transports/control v0.1.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/hstern/go-ssf v0.1.1
 	github.com/hstern/go-subjectid v0.2.0
-	github.com/jackc/pgx/v5 v5.12.0
-	github.com/openpubkey/openpubkey v0.30.0
-	github.com/pkg/sftp v1.13.12
+	github.com/jackc/pgx/v5 v5.13.0
+	github.com/openpubkey/openpubkey v0.30.1
+	github.com/pkg/sftp v1.13.13
 	github.com/prometheus/common v0.73.1
 	github.com/spf13/cobra v1.10.2
-	github.com/zclconf/go-cty v1.19.0
+	github.com/zclconf/go-cty v1.20.0
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
-	modernc.org/sqlite v1.61.1
+	modernc.org/sqlite v1.63.0
 )
 
 require (
@@ -111,7 +111,7 @@ require (
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
