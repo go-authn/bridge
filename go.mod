@@ -3,17 +3,17 @@ module github.com/go-authn/bridge
 go 1.27.4
 
 require (
-	github.com/chromedp/cdproto v0.159.0
-	github.com/chromedp/chromedp v0.21.1
+	github.com/chromedp/cdproto v0.160.12
+	github.com/chromedp/chromedp v0.24.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/fxamacker/cbor/v2 v2.10.0
-	github.com/go-authn/directory v0.26.0
+	github.com/go-authn/directory v0.27.0
 	github.com/go-authn/fido v0.17.0
 	github.com/go-authn/krl v0.6.1
 	github.com/go-authn/oidc v0.8.0
-	github.com/go-authn/revocation v0.7.1
+	github.com/go-authn/revocation v0.8.0
 	github.com/go-authn/saml v0.9.0
-	github.com/go-authn/secretsource v0.9.0
+	github.com/go-authn/secretsource v0.12.1
 	github.com/go-authn/servercert v0.7.1
 	github.com/go-authn/sshcert v0.1.10
 	github.com/go-authn/webauthn v0.5.0
@@ -28,12 +28,12 @@ require (
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/openpubkey/openpubkey v0.30.0
 	github.com/pkg/sftp v1.13.12
-	github.com/prometheus/common v0.73.1
+	github.com/prometheus/common v0.74.0
 	github.com/spf13/cobra v1.10.2
 	github.com/zclconf/go-cty v1.19.0
 	golang.org/x/crypto v0.59.0
-	golang.org/x/net v0.62.0
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/net v0.63.0
+	golang.org/x/oauth2 v0.38.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.61.1
@@ -86,7 +86,7 @@ require (
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/pandatix/go-abnf v0.5.3 // indirect
+	github.com/pandatix/go-abnf v0.5.5 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/russellhaering/goxmldsig v1.6.1 // indirect
